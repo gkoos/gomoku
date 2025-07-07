@@ -190,10 +190,29 @@ function hasOpen4PatternSimple(playerBitboard, row, col, dRow, dCol) {
   return count >= 4;
 }
 
-// Ultra-simple threat detection - check if human can create 4 by placing one stone
+// Ultra-simple threat detection - MORE CONSERVATIVE for complex positions
 function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
   const threats = [];
   const humanBitboard = humanPlayer === "black" ? blackBitboard : whiteBitboard;
+  
+  // Count total stones to determine position complexity
+  let totalStones = 0;
+  for (let slot = 0; slot < 8; slot++) {
+    const blackMask = blackBitboard[slot] >>> 0;
+    const whiteMask = whiteBitboard[slot] >>> 0;
+    const combinedMask = blackMask | whiteMask;
+    
+    // Count set bits in this slot
+    let count = 0;
+    for (let bit = 0; bit < 32; bit++) {
+      if ((combinedMask & (1 << bit)) !== 0) {
+        count++;
+      }
+    }
+    totalStones += count;
+  }
+  
+  const isComplexPosition = totalStones >= 10;
   
   // Helper function to check if a position has a human stone
   const hasHumanStone = (r, c) => {
@@ -215,7 +234,7 @@ function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
     return !blackBit && !whiteBit;
   };
   
-  // Check every empty position for all possible 4-stone threat patterns
+  // Check every empty position for 4-stone threat patterns
   for (let row = 0; row < BOARD_SIZE; row++) {
     for (let col = 0; col < BOARD_SIZE; col++) {
       if (!isEmpty(row, col)) continue;
@@ -247,8 +266,35 @@ function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
         
         // If we found 4 or more stones total, this is a threat
         if (totalCount >= 4) {
-          threats.push({ row, col });
-          break; // Found threat at this position, no need to check other directions
+          // In complex positions, verify this is an immediate 4-threat (not just 4 scattered stones)
+          if (isComplexPosition) {
+            // Additional verification: check that these are truly consecutive
+            let consecutiveStones = 0;
+            let hasGap = false;
+            
+            // Check for actual consecutive pattern
+            for (let check = -4; check <= 4; check++) {
+              if (check === 0) continue; // Skip the position we're testing
+              
+              if (hasHumanStone(row + dRow * check, col + dCol * check)) {
+                consecutiveStones++;
+              } else if (consecutiveStones > 0) {
+                // We hit a gap after finding stones
+                hasGap = true;
+                break;
+              }
+            }
+            
+            // Only add if we have truly consecutive stones with minimal gaps
+            if (consecutiveStones >= 3 && !hasGap) {
+              threats.push({ row, col });
+              break;
+            }
+          } else {
+            // In simple positions, trust the original logic
+            threats.push({ row, col });
+            break;
+          }
         }
       }
     }
@@ -257,7 +303,7 @@ function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
   return threats;
 }
 
-// Simple open 3 threat detection
+// Simple open 3 threat detection - MORE CONSERVATIVE for complex positions
 function checkSimpleOpen3Threats(blackBitboard, whiteBitboard, playerColor) {
   const threats = [];
   const playerBitboard = playerColor === "black" ? blackBitboard : whiteBitboard;
@@ -282,6 +328,27 @@ function checkSimpleOpen3Threats(blackBitboard, whiteBitboard, playerColor) {
     return !blackBit && !whiteBit;
   };
   
+  // Count total stones to determine if we should be more conservative
+  let totalStones = 0;
+  for (let slot = 0; slot < 8; slot++) {
+    const blackMask = blackBitboard[slot] >>> 0;
+    const whiteMask = whiteBitboard[slot] >>> 0;
+    const combinedMask = blackMask | whiteMask;
+    
+    // Count set bits in this slot
+    let count = 0;
+    for (let bit = 0; bit < 32; bit++) {
+      if ((combinedMask & (1 << bit)) !== 0) {
+        count++;
+      }
+    }
+    totalStones += count;
+  }
+  
+  // If there are many stones on the board (complex position), 
+  // be more conservative about open 3 detection to allow deep search
+  const isComplexPosition = totalStones >= 12;
+  
   // Check every empty position for open 3 patterns
   for (let row = 0; row < BOARD_SIZE; row++) {
     for (let col = 0; col < BOARD_SIZE; col++) {
@@ -290,34 +357,53 @@ function checkSimpleOpen3Threats(blackBitboard, whiteBitboard, playerColor) {
       const directions = [[0,1], [1,0], [1,1], [1,-1]];
       
       for (const [dRow, dCol] of directions) {
-        // Check for open 3 pattern: _XXX_ or _XX_X_ or _X_XX_
-        let foundOpen3 = false;
+        // Check for ONLY truly open 3 patterns that are immediately dangerous
+        let foundCriticalOpen3 = false;
         
-        // Pattern 1: _XXX_ (place at either end)
-        // Check if placing here creates ...XXX_
-        if (hasPlayerStone(row + dRow, col + dCol) &&
-            hasPlayerStone(row + dRow * 2, col + dCol * 2) &&
-            hasPlayerStone(row + dRow * 3, col + dCol * 3) &&
-            isEmpty(row + dRow * 4, col + dCol * 4)) {
-          foundOpen3 = true;
-        }
-        
-        // Check if placing here creates _XXX...
+        // Only consider PERFECT open 3 patterns: _XXX_ (both ends open)
         if (isEmpty(row - dRow, col - dCol) &&
             hasPlayerStone(row + dRow, col + dCol) &&
             hasPlayerStone(row + dRow * 2, col + dCol * 2) &&
-            hasPlayerStone(row + dRow * 3, col + dCol * 3)) {
-          foundOpen3 = true;
+            hasPlayerStone(row + dRow * 3, col + dCol * 3) &&
+            isEmpty(row + dRow * 4, col + dCol * 4)) {
+          foundCriticalOpen3 = true;
         }
         
-        if (foundOpen3) {
-          threats.push({ row, col });
-          break; // Found threat at this position
+        // In complex positions, only react to the most critical threats
+        if (foundCriticalOpen3) {
+          // In complex positions, verify this is truly urgent
+          if (isComplexPosition) {
+            // Additional check: ensure this creates an immediate threat
+            // (i.e., opponent can win in next few moves if not blocked)
+            let urgencyScore = 0;
+            
+            // Check if there are multiple threats nearby
+            let nearbyThreats = 0;
+            for (let checkRow = Math.max(0, row - 3); checkRow <= Math.min(BOARD_SIZE - 1, row + 3); checkRow++) {
+              for (let checkCol = Math.max(0, col - 3); checkCol <= Math.min(BOARD_SIZE - 1, col + 3); checkCol++) {
+                if (hasPlayerStone(checkRow, checkCol)) {
+                  nearbyThreats++;
+                }
+              }
+            }
+            
+            urgencyScore += nearbyThreats;
+            
+            // Only add if urgency is high enough in complex positions
+            if (urgencyScore >= 3) {
+              threats.push({ row, col });
+              break;
+            }
+          } else {
+            // In simple positions, add all open 3s
+            threats.push({ row, col });
+            break;
+          }
         }
       }
     }
   }
-  
+
   return threats;
 }
 
@@ -452,7 +538,7 @@ function generateCandidateMoves(blackBitboard, whiteBitboard) {
   candidates.sort((a, b) => b.priority - a.priority);
   
   // Limit candidates to prevent excessive search in complex positions
-  const maxCandidates = Math.min(candidates.length, stonePositions.length < 10 ? 25 : 40);
+  const maxCandidates = Math.min(candidates.length, stonePositions.length < 10 ? 30 : 50); // Increased limits
   return candidates.slice(0, maxCandidates);
 }
 
@@ -460,7 +546,7 @@ function generateCandidateMoves(blackBitboard, whiteBitboard) {
 function findBestMoveAdaptive(blackBitboard, whiteBitboard, computerPlayer, humanPlayer, difficulty, progressCallback) {
   if (progressCallback) progressCallback(10);
   
-  // For hard difficulty, use deep minimax search
+  // For hard difficulty, use deep minimax search with 8-ply
   if (difficulty === 'hard') {
     const deepMove = findBestMoveDeepSearch(
       blackBitboard, 
@@ -472,7 +558,31 @@ function findBestMoveAdaptive(blackBitboard, whiteBitboard, computerPlayer, huma
           const mappedProgress = 10 + (progress / 100) * 80;
           progressCallback(Math.floor(mappedProgress));
         }
-      }
+      },
+      8 // 8-ply depth for hard
+    );
+    
+    if (deepMove) {
+      if (progressCallback) progressCallback(100);
+      return deepMove;
+    }
+    // Fallback to regular search if deep search fails
+  }
+  
+  // For medium difficulty, use deep minimax search with 6-ply
+  if (difficulty === 'medium') {
+    const deepMove = findBestMoveDeepSearch(
+      blackBitboard, 
+      whiteBitboard, 
+      computerPlayer, 
+      humanPlayer, 
+      (progress) => {
+        if (progressCallback) {
+          const mappedProgress = 10 + (progress / 100) * 80;
+          progressCallback(Math.floor(mappedProgress));
+        }
+      },
+      6 // 6-ply depth for medium
     );
     
     if (deepMove) {
@@ -886,6 +996,8 @@ async function findBestMove(
   humanPlayer,
   difficulty
 ) {
+  const startTime = performance.now();
+  
   try {
     // Initialize Zobrist table if not already done
     if (typeof initZobristTable === 'function') {
@@ -914,7 +1026,11 @@ async function findBestMove(
       progressCallback(100);
       return { row: 7, col: 7 }; // Center of 15x15 board
     }
-
+    
+    // For hard difficulty in very complex positions, skip some threat checks and go straight to deep search
+    const isVeryComplexPosition = totalStones >= 15; // Lowered from 20 to 15
+    const skipEarlyReturnsForDeepSearch = difficulty === 'hard' && isVeryComplexPosition;
+    
     // Report progress
     progressCallback(2);
 
@@ -952,20 +1068,24 @@ async function findBestMove(
       return { row: threat.row, col: threat.col };
     }
 
-    // PRIORITY 5: AI's Closed Four (XXXX_, etc.)
-    progressCallback(10);
-    const aiClosed4Threats = findSimple4Threats(blackBitboard, whiteBitboard, computerPlayer);
-    if (aiClosed4Threats.length > 0) {
-      progressCallback(100);
-      return aiClosed4Threats[0];
+    // PRIORITY 5: AI's Closed Four (XXXX_, etc.) - Skip in very complex positions for hard difficulty
+    if (!skipEarlyReturnsForDeepSearch) {
+      progressCallback(10);
+      const aiClosed4Threats = findSimple4Threats(blackBitboard, whiteBitboard, computerPlayer);
+      if (aiClosed4Threats.length > 0) {
+        progressCallback(100);
+        return aiClosed4Threats[0];
+      }
     }
 
-    // PRIORITY 6: Block opponent's Closed Four (XXXX_, etc.)
-    progressCallback(12);
-    const humanClosed4Threats = findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer);
-    if (humanClosed4Threats.length > 0) {
-      progressCallback(100);
-      return humanClosed4Threats[0];
+    // PRIORITY 6: Block opponent's Closed Four (XXXX_, etc.) - Skip in very complex positions for hard difficulty
+    if (!skipEarlyReturnsForDeepSearch) {
+      progressCallback(12);
+      const humanClosed4Threats = findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer);
+      if (humanClosed4Threats.length > 0) {
+        progressCallback(100);
+        return humanClosed4Threats[0];
+      }
     }
 
     // PRIORITY 7: AI's Double Three (2 × _XXX_)
@@ -986,73 +1106,55 @@ async function findBestMove(
       return { row: threat.row, col: threat.col };
     }
 
-    // PRIORITY 9: AI's Open Three (_XXX_)
-    progressCallback(18);
-    const aiOpen3s = checkSimpleOpen3Threats(blackBitboard, whiteBitboard, computerPlayer);
-    if (aiOpen3s.length > 0) {
-      const threat = aiOpen3s[0];
-      progressCallback(100);
-      return { row: threat.row, col: threat.col };
+    // PRIORITY 9: AI's Open Three (_XXX_) - Skip in very complex positions for hard difficulty
+    if (!skipEarlyReturnsForDeepSearch) {
+      progressCallback(18);
+      const aiOpen3s = checkSimpleOpen3Threats(blackBitboard, whiteBitboard, computerPlayer);
+      if (aiOpen3s.length > 0) {
+        const threat = aiOpen3s[0];
+        progressCallback(100);
+        return { row: threat.row, col: threat.col };
+      }
     }
 
-    // PRIORITY 10: Block opponent's Open Three (_XXX_) - ESPECIALLY FOR HARD DIFFICULTY
-    progressCallback(20);
-    const opponentOpen3s = checkSimpleOpen3Threats(blackBitboard, whiteBitboard, humanPlayer);
-    if (opponentOpen3s.length > 0) {
-      const threat = opponentOpen3s[0];
-      
-      // For hard difficulty, ensure minimum thinking time even for threat blocking
-      if (difficulty === 'hard') {
-        const minThinkingTime = 5000; // 5 seconds minimum
-        const startTime = Date.now();
+    // PRIORITY 10: Block opponent's Open Three (_XXX_) - Skip in very complex positions for hard difficulty
+    if (!skipEarlyReturnsForDeepSearch) {
+      progressCallback(20);
+      const opponentOpen3s = checkSimpleOpen3Threats(blackBitboard, whiteBitboard, humanPlayer);
+      if (opponentOpen3s.length > 0) {
+        const threat = opponentOpen3s[0];
         
-        // Use deep search to find the best blocking move
-        if (typeof findBestMoveAdaptive === 'function') {
-          const bestMove = findBestMoveAdaptive(
-            blackBitboard,
-            whiteBitboard,
-            computerPlayer,
-            humanPlayer,
-            difficulty,
-            (progress) => {
-              const mappedProgress = Math.min(95, 20 + (progress / 100) * 75);
-              progressCallback(Math.floor(mappedProgress));
-            }
-          );
+        // For hard difficulty in complex positions, consider deep search even when blocking threats
+        if (difficulty === 'hard' && totalStones >= 10) {
+          // Do a quick evaluation to see if the threat is truly urgent
+          let threatUrgency = 0;
           
-          // Ensure minimum thinking time
-          const elapsedTime = Date.now() - startTime;
-          if (elapsedTime < minThinkingTime) {
-            await new Promise(resolve => {
-              setTimeout(resolve, minThinkingTime - elapsedTime);
-            });
-          }
+          // Check how many other threats exist
+          const allThreats = [
+            ...checkImmediateThreat(blackBitboard, whiteBitboard, humanPlayer),
+            ...checkOpen4Threats(blackBitboard, whiteBitboard, humanPlayer),
+            ...findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer),
+            ...opponentOpen3s
+          ];
           
-          if (bestMove) {
+          threatUrgency = allThreats.length;
+          
+          // If there are multiple threats or this is a very complex position, use deep search
+          if (threatUrgency <= 2 && totalStones >= 15) {
+            // Fall through to deep search instead of immediate blocking
+          } else {
             progressCallback(100);
-            return bestMove;
+            return { row: threat.row, col: threat.col };
           }
-        }
-        
-        // Fallback to blocking the threat with minimum thinking time
-        const elapsedTime = Date.now() - startTime;
-        if (elapsedTime < minThinkingTime) {
-          await new Promise(resolve => {
-            setTimeout(resolve, minThinkingTime - elapsedTime);
-          });
+        } else {
+          progressCallback(100);
+          return { row: threat.row, col: threat.col };
         }
       }
-      
-      progressCallback(100);
-      return { row: threat.row, col: threat.col };
     }
 
     // GENERAL DEEP SEARCH for remaining moves (difficulty-based depth)
     progressCallback(22);
-    
-    let searchStartTime = Date.now();
-    const minThinkingTimeForSearch = difficulty === 'hard' ? 5000 : 
-                                    difficulty === 'medium' ? 2000 : 500;
     
     if (typeof findBestMoveAdaptive === 'function') {
       const bestMove = findBestMoveAdaptive(
@@ -1066,14 +1168,6 @@ async function findBestMove(
           progressCallback(Math.floor(mappedProgress));
         }
       );
-      
-      // Ensure minimum thinking time based on difficulty
-      const elapsedTime = Date.now() - searchStartTime;
-      if (elapsedTime < minThinkingTimeForSearch) {
-        await new Promise(resolve => {
-          setTimeout(resolve, minThinkingTimeForSearch - elapsedTime);
-        });
-      }
       
       if (bestMove) {
         progressCallback(100);
@@ -1094,6 +1188,7 @@ async function findBestMove(
     return { row: 7, col: 7 };
     
   } catch (error) {
+    console.error('AI Worker error in findBestMove:', error);
     // Emergency fallback
     progressCallback(100);
     return { row: 7, col: 7 };
@@ -1104,8 +1199,9 @@ async function findBestMove(
 function minimaxAlphaBeta(blackBitboard, whiteBitboard, depth, alpha, beta, isMaximizing, computerPlayer, humanPlayer, moveHistory = [], progressTracker = null) {
   // Terminal conditions
   if (depth === 0) {
+    const score = evaluatePosition(blackBitboard, whiteBitboard, computerPlayer, humanPlayer);
     return {
-      score: evaluatePosition(blackBitboard, whiteBitboard, computerPlayer, humanPlayer),
+      score: score,
       move: null
     };
   }
@@ -1136,7 +1232,7 @@ function minimaxAlphaBeta(blackBitboard, whiteBitboard, depth, alpha, beta, isMa
   }
   
   // Limit candidates based on depth to maintain performance
-  const maxCandidates = Math.max(5, Math.floor(15 - depth * 2));
+  const maxCandidates = Math.max(8, Math.floor(20 - depth * 2)); // Increased base candidates
   const limitedCandidates = candidates.slice(0, maxCandidates);
   
   if (isMaximizing) {
@@ -1171,6 +1267,7 @@ function minimaxAlphaBeta(blackBitboard, whiteBitboard, depth, alpha, beta, isMa
       
       // Recursive call
       const newMoveHistory = [...moveHistory, candidate];
+      
       const evaluation = minimaxAlphaBeta(
         newBlackBitboard, 
         newWhiteBitboard, 
@@ -1218,6 +1315,7 @@ function minimaxAlphaBeta(blackBitboard, whiteBitboard, depth, alpha, beta, isMa
       
       // Recursive call
       const newMoveHistory = [...moveHistory, candidate];
+      
       const evaluation = minimaxAlphaBeta(
         newBlackBitboard, 
         newWhiteBitboard, 
@@ -1370,15 +1468,15 @@ function evaluateLinePattern(playerBitboard, opponentBitboard, row, col, dRow, d
 }
 
 // Deep search function specifically for hard difficulty
-function findBestMoveDeepSearch(blackBitboard, whiteBitboard, computerPlayer, humanPlayer, progressCallback) {
-  const depth = 4; // 4-ply search for hard difficulty
+function findBestMoveDeepSearch(blackBitboard, whiteBitboard, computerPlayer, humanPlayer, progressCallback, searchDepth = 8) {
+  const depth = searchDepth;
   
   if (progressCallback) progressCallback(5);
   
   // Create progress tracker
   const progressTracker = {
     lastReportedProgress: 0,
-    reportProgress: (progress) => {
+    reportProgress: function(progress) {
       if (progressCallback && progress >= this.lastReportedProgress + 2) { // Throttle updates
         this.lastReportedProgress = progress;
         progressCallback(Math.min(90, progress));
@@ -1404,5 +1502,9 @@ function findBestMoveDeepSearch(blackBitboard, whiteBitboard, computerPlayer, hu
   
   if (progressCallback) progressCallback(100);
   
-  return result.move;
+  if (result && result.move) {
+    return result.move;
+  } else {
+    return null;
+  }
 }

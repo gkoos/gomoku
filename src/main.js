@@ -15,9 +15,7 @@ let aiWorker = null; // AI Web Worker
 // Initialize the AI worker
 function initAIWorker() {
   try {
-    console.log('Loading traditional worker for maximum compatibility...');
     aiWorker = new Worker(new URL('./ai-worker.js', import.meta.url));
-    console.log('Traditional worker created successfully');
     
     aiWorker.onmessage = function(e) {
       const { type, move, progress, message } = e.data;
@@ -43,8 +41,6 @@ function initAIWorker() {
             makeRandomMove();
           }
         }, 150); // Brief delay to show completion
-      } else if (type === 'DEBUG') {
-        console.log(message);
       }
     };
     

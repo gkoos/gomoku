@@ -62,26 +62,33 @@ The AI opponent implements a fairly sophisticated game engine with multiple algo
 ### AI Difficulty Levels
 
 #### Easy
-- **Search Depth**: 1-4 ply adaptive search
-- **Move Evaluation**: Basic threat detection with 30% randomization
-- **Candidate Moves**: Evaluates top 5 moves for variety
-- **Response Time**: ~200-500ms average
+- **Search Method**: Heuristic evaluation with pattern matching
+- **Search Depth**: No deep search (immediate tactical analysis only)
+- **Move Evaluation**: Basic threat detection and pattern scoring
+- **Candidate Moves**: Quick evaluation of promising positions
+- **Response Time**: ~1-2 seconds average
+- **Behavior**: Focuses on immediate threats and basic tactical moves
 
-#### Medium (Default)
-- **Search Depth**: 2-5 ply adaptive search
+#### Medium
+- **Search Method**: Deep minimax search with alpha-beta pruning
+- **Search Depth**: 6-ply lookahead (3 full turns ahead)
 - **Move Evaluation**: Full pattern analysis with strategic positioning
-- **Candidate Moves**: Evaluates top 3 moves for balanced play
-- **Response Time**: ~500-1500ms average
+- **Candidate Moves**: Evaluates top candidates with moderate planning
+- **Response Time**: ~3-8 seconds average
+- **Behavior**: Moderate strategic planning with threat analysis
 
 #### Hard
-- **Search Depth**: 3-6 ply adaptive search with iterative deepening
-- **Move Evaluation**: Complete threat analysis including complex fork detection
-- **Candidate Moves**: Evaluates top 2 moves for maximum strength
+- **Search Method**: Deep minimax search with alpha-beta pruning
+- **Search Depth**: 8-ply lookahead (4 full turns ahead)
+- **Move Evaluation**: Complete threat analysis including complex patterns
+- **Candidate Moves**: Comprehensive evaluation for maximum strength
 - **Advanced Features**:
-  - Double threat creation and blocking
-  - Multi-step tactical sequences
-  - Endgame optimization
-- **Response Time**: ~1000-3000ms average
+  - Multi-move tactical sequences
+  - Complex position evaluation
+  - Advanced threat detection
+  - Strategic endgame optimization
+- **Response Time**: ~5-15+ seconds average (varies by position complexity)
+- **Behavior**: Deep strategic planning with sophisticated threat analysis
 
 ### Move Prioritization System
 
