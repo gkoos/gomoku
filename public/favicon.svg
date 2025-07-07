@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Board background -->
+  <rect width="32" height="32" fill="#DEB887"/>
+  
+  <!-- Grid lines -->
+  <line x1="8" y1="0" x2="8" y2="32" stroke="#8B4513" stroke-width="1"/>
+  <line x1="16" y1="0" x2="16" y2="32" stroke="#8B4513" stroke-width="1"/>
+  <line x1="24" y1="0" x2="24" y2="32" stroke="#8B4513" stroke-width="1"/>
+  <line x1="0" y1="8" x2="32" y2="8" stroke="#8B4513" stroke-width="1"/>
+  <line x1="0" y1="16" x2="32" y2="16" stroke="#8B4513" stroke-width="1"/>
+  <line x1="0" y1="24" x2="32" y2="24" stroke="#8B4513" stroke-width="1"/>
+  
+  <!-- Black stone -->
+  <circle cx="12" cy="12" r="3" fill="url(#blackGradient)"/>
+  
+  <!-- White stone -->
+  <circle cx="20" cy="20" r="3" fill="url(#whiteGradient)"/>
+  
+  <!-- Gradients for realistic stones -->
+  <defs>
+    <radialGradient id="blackGradient" cx="0.3" cy="0.3">
+      <stop offset="0%" stop-color="#555"/>
+      <stop offset="100%" stop-color="#000"/>
+    </radialGradient>
+    <radialGradient id="whiteGradient" cx="0.3" cy="0.3">
+      <stop offset="0%" stop-color="#fff"/>
+      <stop offset="100%" stop-color="#e0e0e0"/>
+    </radialGradient>
+  </defs>
+</svg>

@@ -1,0 +1,148 @@
+# Gomoku Game
+
+A modern, responsive Gomoku (Five in a Row) game built with vanilla JavaScript and Vite. Play against the computer with a clean, intuitive interface.
+
+## Features
+
+### Game Mechanics
+- **15x15 board** - Traditional Gomoku board size
+- **Human vs Computer** - Play against a smart AI opponent
+- **Player choice** - Choose to play as Black (first) or White (second)
+- **Win detection** - Automatic detection of 5 stones in a row (horizontal, vertical, diagonal)
+- **Draw detection** - Detects when the board is full with no winner
+
+### Player Controls
+- **Color selector** - Choose to play as Black or White before starting
+- **AI Difficulty selector** - Choose Easy, Medium, or Hard difficulty
+- **Start Game button** - Begin the game after selecting your preferences
+- **New Game button** - Reset the board and start over at any time
+- **Game status display** - Shows whose turn it is and game results
+
+## Computer AI
+
+The AI opponent implements a fairly sophisticated game engine with multiple algorithms and optimizations:
+
+### Core Algorithms
+
+#### Pattern-Based Evaluation
+- **Threat Detection**: Multi-layered threat analysis system
+  - Immediate win detection (5-in-a-row completion)
+  - Open four patterns (unstoppable 4-stone formations)
+  - Double open three threats (fork creation)
+  - Four-stone patterns with gaps (X_XXX, XX_XX, XXX_X patterns)
+- **Pattern Scoring**: Weighted evaluation based on:
+  - Stone count in sequences (2, 3, 4, 5 stones)
+  - Open ends (0, 1, or 2 open sides)
+  - Strategic position value (center bias)
+
+#### Alpha-Beta Pruning Search
+- **Minimax Algorithm**: Classic game tree search with alpha-beta pruning
+- **Iterative Deepening**: Progressively deeper searches within time constraints
+- **Aspiration Windows**: Narrow search windows around expected values for faster pruning
+- **Move Ordering**: Prioritizes promising moves to improve pruning efficiency
+
+#### Advanced Optimizations
+
+##### Bitboard Representation
+- **32-bit Bitboards**: Efficient board state representation using 8 slots (256 bits total)
+- **Fast Operations**: Bitwise operations for rapid position checks and updates
+- **Memory Efficient**: Compact storage for game states and pattern matching
+
+##### Search Enhancements
+- **Transposition Table**: Caches evaluated positions to avoid redundant calculations
+- **Killer Move Heuristic**: Prioritizes moves that caused cutoffs in similar positions
+- **History Heuristic**: Statistical move ordering based on historical performance
+- **Time Management**: Adaptive search depth based on remaining time and position complexity
+
+##### Zobrist Hashing
+- **Position Hashing**: 64-bit hash keys for fast position lookup and comparison
+- **Incremental Updates**: Efficient hash updates during move generation
+- **Collision Detection**: Handles hash collisions gracefully
+
+### AI Difficulty Levels
+
+#### Easy
+- **Search Depth**: 1-4 ply adaptive search
+- **Move Evaluation**: Basic threat detection with 30% randomization
+- **Candidate Moves**: Evaluates top 5 moves for variety
+- **Response Time**: ~200-500ms average
+
+#### Medium (Default)
+- **Search Depth**: 2-5 ply adaptive search
+- **Move Evaluation**: Full pattern analysis with strategic positioning
+- **Candidate Moves**: Evaluates top 3 moves for balanced play
+- **Response Time**: ~500-1500ms average
+
+#### Hard
+- **Search Depth**: 3-6 ply adaptive search with iterative deepening
+- **Move Evaluation**: Complete threat analysis including complex fork detection
+- **Candidate Moves**: Evaluates top 2 moves for maximum strength
+- **Advanced Features**:
+  - Double threat creation and blocking
+  - Multi-step tactical sequences
+  - Endgame optimization
+- **Response Time**: ~1000-3000ms average
+
+### Move Prioritization System
+
+The AI uses a strict priority hierarchy:
+
+1. **AI Winning Moves** (Priority 1)
+   - 5-in-a-row completion
+   - Open four creation (guaranteed win next move)
+   - Double open three creation (fork/multiple threats)
+
+2. **Defensive Blocking** (Priority 2)
+   - Block opponent's immediate wins
+   - Block opponent's open fours
+   - Block opponent's double open threes
+
+3. **Tactical Moves** (Priority 3)
+   - Create four-stone threats
+   - Block opponent's four-stone threats
+   - Strategic position improvement
+
+4. **Positional Play** (Priority 4)
+   - Alpha-beta search evaluation
+   - Pattern-based scoring
+   - Board control optimization
+
+### Performance Optimizations
+
+- **Web Worker Implementation**: Non-blocking AI computation for smooth UI
+- **Progressive Search**: Incremental depth increases with time management
+- **Early Termination**: Immediate response for obvious moves (wins/blocks)
+- **Candidate Move Filtering**: Reduces search space by focusing on relevant positions
+- **Memory Management**: Efficient cleanup of search tables and caches
+
+The AI never gets stuck or fails to respond, with multiple fallback mechanisms ensuring reliable gameplay at all difficulty levels.
+
+## Setup
+
+### Prerequisites
+- Node.js (version 14 or higher)
+- npm
+
+### Installation
+```bash
+npm install
+```
+
+### Development
+```bash
+npm run dev
+```
+
+### Build for Production
+```bash
+npm run build
+```
+
+### Preview Production Build
+```bash
+npm run preview
+```
+
+## License
+
+MIT License - feel free to use this project for learning or personal use.
