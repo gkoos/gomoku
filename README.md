@@ -1,6 +1,6 @@
 # Gomoku Game
 
-A modern, responsive Gomoku (Five in a Row) game built with vanilla JavaScript and Vite. Play against the computer with a clean, intuitive interface.
+A modern, responsive Gomoku (Five in a Row) game built with vanilla JavaScript and Vite. Play against the computer with a clean, intuitive interface. The game is deployed to [Cloudflare Pages](https://gomoku-e0c.pages.dev/).
 
 ## Features
 
