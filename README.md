@@ -18,6 +18,15 @@ A modern, responsive Gomoku (Five in a Row) game built with vanilla JavaScript a
 - **New Game button** - Reset the board and start over at any time
 - **Game status display** - Shows whose turn it is and game results
 
+### Board Setup Mode
+- **Setup Board button** - Enter board editing mode to create custom game positions
+- **Interactive board editing** - Click cells to cycle through empty → black → white → empty
+- **Computer color selection** - Choose whether the AI plays as Black or White
+- **Next move selection** - Set which player moves first in the custom position
+- **Clear Board button** - Quickly remove all stones from the setup board
+- **Start Game from setup** - Begin playing from your custom board configuration
+- **Cancel setup** - Exit setup mode and return to normal game interface
+
 ## Computer AI
 
 The AI opponent implements a fairly sophisticated game engine with multiple algorithms and optimizations:
