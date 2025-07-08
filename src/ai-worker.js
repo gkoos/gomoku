@@ -127,7 +127,7 @@ function checkOpen4Threats(blackBitboard, whiteBitboard, playerColor) {
 
       // Check each direction for open 4 patterns
       for (const [dRow, dCol] of directions) {
-        if (hasOpen4PatternSimple(targetBitboard, row, col, dRow, dCol)) {
+        if (hasOpen4PatternSimple(targetBitboard, blackBitboard, whiteBitboard, row, col, dRow, dCol)) {
           threatMoves.push({ row, col, position, priority: 'open4' });
           break; // Found a threat, no need to check other directions
         }
@@ -139,7 +139,20 @@ function checkOpen4Threats(blackBitboard, whiteBitboard, playerColor) {
 }
 
 // Simplified check for open 4 pattern 
-function hasOpen4PatternSimple(playerBitboard, row, col, dRow, dCol) {
+function hasOpen4PatternSimple(playerBitboard, blackBitboard, whiteBitboard, row, col, dRow, dCol) {
+  // Helper function to check if position is empty
+  const isEmpty = (r, c) => {
+    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) return false;
+    const pos = r * BOARD_SIZE + c;
+    const slot = Math.floor(pos / 32);
+    const bit = pos % 32;
+    if (slot >= 8) return false;
+    
+    const blackBit = ((blackBitboard[slot] >>> 0) & (1 << bit)) !== 0;
+    const whiteBit = ((whiteBitboard[slot] >>> 0) & (1 << bit)) !== 0;
+    return !blackBit && !whiteBit;
+  };
+  
   // Test placing a stone at this position
   const testBitboard = [...playerBitboard];
   const position = row * BOARD_SIZE + col;
@@ -149,6 +162,8 @@ function hasOpen4PatternSimple(playerBitboard, row, col, dRow, dCol) {
   
   // Count consecutive stones in both directions from the placed stone
   let count = 1; // The stone we just placed
+  let positiveCount = 0;
+  let negativeCount = 0;
   
   // Count in positive direction
   for (let i = 1; i < 5; i++) {
@@ -163,6 +178,7 @@ function hasOpen4PatternSimple(playerBitboard, row, col, dRow, dCol) {
     
     if (newSlot < 8 && ((testBitboard[newSlot] >>> 0) & (1 << newBit)) !== 0) {
       count++;
+      positiveCount++;
     } else {
       break;
     }
@@ -181,19 +197,37 @@ function hasOpen4PatternSimple(playerBitboard, row, col, dRow, dCol) {
     
     if (newSlot < 8 && ((testBitboard[newSlot] >>> 0) & (1 << newBit)) !== 0) {
       count++;
+      negativeCount++;
     } else {
       break;
     }
   }
   
-  // If we have 4 or more consecutive stones, this is a threat
-  return count >= 4;
+  // If we have 4 or more consecutive stones, check if it's truly "open"
+  if (count >= 4) {
+    // For an "open 4", we need at least one end to be extendable to create 5-in-a-row
+    // Check the positions immediately beyond our consecutive stones
+    const positiveEnd = row + dRow * (positiveCount + 1);
+    const positiveEndCol = col + dCol * (positiveCount + 1);
+    const negativeEnd = row - dRow * (negativeCount + 1);
+    const negativeEndCol = col - dCol * (negativeCount + 1);
+    
+    const positiveEndOpen = isEmpty(positiveEnd, positiveEndCol);
+    const negativeEndOpen = isEmpty(negativeEnd, negativeEndCol);
+    
+    // Only consider this an "open 4" if at least one end can be extended
+    // AND we have exactly 4 stones (not 5, which would be a win)
+    return (positiveEndOpen || negativeEndOpen) && count === 4;
+  }
+  
+  return false;
 }
 
 // Ultra-simple threat detection - MORE CONSERVATIVE for complex positions
 function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
   const threats = [];
   const humanBitboard = humanPlayer === "black" ? blackBitboard : whiteBitboard;
+  const opponentBitboard = humanPlayer === "black" ? whiteBitboard : blackBitboard;
   
   // Count total stones to determine position complexity
   let totalStones = 0;
@@ -222,6 +256,15 @@ function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
     const bit = pos % 32;
     return slot < 8 && ((humanBitboard[slot] >>> 0) & (1 << bit)) !== 0;
   };
+
+  // Helper function to check if a position has an opponent stone
+  const hasOpponentStone = (r, c) => {
+    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) return false;
+    const pos = r * BOARD_SIZE + c;
+    const slot = Math.floor(pos / 32);
+    const bit = pos % 32;
+    return slot < 8 && ((opponentBitboard[slot] >>> 0) & (1 << bit)) !== 0;
+  };
   
   // Helper function to check if a position is empty
   const isEmpty = (r, c) => {
@@ -233,6 +276,12 @@ function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
     const whiteBit = ((whiteBitboard[slot] >>> 0) & (1 << bit)) !== 0;
     return !blackBit && !whiteBit;
   };
+
+  // Helper function to check if a position is blocked (opponent stone or board edge)
+  const isBlocked = (r, c) => {
+    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) return true; // Board edge
+    return hasOpponentStone(r, c); // Opponent stone
+  };
   
   // Check every empty position for 4-stone threat patterns
   for (let row = 0; row < BOARD_SIZE; row++) {
@@ -243,57 +292,67 @@ function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
       const directions = [[0,1], [1,0], [1,1], [1,-1]];
       
       for (const [dRow, dCol] of directions) {
-        // Count consecutive stones in both directions from this position
-        let totalCount = 0;
+        // MUCH MORE CONSERVATIVE: Only look for immediate 4-in-a-row completions
+        // Check if placing a stone here creates exactly 4 consecutive stones
+        // and that pattern can be extended to 5
         
-        // Count stones in positive direction
+        let consecutiveStones = 1; // The stone we're placing
+        let canExtendTo5 = false;
+        
+        // Count consecutive stones in positive direction
+        let posCount = 0;
         for (let i = 1; i <= 4; i++) {
           if (hasHumanStone(row + dRow * i, col + dCol * i)) {
-            totalCount++;
+            posCount++;
+            consecutiveStones++;
           } else {
+            // Check if this position can be used to extend to 5
+            if (i === posCount + 1 && isEmpty(row + dRow * i, col + dCol * i)) {
+              canExtendTo5 = true;
+            }
             break;
           }
         }
         
-        // Count stones in negative direction
+        // Count consecutive stones in negative direction
+        let negCount = 0;
         for (let i = 1; i <= 4; i++) {
           if (hasHumanStone(row - dRow * i, col - dCol * i)) {
-            totalCount++;
+            negCount++;
+            consecutiveStones++;
           } else {
+            // Check if this position can be used to extend to 5
+            if (i === negCount + 1 && isEmpty(row - dRow * i, col - dCol * i)) {
+              canExtendTo5 = true;
+            }
             break;
           }
         }
         
-        // If we found 4 or more stones total, this is a threat
-        if (totalCount >= 4) {
-          // In complex positions, verify this is an immediate 4-threat (not just 4 scattered stones)
-          if (isComplexPosition) {
-            // Additional verification: check that these are truly consecutive
-            let consecutiveStones = 0;
-            let hasGap = false;
-            
-            // Check for actual consecutive pattern
-            for (let check = -4; check <= 4; check++) {
-              if (check === 0) continue; // Skip the position we're testing
-              
-              if (hasHumanStone(row + dRow * check, col + dCol * check)) {
-                consecutiveStones++;
-              } else if (consecutiveStones > 0) {
-                // We hit a gap after finding stones
-                hasGap = true;
-                break;
-              }
-            }
-            
-            // Only add if we have truly consecutive stones with minimal gaps
-            if (consecutiveStones >= 3 && !hasGap) {
-              threats.push({ row, col });
-              break;
-            }
-          } else {
-            // In simple positions, trust the original logic
+        // Only consider this a threat if:
+        // 1. It creates exactly 4 or more consecutive stones
+        // 2. The pattern can be extended to create 5-in-a-row
+        // 3. It's not completely blocked on both ends
+        if (consecutiveStones >= 4 && canExtendTo5) {
+          // Additional verification: make sure we're not just filling a gap in a blocked pattern
+          const leftmostPos = row - dRow * negCount;
+          const leftmostCol = col - dCol * negCount;
+          const rightmostPos = row + dRow * posCount;
+          const rightmostCol = col + dCol * posCount;
+          
+          // Check that at least one end of the complete pattern is not blocked
+          const leftEnd = leftmostPos - dRow;
+          const leftEndCol = leftmostCol - dCol;
+          const rightEnd = rightmostPos + dRow;
+          const rightEndCol = rightmostCol + dCol;
+          
+          const leftEndBlocked = isBlocked(leftEnd, leftEndCol);
+          const rightEndBlocked = isBlocked(rightEnd, rightEndCol);
+          
+          // Only add threat if at least one end is not blocked
+          if (!leftEndBlocked || !rightEndBlocked) {
             threats.push({ row, col });
-            break;
+            break; // Found a threat in this direction, no need to check others
           }
         }
       }

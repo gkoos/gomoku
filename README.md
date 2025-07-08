@@ -39,9 +39,11 @@ The AI opponent implements a fairly sophisticated game engine with multiple algo
   - Open four patterns (unstoppable 4-stone formations)
   - Double open three threats (fork creation)
   - Four-stone patterns with gaps (X_XXX, XX_XX, XXX_X patterns)
+  - **Smart blocked pattern filtering**: Avoids wasting moves on patterns that cannot extend to wins
 - **Pattern Scoring**: Weighted evaluation based on:
   - Stone count in sequences (2, 3, 4, 5 stones)
   - Open ends (0, 1, or 2 open sides)
+  - Extension potential (ability to create winning threats)
   - Strategic position value (center bias)
 
 #### Alpha-Beta Pruning Search
@@ -114,14 +116,23 @@ The AI uses a strict priority hierarchy:
    - Block opponent's double open threes
 
 3. **Tactical Moves** (Priority 3)
-   - Create four-stone threats
-   - Block opponent's four-stone threats
+   - Create four-stone threats (only if extendable to wins)
+   - Block opponent's four-stone threats (only genuine threats)
    - Strategic position improvement
 
 4. **Positional Play** (Priority 4)
    - Alpha-beta search evaluation
    - Pattern-based scoring
    - Board control optimization
+
+### Enhanced Threat Analysis
+
+The AI features sophisticated pattern recognition that distinguishes between genuine threats and blocked patterns:
+
+- **Genuine Threats**: Patterns like `XXX.` or `.XXX.` that can extend to create wins
+- **Blocked Patterns**: Patterns like `|XXX.|` (blocked by opponent stones or board edges) are ignored
+- **Deep Search Fallback**: When no immediate threats exist, uses deep minimax search for strategic moves
+- **Context Awareness**: Considers board complexity and position type when evaluating threats
 
 ### Performance Optimizations
 
