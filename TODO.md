@@ -17,7 +17,7 @@ This is the markdown todo file for project gomoku.
 
 ## New Features
 - [ ] Add a feature to read board from url parameters + potentially change url parameters when a move is made.
-- [ ] Add a board editor to allow users to create custom boards.
 
 # DONE
 - [x] Fix responsive design for mobile devices.
+- [x] Add a board editor to allow users to create game positions.

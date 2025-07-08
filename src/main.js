@@ -1,5 +1,6 @@
 import './style.css'
 import { board2Bitboards } from './bitboards.js'
+import * as Setup from './setup.js'
 
 // Game state
 const BOARD_SIZE = 15;
@@ -90,41 +91,76 @@ function initGame() {
 
 // Create the main game UI
 function createGameUI() {
+  const isSetupMode = Setup.isSetupMode();
+  const setupState = Setup.getSetupState();
+  
   document.querySelector('#app').innerHTML = `
     <div class="game-container">
       <h1>Gomoku</h1>
       <div class="player-selector">
-        <label>Play as:</label>
-        <select id="player-color" ${gameInProgress ? 'disabled' : ''}>
-          <option value="black" ${humanPlayer === 'black' ? 'selected' : ''}>Black (First)</option>
-          <option value="white" ${humanPlayer === 'white' ? 'selected' : ''}>White (Second)</option>
-        </select>
-        <label>AI Difficulty:</label>
-        <select id="ai-difficulty" ${gameInProgress ? 'disabled' : ''}>
-          <option value="easy" ${aiDifficulty === 'easy' ? 'selected' : ''}>Easy</option>
-          <option value="medium" ${aiDifficulty === 'medium' ? 'selected' : ''}>Medium</option>
-          <option value="hard" ${aiDifficulty === 'hard' ? 'selected' : ''}>Hard</option>
-        </select>
-        <button id="start-btn" class="start-button" ${gameInProgress ? 'style="visibility: hidden;"' : ''}>Start Game</button>
+        ${!isSetupMode ? `
+          <label>Play as:</label>
+          <select id="player-color" ${gameInProgress ? 'disabled' : ''}>
+            <option value="black" ${humanPlayer === 'black' ? 'selected' : ''}>Black (First)</option>
+            <option value="white" ${humanPlayer === 'white' ? 'selected' : ''}>White (Second)</option>
+          </select>
+          <label>AI Difficulty:</label>
+          <select id="ai-difficulty" ${gameInProgress ? 'disabled' : ''}>
+            <option value="easy" ${aiDifficulty === 'easy' ? 'selected' : ''}>Easy</option>
+            <option value="medium" ${aiDifficulty === 'medium' ? 'selected' : ''}>Medium</option>
+            <option value="hard" ${aiDifficulty === 'hard' ? 'selected' : ''}>Hard</option>
+          </select>
+          <button id="start-btn" class="start-button" ${gameInProgress ? 'style="visibility: hidden;"' : ''}>Start Game</button>
+          <button id="setup-btn" class="start-button" ${gameInProgress ? 'style="visibility: hidden;"' : ''}>Setup Board</button>
+        ` : `
+          <label>Computer:</label>
+          <select id="setup-computer-color">
+            <option value="black" ${setupState.computerColor === 'black' ? 'selected' : ''}>Black</option>
+            <option value="white" ${setupState.computerColor === 'white' ? 'selected' : ''}>White</option>
+          </select>
+          <label>Next Move:</label>
+          <select id="setup-next-move">
+            <option value="black" ${setupState.nextMove === 'black' ? 'selected' : ''}>Black</option>
+            <option value="white" ${setupState.nextMove === 'white' ? 'selected' : ''}>White</option>
+          </select>
+          <button id="setup-start-btn" class="start-button">Start Game</button>
+          <button id="setup-cancel-btn" class="start-button">Cancel</button>
+        `}
       </div>
       <div class="game-info">
         <div id="game-status"></div>
-        <button id="reset-btn" class="reset-button" ${!gameInProgress ? 'style="visibility: hidden;"' : ''}>New Game</button>
+        ${isSetupMode ? 
+          '<button id="clear-board-btn" class="reset-button">Clear Board</button>' :
+          `<button id="reset-btn" class="reset-button" ${!gameInProgress ? 'style="visibility: hidden;"' : ''}>New Game</button>`
+        }
       </div>
       <div id="game-board" class="board"></div>
     </div>
   `;
   
-  // Add event listeners
-  document.getElementById('reset-btn').addEventListener('click', initGame);
-  document.getElementById('start-btn').addEventListener('click', startGame);
-  document.getElementById('player-color').addEventListener('change', (e) => {
-    humanPlayer = e.target.value;
-    computerPlayer = humanPlayer === 'black' ? 'white' : 'black';
-  });
-  document.getElementById('ai-difficulty').addEventListener('change', (e) => {
-    aiDifficulty = e.target.value;
-  });
+  // Add event listeners based on mode
+  if (!isSetupMode) {
+    document.getElementById('reset-btn').addEventListener('click', initGame);
+    document.getElementById('start-btn').addEventListener('click', startGame);
+    document.getElementById('setup-btn').addEventListener('click', enterSetupMode);
+    document.getElementById('player-color').addEventListener('change', (e) => {
+      humanPlayer = e.target.value;
+      computerPlayer = humanPlayer === 'black' ? 'white' : 'black';
+    });
+    document.getElementById('ai-difficulty').addEventListener('change', (e) => {
+      aiDifficulty = e.target.value;
+    });
+  } else {
+    document.getElementById('clear-board-btn').addEventListener('click', clearSetupBoard);
+    document.getElementById('setup-start-btn').addEventListener('click', startGameFromSetup);
+    document.getElementById('setup-cancel-btn').addEventListener('click', exitSetupMode);
+    document.getElementById('setup-computer-color').addEventListener('change', (e) => {
+      Setup.setSetupComputerColor(e.target.value);
+    });
+    document.getElementById('setup-next-move').addEventListener('change', (e) => {
+      Setup.setSetupNextMove(e.target.value);
+    });
+  }
 }
 
 // Create the game board
@@ -132,8 +168,8 @@ function createBoard() {
   const boardElement = document.getElementById('game-board');
   boardElement.innerHTML = '';
   
-  // Apply disabled class if game is not in progress
-  if (!gameInProgress) {
+  // Apply disabled class if game is not in progress and not in setup mode
+  if (!gameInProgress && !Setup.isSetupMode()) {
     boardElement.classList.add('disabled');
   } else {
     boardElement.classList.remove('disabled');
@@ -151,7 +187,13 @@ function createBoard() {
         cell.classList.add('center-marker');
       }
       
-      cell.addEventListener('click', () => makeMove(row, col));
+      cell.addEventListener('click', () => {
+        if (Setup.isSetupMode()) {
+          handleSetupCellClick(row, col);
+        } else {
+          makeMove(row, col);
+        }
+      });
       boardElement.appendChild(cell);
     }
   }
@@ -391,6 +433,9 @@ function updateGameStatus(message = null) {
     statusElement.innerHTML = message;
     statusElement.classList.add('game-over');
     statusElement.classList.remove('no-game');
+  } else if (Setup.isSetupMode()) {
+    statusElement.innerHTML = 'Setup Board';
+    statusElement.classList.remove('game-over', 'no-game');
   } else if (!gameInProgress) {
     statusElement.innerHTML = '';
     statusElement.classList.remove('game-over');
@@ -436,6 +481,96 @@ function cleanup() {
 
 // Add cleanup on page unload
 window.addEventListener('beforeunload', cleanup);
+
+// Handle cell click in setup mode
+function handleSetupCellClick(row, col) {
+  const newState = Setup.toggleSetupCell(row, col);
+  const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+  
+  // Remove existing stone classes
+  cell.classList.remove('stone', 'black', 'white');
+  
+  // Add new state if not empty
+  if (newState) {
+    cell.classList.add('stone', newState);
+  }
+}
+
+// Update board display to show current board state
+function updateBoardDisplay() {
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    for (let col = 0; col < BOARD_SIZE; col++) {
+      const cell = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+      const stone = board[row][col];
+      
+      // Remove existing stone classes
+      cell.classList.remove('stone', 'black', 'white', 'last-move');
+      
+      // Add stone class if there's a stone
+      if (stone) {
+        cell.classList.add('stone', stone);
+      }
+    }
+  }
+}
+
+// Clear setup board function
+function clearSetupBoard() {
+  Setup.clearSetupBoard();
+  updateBoardDisplay();
+}
+
+// Setup mode functions
+function enterSetupMode() {
+  Setup.enterSetupMode();
+  createGameUI();
+  createBoard();
+  updateGameStatus();
+}
+
+function exitSetupMode() {
+  Setup.exitSetupMode();
+  // Reset the game board to empty state
+  board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
+  createGameUI();
+  createBoard();
+  updateGameStatus();
+}
+
+function startGameFromSetup() {
+  if (!Setup.validateSetup()) {
+    alert('Invalid board setup. Please check your configuration.');
+    return;
+  }
+  
+  const setupData = Setup.getSetupBoardForGame();
+  
+  // Set the game configuration from setup
+  computerPlayer = setupData.computerColor;
+  humanPlayer = setupData.humanColor;
+  currentPlayer = setupData.nextMove;
+  
+  // Copy the setup board to the game board
+  board = setupData.board;
+  
+  // Exit setup mode
+  Setup.exitSetupMode();
+  
+  // Start the game
+  gameInProgress = true;
+  gameOver = false;
+  
+  // Update UI
+  createGameUI();
+  createBoard();
+  updateBoardDisplay();
+  updateGameStatus();
+  
+  // If it's the computer's turn, make computer move
+  if (currentPlayer === computerPlayer) {
+    makeComputerMove();
+  }
+}
 
 // Start the game
 initGame();
