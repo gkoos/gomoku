@@ -5,6 +5,8 @@
 const BOARD_SIZE = 15;
 const BOARD_CELLS = BOARD_SIZE * BOARD_SIZE;
 const BITBOARD_SLOTS = 8;
+const WIN_SCORE = 1000000;
+const MAX_STATIC_SCORE = WIN_SCORE / 2;
 
 // Simple win condition checker for bitboards
 function checkWinCondition(bitboard, lastPosition) {
@@ -205,7 +207,7 @@ function hasOpen4PatternSimple(playerBitboard, blackBitboard, whiteBitboard, row
   
   // If we have 4 or more consecutive stones, check if it's truly "open"
   if (count >= 4) {
-    // For an "open 4", we need at least one end to be extendable to create 5-in-a-row
+    // An open four must have two empty ends, giving two distinct winning moves.
     // Check the positions immediately beyond our consecutive stones
     const positiveEnd = row + dRow * (positiveCount + 1);
     const positiveEndCol = col + dCol * (positiveCount + 1);
@@ -215,9 +217,9 @@ function hasOpen4PatternSimple(playerBitboard, blackBitboard, whiteBitboard, row
     const positiveEndOpen = isEmpty(positiveEnd, positiveEndCol);
     const negativeEndOpen = isEmpty(negativeEnd, negativeEndCol);
     
-    // Only consider this an "open 4" if at least one end can be extended
+    // Both ends must be extendable; one empty end is a closed four.
     // AND we have exactly 4 stones (not 5, which would be a win)
-    return (positiveEndOpen || negativeEndOpen) && count === 4;
+    return positiveEndOpen && negativeEndOpen && count === 4;
   }
   
   return false;
@@ -473,9 +475,9 @@ function checkDoubleOpen3Threats(blackBitboard, whiteBitboard, playerColor) {
 }
 
 // Generate candidate moves near existing stones with smart ordering
-function generateCandidateMoves(blackBitboard, whiteBitboard) {
+function generateCandidateMoves(blackBitboard, whiteBitboard, playerColor = "black") {
   const candidates = [];
-  const visited = new Set();
+  const visited = new Map();
   const stonePositions = [];
   
   // Helper function to check if position is empty
@@ -493,14 +495,13 @@ function generateCandidateMoves(blackBitboard, whiteBitboard) {
   const addCandidate = (row, col, priority = 0) => {
     if (row >= 0 && row < BOARD_SIZE && col >= 0 && col < BOARD_SIZE && isEmpty(row, col)) {
       const key = `${row},${col}`;
-      if (!visited.has(key)) {
-        visited.add(key);
-        candidates.push({ 
-          row, 
-          col, 
-          position: row * BOARD_SIZE + col,
-          priority: priority
-        });
+      const existing = visited.get(key);
+      if (existing) {
+        existing.priority = Math.max(existing.priority, priority);
+      } else {
+        const candidate = { row, col, position: row * BOARD_SIZE + col, priority };
+        visited.set(key, candidate);
+        candidates.push(candidate);
       }
     }
   };
@@ -593,12 +594,31 @@ function generateCandidateMoves(blackBitboard, whiteBitboard) {
     }
   }
   
-  // Sort candidates by priority (highest first) and limit to reasonable number
-  candidates.sort((a, b) => b.priority - a.priority);
-  
-  // Limit candidates to prevent excessive search in complex positions
-  const maxCandidates = Math.min(candidates.length, stonePositions.length < 10 ? 30 : 50); // Increased limits
-  return candidates.slice(0, maxCandidates);
+  // Classify tactics before either candidate limit. Every winning move is
+  // adjacent to an existing stone, including completions of broken fours.
+  const blackTest = [...blackBitboard];
+  const whiteTest = [...whiteBitboard];
+  let tacticalCount = 0;
+  for (const candidate of candidates) {
+    const slot = Math.floor(candidate.position / 32);
+    const bit = candidate.position % 32;
+    blackTest[slot] |= 1 << bit;
+    whiteTest[slot] |= 1 << bit;
+    const blackWins = checkWinCondition(blackTest, candidate.position);
+    const whiteWins = checkWinCondition(whiteTest, candidate.position);
+    blackTest[slot] = blackBitboard[slot];
+    whiteTest[slot] = whiteBitboard[slot];
+    const ownWin = playerColor === "black" ? blackWins : whiteWins;
+    const opponentWin = playerColor === "black" ? whiteWins : blackWins;
+    candidate.tactical = ownWin ? 2 : opponentWin ? 1 : 0;
+    if (candidate.tactical) tacticalCount++;
+  }
+
+  // Wins precede blocks, which precede positional moves. Keep all tactics even
+  // when they exceed the usual branching limit.
+  candidates.sort((a, b) => b.tactical - a.tactical || b.priority - a.priority);
+  const maxCandidates = stonePositions.length < 10 ? 30 : 50;
+  return candidates.slice(0, Math.max(maxCandidates, tacticalCount));
 }
 
 // Simple evaluation function with enhanced strategy and caching
@@ -651,7 +671,7 @@ function findBestMoveAdaptive(blackBitboard, whiteBitboard, computerPlayer, huma
     // Fallback to regular search if deep search fails
   }
   
-  const candidates = generateCandidateMoves(blackBitboard, whiteBitboard);
+  const candidates = generateCandidateMoves(blackBitboard, whiteBitboard, computerPlayer);
   if (candidates.length === 0) {
     return { row: 7, col: 7 };
   }
@@ -760,100 +780,59 @@ function evaluateMoveEnhanced(blackBitboard, whiteBitboard, move, computerPlayer
   return score;
 }
 
-// Enhanced line evaluation with better pattern recognition
+// Inspect every five-cell window containing this stone. Opponent stones and
+// board edges invalidate a window; gaps remain available winning squares.
+function analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol) {
+  const cells = [];
+  for (let offset = -4; offset <= 4; offset++) {
+    const r = row + dRow * offset;
+    const c = col + dCol * offset;
+    if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) {
+      cells.push(-1);
+      continue;
+    }
+    const position = r * BOARD_SIZE + c;
+    const slot = Math.floor(position / 32);
+    const mask = 1 << (position % 32);
+    cells.push((opponentBitboard[slot] & mask) !== 0 ? -1 :
+      (playerBitboard[slot] & mask) !== 0 ? 1 : 0);
+  }
+
+  let stones = 0;
+  let windows = 0;
+  const winningSquares = new Set();
+  for (let start = 0; start <= 4; start++) {
+    let count = 0;
+    let emptySquare = -1;
+    let blocked = false;
+    for (let index = start; index < start + 5; index++) {
+      if (cells[index] === -1) {
+        blocked = true;
+        break;
+      }
+      if (cells[index] === 1) count++;
+      else emptySquare = index;
+    }
+    if (blocked) continue;
+    if (count > stones) {
+      stones = count;
+      windows = 1;
+    } else if (count === stones) {
+      windows++;
+    }
+    if (count === 4) winningSquares.add(emptySquare);
+  }
+  return { stones, windows, winningMoves: winningSquares.size };
+}
+
 function evaluateLineEnhanced(playerBitboard, opponentBitboard, row, col, dRow, dCol) {
-  let playerStones = 1; // The stone we just placed
-  let spaces = 0;
-  let openEnds = 0;
-  let blocked = false;
-  
-  // Analyze in positive direction
-  let consecutiveStones = 0;
-  for (let i = 1; i <= 5; i++) {
-    const newRow = row + dRow * i;
-    const newCol = col + dCol * i;
-    
-    if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
-      blocked = true;
-      break;
-    }
-    
-    const pos = newRow * BOARD_SIZE + newCol;
-    const slot = Math.floor(pos / 32);
-    const bit = pos % 32;
-    
-    if (slot < 8 && ((playerBitboard[slot] >>> 0) & (1 << bit)) !== 0) {
-      consecutiveStones++;
-      playerStones++;
-    } else if (slot < 8 && ((opponentBitboard[slot] >>> 0) & (1 << bit)) !== 0) {
-      blocked = true;
-      break;
-    } else {
-      // Empty space
-      if (consecutiveStones > 0 || i === 1) {
-        spaces++;
-        if (i <= 4) openEnds++; // Only count as open end if within 5-stone range
-      }
-      break;
-    }
-  }
-  
-  // Reset for negative direction
-  consecutiveStones = 0;
-  let negBlocked = false;
-  
-  for (let i = 1; i <= 5; i++) {
-    const newRow = row - dRow * i;
-    const newCol = col - dCol * i;
-    
-    if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
-      negBlocked = true;
-      break;
-    }
-    
-    const pos = newRow * BOARD_SIZE + newCol;
-    const slot = Math.floor(pos / 32);
-    const bit = pos % 32;
-    
-    if (slot < 8 && ((playerBitboard[slot] >>> 0) & (1 << bit)) !== 0) {
-      consecutiveStones++;
-      playerStones++;
-    } else if (slot < 8 && ((opponentBitboard[slot] >>> 0) & (1 << bit)) !== 0) {
-      negBlocked = true;
-      break;
-    } else {
-      // Empty space
-      if (consecutiveStones > 0 || i === 1) {
-        spaces++;
-        if (i <= 4) openEnds++; // Only count as open end if within 5-stone range
-      }
-      break;
-    }
-  }
-  
-  // Adjust open ends based on blocking
-  if (blocked && negBlocked) openEnds = 0;
-  else if (blocked || negBlocked) openEnds = Math.min(openEnds, 1);
-  else openEnds = Math.min(openEnds, 2);
-  
-  // Enhanced scoring based on pattern strength
-  if (playerStones >= 5) return 100000; // Win
-  if (playerStones === 4) {
-    if (openEnds >= 1) return 10000; // Open or semi-open 4
-    return 1000; // Closed 4
-  }
-  if (playerStones === 3) {
-    if (openEnds >= 2) return 2000; // Open 3 (very strong)
-    if (openEnds >= 1) return 500; // Semi-open 3
-    return 100; // Closed 3
-  }
-  if (playerStones === 2) {
-    if (openEnds >= 2) return 200; // Open 2
-    if (openEnds >= 1) return 80; // Semi-open 2
-    return 20; // Closed 2
-  }
-  
-  return playerStones * 10 + spaces * 2; // Basic score
+  const { stones, windows, winningMoves } =
+    analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol);
+  if (stones >= 5) return 100000;
+  if (stones === 4) return winningMoves >= 2 ? 20000 : 10000;
+  if (stones === 3) return windows >= 2 ? 2000 : 500;
+  if (stones === 2) return windows >= 2 ? 200 : 80;
+  return stones === 1 ? 14 : 0;
 }
 
 // Evaluate strategic position characteristics
@@ -1236,7 +1215,7 @@ async function findBestMove(
     
     // Fallback to candidate moves if everything else fails
     progressCallback(96);
-    const availableMoves = generateCandidateMoves(blackBitboard, whiteBitboard);
+    const availableMoves = generateCandidateMoves(blackBitboard, whiteBitboard, computerPlayer);
     if (availableMoves.length > 0) {
       progressCallback(100);
       return { row: availableMoves[0].row, col: availableMoves[0].col };
@@ -1256,15 +1235,6 @@ async function findBestMove(
 
 // Minimax with Alpha-Beta Pruning for deeper search (hard difficulty)
 function minimaxAlphaBeta(blackBitboard, whiteBitboard, depth, alpha, beta, isMaximizing, computerPlayer, humanPlayer, moveHistory = [], progressTracker = null) {
-  // Terminal conditions
-  if (depth === 0) {
-    const score = evaluatePosition(blackBitboard, whiteBitboard, computerPlayer, humanPlayer);
-    return {
-      score: score,
-      move: null
-    };
-  }
-  
   // Check for immediate wins/losses
   const computerBitboard = computerPlayer === "black" ? blackBitboard : whiteBitboard;
   const opponentBitboard = computerPlayer === "black" ? whiteBitboard : blackBitboard;
@@ -1272,27 +1242,35 @@ function minimaxAlphaBeta(blackBitboard, whiteBitboard, depth, alpha, beta, isMa
   // Check if game is already won
   if (moveHistory.length > 0) {
     const lastMove = moveHistory[moveHistory.length - 1];
-    const lastPlayer = moveHistory.length % 2 === 1 ? computerPlayer : humanPlayer;
+    const lastPlayer = isMaximizing ? humanPlayer : computerPlayer;
     const lastBitboard = lastPlayer === computerPlayer ? computerBitboard : opponentBitboard;
     
     if (checkWinCondition(lastBitboard, lastMove.row * BOARD_SIZE + lastMove.col)) {
       if (lastPlayer === computerPlayer) {
-        return { score: 100000 - moveHistory.length, move: null }; // Prefer faster wins
+        return { score: WIN_SCORE - moveHistory.length, move: null }; // Prefer faster wins
       } else {
-        return { score: -100000 + moveHistory.length, move: null }; // Delay losses
+        return { score: -WIN_SCORE + moveHistory.length, move: null }; // Delay losses
       }
     }
   }
   
-  // Generate candidate moves (limited for performance)
-  const candidates = generateCandidateMoves(blackBitboard, whiteBitboard);
+  // A win at the horizon is terminal, just like a win at any earlier ply.
+  if (depth === 0) {
+    return { score: evaluatePosition(blackBitboard, whiteBitboard, computerPlayer, humanPlayer), move: null };
+  }
+
+  // Order wins and blocks for the player whose turn is being searched.
+  const candidates = generateCandidateMoves(
+    blackBitboard, whiteBitboard, isMaximizing ? computerPlayer : humanPlayer
+  );
   if (candidates.length === 0) {
     return { score: 0, move: null };
   }
   
   // Limit candidates based on depth to maintain performance
   const maxCandidates = Math.max(8, Math.floor(20 - depth * 2)); // Increased base candidates
-  const limitedCandidates = candidates.slice(0, maxCandidates);
+  const tacticalCount = candidates.filter(candidate => candidate.tactical).length;
+  const limitedCandidates = candidates.slice(0, Math.max(maxCandidates, tacticalCount));
   
   if (isMaximizing) {
     let maxEval = -Infinity;
@@ -1428,7 +1406,8 @@ function evaluatePosition(blackBitboard, whiteBitboard, computerPlayer, humanPla
     }
   }
   
-  return score;
+  // Heuristic totals must never outrank a terminal win or loss.
+  return Math.max(-MAX_STATIC_SCORE, Math.min(MAX_STATIC_SCORE, score));
 }
 
 // Evaluate the value of a stone at a specific position
@@ -1446,84 +1425,13 @@ function evaluateStonePosition(playerBitboard, opponentBitboard, row, col, multi
 
 // Evaluate line patterns for positional scoring
 function evaluateLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol) {
-  let consecutive = 1;
-  let openEnds = 0;
-  let spaces = 0;
-  
-  // Check in positive direction
-  let posConsecutive = 0;
-  let posBlocked = false;
-  for (let i = 1; i <= 4; i++) {
-    const newRow = row + dRow * i;
-    const newCol = col + dCol * i;
-    
-    if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
-      posBlocked = true;
-      break;
-    }
-    
-    const pos = newRow * BOARD_SIZE + newCol;
-    const slot = Math.floor(pos / 32);
-    const bit = pos % 32;
-    
-    if (slot < 8 && ((playerBitboard[slot] >>> 0) & (1 << bit)) !== 0) {
-      posConsecutive++;
-    } else if (slot < 8 && ((opponentBitboard[slot] >>> 0) & (1 << bit)) !== 0) {
-      posBlocked = true;
-      break;
-    } else {
-      break;
-    }
-  }
-  
-  // Check in negative direction
-  let negConsecutive = 0;
-  let negBlocked = false;
-  for (let i = 1; i <= 4; i++) {
-    const newRow = row - dRow * i;
-    const newCol = col - dCol * i;
-    
-    if (newRow < 0 || newRow >= BOARD_SIZE || newCol < 0 || newCol >= BOARD_SIZE) {
-      negBlocked = true;
-      break;
-    }
-    
-    const pos = newRow * BOARD_SIZE + newCol;
-    const slot = Math.floor(pos / 32);
-    const bit = pos % 32;
-    
-    if (slot < 8 && ((playerBitboard[slot] >>> 0) & (1 << bit)) !== 0) {
-      negConsecutive++;
-    } else if (slot < 8 && ((opponentBitboard[slot] >>> 0) & (1 << bit)) !== 0) {
-      negBlocked = true;
-      break;
-    } else {
-      break;
-    }
-  }
-  
-  consecutive += posConsecutive + negConsecutive;
-  if (!posBlocked) openEnds++;
-  if (!negBlocked) openEnds++;
-  
-  // Score based on pattern
-  if (consecutive >= 5) return 100000; // Five in a row
-  if (consecutive === 4) {
-    if (openEnds >= 1) return 10000; // Open or semi-open four
-    return 1000; // Closed four
-  }
-  if (consecutive === 3) {
-    if (openEnds === 2) return 1000; // Open three
-    if (openEnds === 1) return 100; // Semi-open three
-    return 10; // Closed three
-  }
-  if (consecutive === 2) {
-    if (openEnds === 2) return 100; // Open two
-    if (openEnds === 1) return 10; // Semi-open two
-    return 1; // Closed two
-  }
-  
-  return openEnds; // Just for having open ends
+  const { stones, windows, winningMoves } =
+    analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol);
+  if (stones >= 5) return 100000;
+  if (stones === 4) return winningMoves >= 2 ? 20000 : 10000;
+  if (stones === 3) return windows >= 2 ? 1000 : 100;
+  if (stones === 2) return windows >= 2 ? 100 : 10;
+  return stones === 1 ? Math.min(windows, 2) : 0;
 }
 
 // Deep search function specifically for hard difficulty
