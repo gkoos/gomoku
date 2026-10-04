@@ -1,6 +1,7 @@
 import './style.css'
 import { board2Bitboards } from './bitboards.js'
 import * as Setup from './setup.js'
+import { getBoardResult, getWinningLine } from './rules.js'
 
 // Game state
 const BOARD_SIZE = 15;
@@ -13,59 +14,91 @@ let aiDifficulty = 'medium'; // AI difficulty: easy, medium, hard
 let gameInProgress = false;
 let aiWorker = null; // AI Web Worker
 
+let gameGeneration = 0;
+let nextRequestId = 0;
+let activeAIRequest = null;
+let aiResultTimer = null;
+let openingTimer = null;
+
+function canComputerMove() {
+  return gameInProgress && !gameOver && !Setup.isSetupMode() && currentPlayer === computerPlayer;
+}
+
+function cancelAIWork() {
+  gameGeneration++;
+  activeAIRequest = null;
+  clearTimeout(aiResultTimer);
+  clearTimeout(openingTimer);
+  aiResultTimer = null;
+  openingTimer = null;
+  if (aiWorker) aiWorker.terminate();
+  aiWorker = null;
+}
+
+function finishTerminalPosition() {
+  const result = getBoardResult(board);
+  if (!result) return false;
+  gameOver = true;
+  if (result.winner) {
+    highlightWinningStones(result.winningPositions);
+    updateGameStatus(result.winner === humanPlayer ? 'You Win!' : 'Computer Wins!');
+  } else {
+    updateGameStatus(result.invalid ? 'Invalid board position.' : 'Game Draw!');
+  }
+  return true;
+}
+
+function handleWorkerFailure(worker, error) {
+  if (worker !== aiWorker) return;
+  console.error('AI Worker error:', error);
+  const hadPendingRequest = activeAIRequest !== null;
+  activeAIRequest = null;
+  clearTimeout(aiResultTimer);
+  aiResultTimer = null;
+  worker.terminate();
+  aiWorker = null;
+  if (hadPendingRequest && canComputerMove()) makeRandomMove();
+}
+
 // Initialize the AI worker
 function initAIWorker() {
   try {
-    aiWorker = new Worker(new URL('./ai-worker.js', import.meta.url));
-    
-    aiWorker.onmessage = function(e) {
-      const { type, move, progress, message } = e.data;
-      
+    const worker = new Worker(new URL('./ai-worker.js', import.meta.url));
+    aiWorker = worker;
+    worker.onmessage = function(e) {
+      const { type, move, progress, requestId } = e.data;
+      if (worker !== aiWorker || requestId !== activeAIRequest || !canComputerMove()) return;
       if (type === 'PROGRESS_UPDATE') {
         updateAIProgress(progress);
-      } else if (type === 'BEST_MOVE_FOUND') {
-        // Set progress to 100% when move is found
+      } else if (type === 'BEST_MOVE_FOUND' && aiResultTimer === null) {
         updateAIProgress(100);
-        
-        // Small delay to show 100% completion before making the move
-        setTimeout(() => {
-          if (move) {
-            // Check if the move is valid before attempting it
-            if (board[move.row][move.col] === null && !gameOver) {
-              makeMove(move.row, move.col, true);
-            } else {
-              // AI returned an invalid move, make a random move instead
-              makeRandomMove();
-            }
+        aiResultTimer = setTimeout(() => {
+          if (worker !== aiWorker || requestId !== activeAIRequest || !canComputerMove()) return;
+          aiResultTimer = null;
+          activeAIRequest = null;
+          if (finishTerminalPosition()) return;
+          if (move && Number.isInteger(move.row) && Number.isInteger(move.col) &&
+              move.row >= 0 && move.row < BOARD_SIZE && move.col >= 0 && move.col < BOARD_SIZE &&
+              board[move.row][move.col] === null) {
+            makeMove(move.row, move.col, true);
           } else {
-            // As a fallback, make a random move
             makeRandomMove();
           }
-        }, 150); // Brief delay to show completion
+        }, 150);
       }
     };
-    
-    aiWorker.onerror = function(error) {
-      console.error('AI Worker error:', error);
-      console.error('Error details:', error.message, error.filename, error.lineno, error.colno, error.error);
-      // AI Worker error - make a random move as fallback
-      makeRandomMove();
-    };
-
-    aiWorker.onmessageerror = function(error) {
-      console.error('AI Worker message error:', error);
-      makeRandomMove();
-    };
-
+    worker.onerror = error => handleWorkerFailure(worker, error);
+    worker.onmessageerror = error => handleWorkerFailure(worker, error);
   } catch (error) {
     console.error('Failed to create AI worker:', error);
-    // Fallback to random moves if worker creation fails
     aiWorker = null;
   }
 }
 
 // Initialize the game
 function initGame() {
+  cancelAIWork();
+  Setup.exitSetupMode();
   // Initialize empty board
   board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
   currentPlayer = 'black';
@@ -201,19 +234,24 @@ function createBoard() {
 
 // Start the game
 function startGame() {
+  if (gameInProgress || Setup.isSetupMode()) return;
   gameInProgress = true;
   
   // Clear AI caches for new game
   if (aiWorker) {
-    aiWorker.postMessage({
-      type: 'NEW_GAME'
-    });
+    const worker = aiWorker;
+    try {
+      worker.postMessage({ type: 'NEW_GAME' });
+    } catch (error) {
+      handleWorkerFailure(worker, error);
+    }
   }
   
   // Update UI
   document.getElementById('player-color').disabled = true;
   document.getElementById('ai-difficulty').disabled = true;
   document.getElementById('start-btn').style.visibility = 'hidden';
+  document.getElementById('setup-btn').style.visibility = 'hidden';
   document.getElementById('reset-btn').style.visibility = 'visible';
   
   // Enable the board
@@ -224,13 +262,21 @@ function startGame() {
   
   // If computer goes first (human chose white), make computer move
   if (humanPlayer === 'white') {
-    setTimeout(() => makeComputerMove(), 500);
+    const generation = gameGeneration;
+    openingTimer = setTimeout(() => {
+      if (generation !== gameGeneration || !canComputerMove()) return;
+      openingTimer = null;
+      makeComputerMove();
+    }, 500);
   }
 }
 
 // Make a move
 function makeMove(row, col, isComputerMove = false) {
-  if (gameOver || board[row][col] !== null) {
+  if (!gameInProgress || Setup.isSetupMode() || gameOver ||
+      !Number.isInteger(row) || !Number.isInteger(col) ||
+      row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE ||
+      board[row][col] !== null) {
     return;
   }
   
@@ -241,11 +287,6 @@ function makeMove(row, col, isComputerMove = false) {
   
   // If it's a computer move and it's not the computer's turn, ignore
   if (isComputerMove && currentPlayer !== computerPlayer) {
-    return;
-  }
-  
-  // If game hasn't started yet, ignore
-  if (!gameInProgress && !isComputerMove) {
     return;
   }
   
@@ -287,9 +328,7 @@ function makeMove(row, col, isComputerMove = false) {
 
 // Fallback function to make a random move if AI fails
 function makeRandomMove() {
-  if (gameOver || !gameInProgress) {
-    return;
-  }
+  if (!canComputerMove() || finishTerminalPosition()) return;
   
   // First, try to find moves near existing stones
   const smartMoves = [];
@@ -349,66 +388,32 @@ function makeRandomMove() {
 
 // Computer AI - using web worker
 function makeComputerMove() {
-  if (gameOver || !gameInProgress) {
+  if (!canComputerMove() || activeAIRequest !== null) return;
+  if (finishTerminalPosition()) return;
+  if (!aiWorker) {
+    makeRandomMove();
     return;
   }
-  
-  // Convert board to bitboards
   const { blackBitboard, whiteBitboard } = board2Bitboards(board);
-  // Send bitboards to AI worker
-  aiWorker.postMessage({
-    type: 'FIND_BEST_MOVE',
-    data: {
-      blackBitboard,
-      whiteBitboard,
-      computerPlayer,
-      humanPlayer,
-      difficulty: aiDifficulty
-    }
-  });
+  const worker = aiWorker;
+  activeAIRequest = ++nextRequestId;
+  try {
+    worker.postMessage({
+      type: 'FIND_BEST_MOVE',
+      requestId: activeAIRequest,
+      data: { blackBitboard, whiteBitboard, computerPlayer, humanPlayer, difficulty: aiDifficulty },
+    });
+  } catch (error) {
+    handleWorkerFailure(worker, error);
+  }
 }
 
 // Check win condition (5 in a row)
 function checkWin(row, col) {
-  const directions = [
-    [0, 1],   // horizontal
-    [1, 0],   // vertical
-    [1, 1],   // diagonal \
-    [1, -1]   // diagonal /
-  ];
-  
-  for (const [dRow, dCol] of directions) {
-    const winningPositions = [];
-    
-    // Check in negative direction first
-    let r = row - dRow;
-    let c = col - dCol;
-    while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && board[r][c] === currentPlayer) {
-      winningPositions.unshift([r, c]); // Add to beginning to maintain order
-      r -= dRow;
-      c -= dCol;
-    }
-    
-    // Add the current position
-    winningPositions.push([row, col]);
-    
-    // Check in positive direction
-    r = row + dRow;
-    c = col + dCol;
-    while (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE && board[r][c] === currentPlayer) {
-      winningPositions.push([r, c]);
-      r += dRow;
-      c += dCol;
-    }
-    
-    if (winningPositions.length >= 5) {
-      // Highlight exactly 5 stones (take first 5 if more than 5)
-      highlightWinningStones(winningPositions.slice(0, 5));
-      return true;
-    }
-  }
-  
-  return false;
+  const positions = getWinningLine(board, row, col);
+  if (!positions) return false;
+  highlightWinningStones(positions);
+  return true;
 }
 
 // Highlight the winning stones
@@ -473,10 +478,7 @@ function updateAIProgress(progress) {
 
 // Cleanup function for web worker
 function cleanup() {
-  if (aiWorker) {
-    aiWorker.terminate();
-    aiWorker = null;
-  }
+  cancelAIWork();
 }
 
 // Add cleanup on page unload
@@ -522,6 +524,12 @@ function clearSetupBoard() {
 
 // Setup mode functions
 function enterSetupMode() {
+  if (gameInProgress && !gameOver) return;
+  cancelAIWork();
+  gameInProgress = false;
+  gameOver = false;
+  currentPlayer = 'black';
+  board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
   Setup.enterSetupMode();
   createGameUI();
   createBoard();
@@ -530,11 +538,7 @@ function enterSetupMode() {
 
 function exitSetupMode() {
   Setup.exitSetupMode();
-  // Reset the game board to empty state
-  board = Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(null));
-  createGameUI();
-  createBoard();
-  updateGameStatus();
+  initGame();
 }
 
 function startGameFromSetup() {
@@ -542,34 +546,22 @@ function startGameFromSetup() {
     alert('Invalid board setup. Please check your configuration.');
     return;
   }
-  
   const setupData = Setup.getSetupBoardForGame();
-  
-  // Set the game configuration from setup
+  cancelAIWork();
   computerPlayer = setupData.computerColor;
   humanPlayer = setupData.humanColor;
   currentPlayer = setupData.nextMove;
-  
-  // Copy the setup board to the game board
   board = setupData.board;
-  
-  // Exit setup mode
   Setup.exitSetupMode();
-  
-  // Start the game
   gameInProgress = true;
   gameOver = false;
-  
-  // Update UI
   createGameUI();
   createBoard();
   updateBoardDisplay();
+  if (finishTerminalPosition()) return;
   updateGameStatus();
-  
-  // If it's the computer's turn, make computer move
-  if (currentPlayer === computerPlayer) {
-    makeComputerMove();
-  }
+  initAIWorker();
+  if (currentPlayer === computerPlayer) makeComputerMove();
 }
 
 // Start the game

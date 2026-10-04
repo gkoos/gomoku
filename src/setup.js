@@ -1,3 +1,5 @@
+import { getBoardResult } from './rules.js'
+
 // Board Setup Module
 // Handles board setup mode functionality
 
@@ -105,9 +107,5 @@ export function clearSetupBoard() {
 
 // Validate setup (optional - could add rules like valid board state)
 export function validateSetup() {
-  // For now, any setup is valid
-  // Could add checks like:
-  // - No more than 1 stone difference between black and white
-  // - No winning positions already on board
-  return true;
+  return setupMode && !getBoardResult(setupBoard)?.invalid;
 }

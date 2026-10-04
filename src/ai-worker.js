@@ -67,6 +67,76 @@ function checkWinCondition(bitboard, lastPosition) {
   return false;
 }
 
+// Root searches have no last-move history, so inspect the actual board.
+function getBitboardResult(blackBitboard, whiteBitboard) {
+  const winners = new Set();
+  let emptyCells = 0;
+  for (let position = 0; position < BOARD_CELLS; position++) {
+    const slot = Math.floor(position / 32);
+    const mask = 1 << (position % 32);
+    const black = (blackBitboard[slot] & mask) !== 0;
+    const white = (whiteBitboard[slot] & mask) !== 0;
+    if (black && white) return { invalid: true };
+    if (!black && !white) {
+      emptyCells++;
+      continue;
+    }
+    const player = black ? "black" : "white";
+    if (!winners.has(player) && checkWinCondition(black ? blackBitboard : whiteBitboard, position)) {
+      winners.add(player);
+    }
+  }
+  if (winners.size > 1) return { invalid: true };
+  if (winners.size === 1) return { winner: winners.values().next().value };
+  return emptyCells === 0 ? { draw: true } : null;
+}
+
+function findLegalFallback(blackBitboard, whiteBitboard) {
+  if (!blackBitboard || !whiteBitboard || getBitboardResult(blackBitboard, whiteBitboard)) return null;
+  for (let position = 0; position < BOARD_CELLS; position++) {
+    const slot = Math.floor(position / 32);
+    const mask = 1 << (position % 32);
+    if (((blackBitboard[slot] | whiteBitboard[slot]) & mask) === 0) {
+      return { row: Math.floor(position / BOARD_SIZE), col: position % BOARD_SIZE };
+    }
+  }
+  return null;
+}
+
+// A defender stone can remove opponent threats, never create new ones.
+// Recheck the complete original threat set for every legal blocking move.
+function selectOpenFourDefense(blackBitboard, whiteBitboard, computerPlayer, humanPlayer, threats) {
+  let bestMove = null;
+  let fewestThreats = Infinity;
+  let bestScore = -Infinity;
+  for (let position = 0; position < BOARD_CELLS; position++) {
+    const slot = Math.floor(position / 32);
+    const mask = 1 << (position % 32);
+    if (((blackBitboard[slot] | whiteBitboard[slot]) & mask) !== 0) continue;
+    const blackTest = [...blackBitboard];
+    const whiteTest = [...whiteBitboard];
+    (computerPlayer === "black" ? blackTest : whiteTest)[slot] |= mask;
+    const opponent = humanPlayer === "black" ? blackTest : whiteTest;
+    let remaining = 0;
+    for (const threat of threats) {
+      if (threat.position === position) continue;
+      if ([[0, 1], [1, 0], [1, 1], [1, -1]].some(([dRow, dCol]) =>
+        hasOpen4PatternSimple(opponent, blackTest, whiteTest, threat.row, threat.col, dRow, dCol))) {
+        remaining++;
+      }
+    }
+    if (remaining > fewestThreats) continue;
+    const move = { row: Math.floor(position / BOARD_SIZE), col: position % BOARD_SIZE };
+    const score = evaluateMoveEnhanced(blackBitboard, whiteBitboard, move, computerPlayer, humanPlayer);
+    if (remaining < fewestThreats || score > bestScore) {
+      fewestThreats = remaining;
+      bestScore = score;
+      bestMove = move;
+    }
+  }
+  return bestMove;
+}
+
 // Check for immediate threats (4 in a row with open ends)
 function checkImmediateThreat(blackBitboard, whiteBitboard, playerColor) {
   const threatMoves = [];
@@ -623,6 +693,7 @@ function generateCandidateMoves(blackBitboard, whiteBitboard, playerColor = "bla
 
 // Simple evaluation function with enhanced strategy and caching
 function findBestMoveAdaptive(blackBitboard, whiteBitboard, computerPlayer, humanPlayer, difficulty, progressCallback) {
+  if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
   if (progressCallback) progressCallback(10);
   
   // For hard difficulty, use deep minimax search with 8-ply
@@ -673,7 +744,7 @@ function findBestMoveAdaptive(blackBitboard, whiteBitboard, computerPlayer, huma
   
   const candidates = generateCandidateMoves(blackBitboard, whiteBitboard, computerPlayer);
   if (candidates.length === 0) {
-    return { row: 7, col: 7 };
+    return null;
   }
   
   if (progressCallback) progressCallback(30);
@@ -782,6 +853,25 @@ function evaluateMoveEnhanced(blackBitboard, whiteBitboard, move, computerPlayer
 
 // Inspect every five-cell window containing this stone. Opponent stones and
 // board edges invalidate a window; gaps remain available winning squares.
+// Three and two strengths require a route to a four with two empty ends.
+function hasOpenFormation(cells, stoneCount) {
+  for (let start = 0; start <= 3; start++) {
+    if (cells[start] !== 0 || cells[start + 5] !== 0) continue;
+    if (4 < start + 1 || 4 > start + 4) continue;
+    let stones = 0;
+    let blocked = false;
+    for (let index = start + 1; index < start + 5; index++) {
+      if (cells[index] === -1) {
+        blocked = true;
+        break;
+      }
+      stones += cells[index];
+    }
+    if (!blocked && stones === stoneCount) return true;
+  }
+  return false;
+}
+
 function analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol) {
   const cells = [];
   for (let offset = -4; offset <= 4; offset++) {
@@ -822,16 +912,20 @@ function analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dC
     }
     if (count === 4) winningSquares.add(emptySquare);
   }
-  return { stones, windows, winningMoves: winningSquares.size };
+  return {
+    stones, windows, winningMoves: winningSquares.size,
+    openThree: stones === 3 && hasOpenFormation(cells, 3),
+    openTwo: stones === 2 && hasOpenFormation(cells, 2),
+  };
 }
 
 function evaluateLineEnhanced(playerBitboard, opponentBitboard, row, col, dRow, dCol) {
-  const { stones, windows, winningMoves } =
+  const { stones, windows, winningMoves, openThree, openTwo } =
     analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol);
   if (stones >= 5) return 100000;
   if (stones === 4) return winningMoves >= 2 ? 20000 : 10000;
-  if (stones === 3) return windows >= 2 ? 2000 : 500;
-  if (stones === 2) return windows >= 2 ? 200 : 80;
+  if (stones === 3) return openThree ? 2000 : 500;
+  if (stones === 2) return openTwo ? 200 : 80;
   return stones === 1 ? 14 : 0;
 }
 
@@ -957,73 +1051,38 @@ function initZobristTable() {}
 
 // Listen for messages from the main thread
 self.addEventListener('message', async function (e) {
+  const requestId = e.data?.requestId;
   try {
     const { type, data } = e.data;
-
-    switch (type) {
-      case "FIND_BEST_MOVE": {
-        const { blackBitboard, whiteBitboard, computerPlayer, humanPlayer, difficulty } = data;
-
-        // Debug: Check if bitboards are properly received
-        if (!blackBitboard || !whiteBitboard) {
-          self.postMessage({
-            type: "BEST_MOVE_FOUND",
-            move: null,
-          });
-          return;
-        }
-
-        // Use the AI logic
-        try {
-          const bestMove = await findBestMove(
-            blackBitboard,
-            whiteBitboard,
-            computerPlayer,
-            humanPlayer,
-            difficulty
-          );
-          
-          self.postMessage({
-            type: "BEST_MOVE_FOUND",
-            move: bestMove,
-          });
-        } catch (error) {
-          self.postMessage({
-            type: "BEST_MOVE_FOUND",
-            move: { row: 7, col: 7 }, // Fallback center move
-          });
-        }
-        break;
-      }
-
-      case "NEW_GAME":
-        // Clear caches for new game
-        if (typeof clearTranspositionTable === 'function') {
-          clearTranspositionTable();
-        }
-        if (typeof clearEvaluationCache === 'function') {
-          clearEvaluationCache();
-        }
-        break;
-
-      default:
-        break;
+    if (type === "NEW_GAME") {
+      clearTranspositionTable();
+      clearEvaluationCache();
+      return;
     }
+    if (type !== "FIND_BEST_MOVE") return;
+    const { blackBitboard, whiteBitboard, computerPlayer, humanPlayer, difficulty } = data;
+    if (!blackBitboard || !whiteBitboard) {
+      self.postMessage({ type: "BEST_MOVE_FOUND", requestId, move: null });
+      return;
+    }
+    const move = await findBestMove(
+      blackBitboard, whiteBitboard, computerPlayer, humanPlayer, difficulty,
+      progress => self.postMessage({ type: "PROGRESS_UPDATE", requestId, progress })
+    );
+    self.postMessage({ type: "BEST_MOVE_FOUND", requestId, move });
   } catch (error) {
     console.error('AI Worker error:', error);
+    const { blackBitboard, whiteBitboard } = e.data?.data || {};
     self.postMessage({
-      type: "BEST_MOVE_FOUND",
-      move: { row: 7, col: 7 }, // Center fallback
+      type: "BEST_MOVE_FOUND", requestId,
+      move: findLegalFallback(blackBitboard, whiteBitboard),
     });
   }
 });
 
 // Progress callback function
-function progressCallback(progress) {
-  self.postMessage({
-    type: "PROGRESS_UPDATE",
-    progress: progress,
-  });
+function reportWorkerProgress(progress) {
+  self.postMessage({ type: "PROGRESS_UPDATE", progress });
 }
 
 // Main AI function - finds the best move for the computer
@@ -1032,11 +1091,16 @@ async function findBestMove(
   whiteBitboard,
   computerPlayer,
   humanPlayer,
-  difficulty
+  difficulty,
+  progressCallback = reportWorkerProgress
 ) {
   const startTime = performance.now();
   
   try {
+    if (getBitboardResult(blackBitboard, whiteBitboard)) {
+      progressCallback(100);
+      return null;
+    }
     // Initialize Zobrist table if not already done
     if (typeof initZobristTable === 'function') {
       initZobristTable();
@@ -1101,9 +1165,11 @@ async function findBestMove(
     progressCallback(8);
     const humanOpen4s = checkOpen4Threats(blackBitboard, whiteBitboard, humanPlayer);
     if (humanOpen4s.length > 0) {
-      const threat = humanOpen4s[0];
+      const defense = selectOpenFourDefense(
+        blackBitboard, whiteBitboard, computerPlayer, humanPlayer, humanOpen4s
+      );
       progressCallback(100);
-      return { row: threat.row, col: threat.col };
+      return defense;
     }
 
     // PRIORITY 5: AI's Closed Four (XXXX_, etc.) - Skip in very complex positions for hard difficulty
@@ -1221,15 +1287,13 @@ async function findBestMove(
       return { row: availableMoves[0].row, col: availableMoves[0].col };
     }
     
-    // Ultimate fallback - center move
     progressCallback(100);
-    return { row: 7, col: 7 };
+    return findLegalFallback(blackBitboard, whiteBitboard);
     
   } catch (error) {
     console.error('AI Worker error in findBestMove:', error);
-    // Emergency fallback
     progressCallback(100);
-    return { row: 7, col: 7 };
+    return findLegalFallback(blackBitboard, whiteBitboard);
   }
 }
 
@@ -1239,6 +1303,14 @@ function minimaxAlphaBeta(blackBitboard, whiteBitboard, depth, alpha, beta, isMa
   const computerBitboard = computerPlayer === "black" ? blackBitboard : whiteBitboard;
   const opponentBitboard = computerPlayer === "black" ? whiteBitboard : blackBitboard;
   
+  if (moveHistory.length === 0) {
+    const result = getBitboardResult(blackBitboard, whiteBitboard);
+    if (result) {
+      const score = result.winner ? (result.winner === computerPlayer ? WIN_SCORE : -WIN_SCORE) : 0;
+      return { score, move: null };
+    }
+  }
+
   // Check if game is already won
   if (moveHistory.length > 0) {
     const lastMove = moveHistory[moveHistory.length - 1];
@@ -1425,12 +1497,12 @@ function evaluateStonePosition(playerBitboard, opponentBitboard, row, col, multi
 
 // Evaluate line patterns for positional scoring
 function evaluateLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol) {
-  const { stones, windows, winningMoves } =
+  const { stones, windows, winningMoves, openThree, openTwo } =
     analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol);
   if (stones >= 5) return 100000;
   if (stones === 4) return winningMoves >= 2 ? 20000 : 10000;
-  if (stones === 3) return windows >= 2 ? 1000 : 100;
-  if (stones === 2) return windows >= 2 ? 100 : 10;
+  if (stones === 3) return openThree ? 1000 : 100;
+  if (stones === 2) return openTwo ? 100 : 10;
   return stones === 1 ? Math.min(windows, 2) : 0;
 }
 

@@ -186,3 +186,130 @@ test('worker protocol returns a winning move without mutating input bitboards', 
   ai.generateCandidateMoves(black, white);
   assert.deepEqual([black, white], before);
 });
+
+test('all difficulties neutralize crossing open-four threats with the shared defense', async () => {
+  const attack = [[10, 5], [10, 6], [10, 7], [7, 8], [8, 8], [9, 8]];
+  const defense = [[0, 0], [0, 2], [0, 4], [14, 0], [14, 2], [14, 4]];
+  for (const computer of ['black', 'white']) {
+    const [black, white] = computer === 'black' ?
+      [bitboard(defense), bitboard(attack)] : [bitboard(attack), bitboard(defense)];
+    const human = computer === 'black' ? 'white' : 'black';
+    for (const difficulty of ['easy', 'medium', 'hard']) {
+      const move = await ai.findBestMove(black, white, computer, human, difficulty);
+      assert.equal(move.row, 10);
+      assert.equal(move.col, 8);
+      const afterBlack = black.slice(), afterWhite = white.slice();
+      const position = move.row * 15 + move.col;
+      (computer === 'black' ? afterBlack : afterWhite)[position >>> 5] |= 1 << (position % 32);
+      assert.equal(ai.checkOpen4Threats(afterBlack, afterWhite, human).length, 0);
+      assert.deepEqual(black, computer === 'black' ? bitboard(defense) : bitboard(attack));
+      assert.deepEqual(white, computer === 'black' ? bitboard(attack) : bitboard(defense));
+    }
+  }
+});
+
+test('shared open-four defenses remain correct after reflection and rotation', async () => {
+  const attack = [[10, 5], [10, 6], [10, 7], [7, 8], [8, 8], [9, 8]];
+  const defense = [[0, 0], [0, 2], [0, 4], [14, 0], [14, 2], [14, 4]];
+  for (const transform of [
+    ([row, col]) => [14 - row, col],
+    ([row, col]) => [col, 14 - row],
+  ]) {
+    const move = await ai.findBestMove(bitboard(defense.map(transform)), bitboard(attack.map(transform)),
+      'black', 'white', 'easy');
+    const [row, col] = transform([10, 8]);
+    assert.equal(move.row, row);
+    assert.equal(move.col, col);
+  }
+});
+
+test('multiple windows alone do not make an open three', () => {
+  for (const [dRow, dCol] of [[0, 1], [1, 0], [1, 1], [1, -1]]) {
+    const at = offset => [7 + dRow * offset, 7 + dCol * offset];
+    const player = bitboard([-3, -2, 0, 2, 3].map(at));
+    const opponent = bitboard([-4, 4].map(at));
+    assert.equal(ai.analyzeLinePattern(player, opponent, 7, 7, dRow, dCol).openThree, false);
+    assert.equal(ai.evaluateLineEnhanced(player, opponent, 7, 7, dRow, dCol), 500);
+    assert.equal(ai.evaluateLinePattern(player, opponent, 7, 7, dRow, dCol), 100);
+  }
+});
+
+test('contiguous and broken threes retain open strength when they can create an open four', () => {
+  for (const offsets of [[-1, 0, 1], [-1, 0, 2], [-2, 0, 1]]) {
+    const player = bitboard(offsets.map(offset => [7, 7 + offset]));
+    assert.equal(ai.analyzeLinePattern(player, empty, 7, 7, 0, 1).openThree, true);
+    assert.equal(ai.evaluateLineEnhanced(player, empty, 7, 7, 0, 1), 2000);
+    assert.equal(ai.evaluateLinePattern(player, empty, 7, 7, 0, 1), 1000);
+  }
+  const cramped = bitboard([[7, 1], [7, 2], [7, 3]]);
+  assert.equal(ai.analyzeLinePattern(cramped, bitboard([[7, 5]]), 7, 2, 0, 1).openThree, false);
+});
+
+test('terminal wins at the root produce a terminal score and no move', async () => {
+  const won = bitboard([[7, 4], [7, 5], [7, 6], [7, 7], [7, 8], [7, 9]]);
+  for (const computer of ['black', 'white']) {
+    const [black, white] = computer === 'black' ? [won, empty] : [empty, won];
+    for (const difficulty of ['easy', 'medium', 'hard']) {
+      assert.equal(await ai.findBestMove(black, white, computer, computer === 'black' ? 'white' : 'black', difficulty), null);
+      assert.equal(ai.findBestMoveAdaptive(black, white, computer, computer === 'black' ? 'white' : 'black', difficulty), null);
+    }
+    const result = search(black, white, 1, true, [], computer);
+    assert.equal(result.score, 1000000);
+    assert.equal(result.move, null);
+    assert.equal(search(black, white, 0, true, [], computer).score, 1000000);
+    assert.equal(search(black, white, 1, true, [], computer === 'black' ? 'white' : 'black').score, -1000000);
+  }
+});
+
+test('full-board draws return no move at every entry point', async () => {
+  const black = [], white = [];
+  for (let row = 0; row < 15; row++) for (let col = 0; col < 15; col++) {
+    ((Math.floor(row / 2) + col) % 2 ? white : black).push([row, col]);
+  }
+  const b = bitboard(black), w = bitboard(white);
+  assert.equal(ai.getBitboardResult(b, w).draw, true);
+  for (const difficulty of ['easy', 'medium', 'hard']) {
+    assert.equal(await ai.findBestMove(b, w, 'black', 'white', difficulty), null);
+    assert.equal(ai.findBestMoveAdaptive(b, w, 'black', 'white', difficulty), null);
+  }
+  assert.equal(ai.findBestMoveDeepSearch(b, w, 'black', 'white', null, 1), null);
+  assert.equal(ai.findLegalFallback(b, w), null);
+  for (const depth of [0, 1]) {
+    const result = search(b, w, depth);
+    assert.equal(result.score, 0);
+    assert.equal(result.move, null);
+  }
+});
+
+test('worker echoes request IDs on progress and results', async () => {
+  messages.length = 0;
+  await listener({ data: {
+    type: 'FIND_BEST_MOVE', requestId: 42,
+    data: { blackBitboard: empty, whiteBitboard: empty, computerPlayer: 'black', humanPlayer: 'white', difficulty: 'easy' },
+  } });
+  assert.ok(messages.some(message => message.type === 'PROGRESS_UPDATE'));
+  assert.ok(messages.some(message => message.type === 'BEST_MOVE_FOUND'));
+  assert.ok(messages.every(message => message.requestId === 42));
+});
+
+test('worker errors return a legal fallback instead of an occupied center', async () => {
+  const original = ai.findBestMove;
+  const originalConsole = ai.console;
+  ai.console = { error() {} };
+  ai.findBestMove = async () => { throw new Error('simulated search failure'); };
+  messages.length = 0;
+  const center = bitboard([[7, 7]]);
+  try {
+    await listener({ data: {
+      type: 'FIND_BEST_MOVE', requestId: 43,
+      data: { blackBitboard: center, whiteBitboard: empty, computerPlayer: 'white', humanPlayer: 'black', difficulty: 'easy' },
+    } });
+    const result = messages.find(message => message.type === 'BEST_MOVE_FOUND');
+    assert.equal(result.requestId, 43);
+    assert.ok(result.move);
+    assert.ok(result.move.row !== 7 || result.move.col !== 7);
+  } finally {
+    ai.findBestMove = original;
+    ai.console = originalConsole;
+  }
+});
