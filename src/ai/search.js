@@ -2,7 +2,7 @@ import { BOARD_SIZE } from '../core/constants.js';
 import { WIN_SCORE } from './config.js';
 import { checkWinCondition, getBitboardResult } from '../core/rules.js';
 import { generateCandidateMoves } from './moves.js';
-import { evaluatePosition } from './evaluation.js';
+import { createIncrementalEvaluator } from './incremental-evaluation.js';
 
 export function minimaxAlphaBeta(
   blackBitboard,
@@ -15,6 +15,7 @@ export function minimaxAlphaBeta(
   humanPlayer,
   moveHistory = [],
   progressTracker = null,
+  evaluationState = null,
 ) {
   if (progressTracker?.nodes !== undefined) progressTracker.nodes++;
 
@@ -54,15 +55,14 @@ export function minimaxAlphaBeta(
     }
   }
 
+  const state =
+    evaluationState ||
+    createIncrementalEvaluator(blackBitboard, whiteBitboard, computerPlayer);
+
   // A win at the horizon is terminal, just like a win at any earlier ply.
   if (depth === 0) {
     return {
-      score: evaluatePosition(
-        blackBitboard,
-        whiteBitboard,
-        computerPlayer,
-        humanPlayer,
-      ),
+      score: state.getScore(),
       move: null,
     };
   }
@@ -118,18 +118,25 @@ export function minimaxAlphaBeta(
       // Recursive call
       const newMoveHistory = [...moveHistory, candidate];
 
-      const evaluation = minimaxAlphaBeta(
-        newBlackBitboard,
-        newWhiteBitboard,
-        depth - 1,
-        alpha,
-        beta,
-        false,
-        computerPlayer,
-        humanPlayer,
-        newMoveHistory,
-        progressTracker,
-      );
+      const undo = state.makeMove(position, computerPlayer);
+      let evaluation;
+      try {
+        evaluation = minimaxAlphaBeta(
+          newBlackBitboard,
+          newWhiteBitboard,
+          depth - 1,
+          alpha,
+          beta,
+          false,
+          computerPlayer,
+          humanPlayer,
+          newMoveHistory,
+          progressTracker,
+          state,
+        );
+      } finally {
+        state.undoMove(undo);
+      }
 
       if (evaluation.score > maxEval) {
         maxEval = evaluation.score;
@@ -174,18 +181,25 @@ export function minimaxAlphaBeta(
       // Recursive call
       const newMoveHistory = [...moveHistory, candidate];
 
-      const evaluation = minimaxAlphaBeta(
-        newBlackBitboard,
-        newWhiteBitboard,
-        depth - 1,
-        alpha,
-        beta,
-        true,
-        computerPlayer,
-        humanPlayer,
-        newMoveHistory,
-        progressTracker,
-      );
+      const undo = state.makeMove(position, humanPlayer);
+      let evaluation;
+      try {
+        evaluation = minimaxAlphaBeta(
+          newBlackBitboard,
+          newWhiteBitboard,
+          depth - 1,
+          alpha,
+          beta,
+          true,
+          computerPlayer,
+          humanPlayer,
+          newMoveHistory,
+          progressTracker,
+          state,
+        );
+      } finally {
+        state.undoMove(undo);
+      }
 
       if (evaluation.score < minEval) {
         minEval = evaluation.score;
@@ -221,6 +235,11 @@ export function findBestMoveDeepSearch(
   if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
   let bestMove = null;
   let principalVariation = [];
+  const state = createIncrementalEvaluator(
+    blackBitboard,
+    whiteBitboard,
+    computerPlayer,
+  );
   for (let depth = 1; depth <= searchDepth; depth++) {
     const tracker = {
       trackPV: true,
@@ -248,6 +267,7 @@ export function findBestMoveDeepSearch(
       humanPlayer,
       [],
       tracker,
+      state,
     );
     if (!result.move) break;
     bestMove = result.move;

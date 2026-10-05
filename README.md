@@ -31,12 +31,13 @@ A modern, responsive Gomoku (Five in a Row) game built with vanilla JavaScript a
 
 The engine checks immediate wins, mandatory blocks, open fours, and other four-stone threats before choosing a positional move. Creating a blockable four is evaluated alongside alternatives rather than selected automatically. Evaluation scores contiguous and broken formations according to their winning extensions.
 
-Easy uses heuristic move scoring. Medium and Hard use iterative deepening with alpha-beta search, up to 6 and 8 plies respectively. Completed iterations supply principal-variation move ordering for the next depth. Tactical candidates survive branching limits. Search has no time deadline. The Move now button is enabled while an AI request is pending: it plays the last completed search result and terminates the worker. If depth 1 has not completed, it uses a legal candidate move. Search currently has no transposition table; double-open-three detection remains unfinished.
+Easy uses heuristic move scoring. Medium and Hard use iterative deepening with alpha-beta search, up to 6 and 8 plies respectively. Completed iterations supply principal-variation move ordering for the next depth. Tactical candidates survive branching limits. Search maintains incremental per-stone line scores, recomputes only contributions affected by a move, and restores them on undo. The full-board evaluator remains the regression reference. Search has no time deadline. The Move now button is enabled while an AI request is pending: it plays the last completed search result and terminates the worker. If depth 1 has not completed, it uses a legal candidate move. Search currently has no transposition table; double-open-three detection remains unfinished.
 
 ## Architecture
 
 - `src/core/`: shared board constants, bitboard conversion, and array/bitboard rules.
 - `src/ai/`: patterns, threats, candidate generation, evaluation, search, and engine orchestration.
+- `src/ai/incremental-evaluation.js`: private search board, cached direction scores, and reversible move updates.
 - `src/ai/engine.js`: `chooseMove(position, { difficulty, onProgress })`, where a position contains black and white bitboards and `toMove`. The opponent is derived from `toMove`.
 - `src/ai/worker-handler.js`: injectable message handling; `src/ai-worker.js` installs it in an ES module worker.
 - `src/ai/client.js`: worker lifecycle, request IDs, delayed responses, cancellation, and failure handling.
