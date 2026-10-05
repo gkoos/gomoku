@@ -1,3 +1,4 @@
+import { bitboardPositions } from '../core/bitboards.js';
 import { BOARD_SIZE } from '../core/constants.js';
 import { MAX_STATIC_SCORE } from './config.js';
 import { analyzeLinePattern } from './patterns.js';
@@ -250,36 +251,22 @@ export function evaluatePosition(
 
   let score = 0;
 
-  // Evaluate all positions on the board
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      const position = row * BOARD_SIZE + col;
-      const slot = Math.floor(position / 32);
-      const bit = position % 32;
-
-      const hasComputer =
-        slot < 8 && ((computerBitboard[slot] >>> 0) & (1 << bit)) !== 0;
-      const hasOpponent =
-        slot < 8 && ((opponentBitboard[slot] >>> 0) & (1 << bit)) !== 0;
-
-      if (hasComputer) {
-        score += evaluateStonePosition(
-          computerBitboard,
-          opponentBitboard,
-          row,
-          col,
-          1,
-        );
-      } else if (hasOpponent) {
-        score -= evaluateStonePosition(
-          opponentBitboard,
-          computerBitboard,
-          row,
-          col,
-          1,
-        );
-      }
-    }
+  for (const position of bitboardPositions(
+    computerBitboard,
+    opponentBitboard,
+  )) {
+    const row = Math.floor(position / BOARD_SIZE),
+      col = position % BOARD_SIZE;
+    const own =
+      (computerBitboard[position >>> 5] & (1 << (position & 31))) !== 0;
+    const value = evaluateStonePosition(
+      own ? computerBitboard : opponentBitboard,
+      own ? opponentBitboard : computerBitboard,
+      row,
+      col,
+      1,
+    );
+    score += own ? value : -value;
   }
 
   // Heuristic totals must never outrank a terminal win or loss.

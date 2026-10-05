@@ -1,4 +1,9 @@
-import { BOARD_SIZE, BOARD_CELLS } from './constants.js';
+import { BOARD_SIZE } from './constants.js';
+import {
+  bitboardPositions,
+  bitboardsOverlap,
+  bitboardsFull,
+} from './bitboards.js';
 
 export function checkWinCondition(bitboard, lastPosition) {
   const row = Math.floor(lastPosition / BOARD_SIZE);
@@ -72,17 +77,10 @@ export function checkWinCondition(bitboard, lastPosition) {
 
 export function getBitboardResult(blackBitboard, whiteBitboard) {
   const winners = new Set();
-  let emptyCells = 0;
-  for (let position = 0; position < BOARD_CELLS; position++) {
-    const slot = Math.floor(position / 32);
-    const mask = 1 << (position % 32);
-    const black = (blackBitboard[slot] & mask) !== 0;
-    const white = (whiteBitboard[slot] & mask) !== 0;
-    if (black && white) return { invalid: true };
-    if (!black && !white) {
-      emptyCells++;
-      continue;
-    }
+  if (bitboardsOverlap(blackBitboard, whiteBitboard)) return { invalid: true };
+  for (const position of bitboardPositions(blackBitboard, whiteBitboard)) {
+    const black =
+      (blackBitboard[position >>> 5] & (1 << (position & 31))) !== 0;
     const player = black ? 'black' : 'white';
     if (
       !winners.has(player) &&
@@ -93,7 +91,7 @@ export function getBitboardResult(blackBitboard, whiteBitboard) {
   }
   if (winners.size > 1) return { invalid: true };
   if (winners.size === 1) return { winner: winners.values().next().value };
-  return emptyCells === 0 ? { draw: true } : null;
+  return bitboardsFull(blackBitboard, whiteBitboard) ? { draw: true } : null;
 }
 
 export function findLegalFallback(blackBitboard, whiteBitboard) {
@@ -103,15 +101,15 @@ export function findLegalFallback(blackBitboard, whiteBitboard) {
     getBitboardResult(blackBitboard, whiteBitboard)
   )
     return null;
-  for (let position = 0; position < BOARD_CELLS; position++) {
-    const slot = Math.floor(position / 32);
-    const mask = 1 << (position % 32);
-    if (((blackBitboard[slot] | whiteBitboard[slot]) & mask) === 0) {
-      return {
-        row: Math.floor(position / BOARD_SIZE),
-        col: position % BOARD_SIZE,
-      };
-    }
+  for (const position of bitboardPositions(
+    blackBitboard,
+    whiteBitboard,
+    true,
+  )) {
+    return {
+      row: Math.floor(position / BOARD_SIZE),
+      col: position % BOARD_SIZE,
+    };
   }
   return null;
 }

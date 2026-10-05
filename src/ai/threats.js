@@ -1,10 +1,11 @@
+import { bitboardPositions } from '../core/bitboards.js';
 import {
   createLineBitboards,
   findWinningSquares,
   findOpenFourSquares,
   threatMovesFromBitboard,
 } from './line-bitboards.js';
-import { BOARD_SIZE, BOARD_CELLS } from '../core/constants.js';
+import { BOARD_SIZE } from '../core/constants.js';
 
 import { checkWinCondition } from '../core/rules.js';
 import { evaluateMoveEnhanced } from './evaluation.js';
@@ -27,10 +28,13 @@ export function selectOpenFourDefense(
   let bestMove = null;
   let fewestThreats = Infinity;
   let bestScore = -Infinity;
-  for (let position = 0; position < BOARD_CELLS; position++) {
+  for (const position of bitboardPositions(
+    blackBitboard,
+    whiteBitboard,
+    true,
+  )) {
     const slot = Math.floor(position / 32);
     const mask = 1 << (position % 32);
-    if (((blackBitboard[slot] | whiteBitboard[slot]) & mask) !== 0) continue;
     const blackTest = [...blackBitboard];
     const whiteTest = [...whiteBitboard];
     (computerPlayer === 'black' ? blackTest : whiteTest)[slot] |= mask;

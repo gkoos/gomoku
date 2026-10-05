@@ -1,3 +1,4 @@
+import { bitboardPositions } from '../core/bitboards.js';
 import { BOARD_SIZE, BOARD_CELLS, oppositeColor } from '../core/constants.js';
 import { MAX_STATIC_SCORE } from './config.js';
 import { scoreLinePattern } from './evaluation.js';
@@ -73,9 +74,12 @@ export function createIncrementalEvaluator(
     return isBlack ? value : -value;
   }
 
-  for (let index = 0; index < scores.length; index++) {
-    scores[index] = contribution(index);
-    total += scores[index];
+  for (const position of bitboardPositions(black, white)) {
+    for (let direction = 0; direction < 4; direction++) {
+      const index = position * 4 + direction;
+      scores[index] = contribution(index);
+      total += scores[index];
+    }
   }
 
   function makeMove(position, color) {

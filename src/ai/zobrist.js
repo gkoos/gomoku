@@ -1,3 +1,4 @@
+import { bitboardPositions } from '../core/bitboards.js';
 import { BOARD_CELLS, oppositeColor } from '../core/constants.js';
 
 let seed = 0x9e3779b9;
@@ -18,17 +19,13 @@ export function createPositionHasher(blackBitboard, whiteBitboard, toMove) {
   oppositeColor(toMove);
   let low = 0,
     high = 0;
-  for (let position = 0; position < BOARD_CELLS; position++) {
-    const mask = 1 << (position % 32),
-      slot = position >>> 5;
-    for (const [color, board] of [
-      [0, blackBitboard],
-      [1, whiteBitboard],
-    ]) {
-      if ((board[slot] & mask) !== 0) {
-        low ^= STONES[position * 2 + color][0];
-        high ^= STONES[position * 2 + color][1];
-      }
+  for (const [color, board] of [
+    [0, blackBitboard],
+    [1, whiteBitboard],
+  ]) {
+    for (const position of bitboardPositions(board)) {
+      low ^= STONES[position * 2 + color][0];
+      high ^= STONES[position * 2 + color][1];
     }
   }
   if (toMove === 'white') {
