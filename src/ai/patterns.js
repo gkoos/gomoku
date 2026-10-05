@@ -1,19 +1,18 @@
 import { BOARD_SIZE } from '../core/constants.js';
 
-export function hasOpenFormation(cells, stoneCount) {
+// Nine-bit masks represent offsets -4 through +4; bit 4 is the anchor.
+const BIT_COUNTS = new Uint8Array(1 << 9);
+for (let mask = 1; mask < BIT_COUNTS.length; mask++) {
+  BIT_COUNTS[mask] = BIT_COUNTS[mask >>> 1] + (mask & 1);
+}
+
+export function hasOpenFormation(friendly, blockers, stoneCount) {
+  const occupied = friendly | blockers;
   for (let start = 0; start <= 3; start++) {
-    if (cells[start] !== 0 || cells[start + 5] !== 0) continue;
-    if (4 < start + 1 || 4 > start + 4) continue;
-    let stones = 0;
-    let blocked = false;
-    for (let index = start + 1; index < start + 5; index++) {
-      if (cells[index] === -1) {
-        blocked = true;
-        break;
-      }
-      stones += cells[index];
-    }
-    if (!blocked && stones === stoneCount) return true;
+    const ends = (1 << start) | (1 << (start + 5));
+    const interior = 0b1111 << (start + 1);
+    if ((occupied & ends) !== 0 || (blockers & interior) !== 0) continue;
+    if (BIT_COUNTS[friendly & interior] === stoneCount) return true;
   }
   return false;
 }
@@ -26,55 +25,43 @@ export function analyzeLinePattern(
   dRow,
   dCol,
 ) {
-  const cells = [];
+  let friendly = 0,
+    blockers = 0;
   for (let offset = -4; offset <= 4; offset++) {
     const r = row + dRow * offset;
     const c = col + dCol * offset;
+    const lineBit = 1 << (offset + 4);
     if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) {
-      cells.push(-1);
+      blockers |= lineBit;
       continue;
     }
     const position = r * BOARD_SIZE + c;
-    const slot = Math.floor(position / 32);
-    const mask = 1 << (position % 32);
-    cells.push(
-      (opponentBitboard[slot] & mask) !== 0
-        ? -1
-        : (playerBitboard[slot] & mask) !== 0
-          ? 1
-          : 0,
-    );
+    const slot = position >>> 5;
+    const boardBit = 1 << (position & 31);
+    if ((opponentBitboard[slot] & boardBit) !== 0) blockers |= lineBit;
+    else if ((playerBitboard[slot] & boardBit) !== 0) friendly |= lineBit;
   }
 
-  let stones = 0;
-  let windows = 0;
-  const winningSquares = new Set();
+  let stones = 0,
+    windows = 0,
+    winningSquares = 0;
   for (let start = 0; start <= 4; start++) {
-    let count = 0;
-    let emptySquare = -1;
-    let blocked = false;
-    for (let index = start; index < start + 5; index++) {
-      if (cells[index] === -1) {
-        blocked = true;
-        break;
-      }
-      if (cells[index] === 1) count++;
-      else emptySquare = index;
-    }
-    if (blocked) continue;
+    const window = 0b11111 << start;
+    if ((blockers & window) !== 0) continue;
+    const count = BIT_COUNTS[friendly & window];
     if (count > stones) {
       stones = count;
       windows = 1;
     } else if (count === stones) {
       windows++;
     }
-    if (count === 4) winningSquares.add(emptySquare);
+    if (count === 4) winningSquares |= window & ~friendly;
   }
   return {
     stones,
     windows,
-    winningMoves: winningSquares.size,
-    openThree: stones === 3 && hasOpenFormation(cells, 3),
-    openTwo: stones === 2 && hasOpenFormation(cells, 2),
+    winningMoves: BIT_COUNTS[winningSquares],
+    openThree: stones === 3 && hasOpenFormation(friendly, blockers, 3),
+    openTwo: stones === 2 && hasOpenFormation(friendly, blockers, 2),
   };
 }
