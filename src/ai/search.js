@@ -1,3 +1,11 @@
+import { createSearchContext, transpositionKey } from './search-context.js';
+import {
+  EXACT,
+  LOWER_BOUND,
+  UPPER_BOUND,
+  scoreToTable,
+  scoreFromTable,
+} from './transposition-table.js';
 import { BOARD_SIZE } from '../core/constants.js';
 import { WIN_SCORE } from './config.js';
 import { checkWinCondition, getBitboardResult } from '../core/rules.js';
@@ -16,6 +24,7 @@ export function minimaxAlphaBeta(
   moveHistory = [],
   progressTracker = null,
   evaluationState = null,
+  searchContext = null,
 ) {
   if (progressTracker?.nodes !== undefined) progressTracker.nodes++;
 
@@ -55,15 +64,83 @@ export function minimaxAlphaBeta(
     }
   }
 
-  // A win at the horizon is terminal, just like a win at any earlier ply.
+  // Incremental evaluation already makes leaf scoring O(1); caching leaves
+  // would add hashing/table overhead without avoiding a search subtree.
   if (depth === 0) {
     const state =
       evaluationState ||
       createIncrementalEvaluator(blackBitboard, whiteBitboard, computerPlayer);
-    return {
-      score: state.getScore(),
-      move: null,
-    };
+    return { score: state.getScore(), move: null };
+  }
+
+  const toMove = isMaximizing ? computerPlayer : humanPlayer;
+  const ply = moveHistory.length;
+  const cacheKey = searchContext
+    ? transpositionKey(
+        searchContext,
+        depth,
+        computerPlayer,
+        moveHistory,
+        progressTracker,
+      )
+    : null;
+  const alphaAtEntry = alpha,
+    betaAtEntry = beta;
+  if (searchContext) {
+    const entry = searchContext.table.get(
+      cacheKey,
+      blackBitboard,
+      whiteBitboard,
+      toMove,
+    );
+    if (entry) {
+      searchContext.stats.hits++;
+      const score = scoreFromTable(entry.score, ply);
+      // Bounds can justify a cutoff, but are not exact answers inside the window.
+      if (
+        entry.flag === EXACT ||
+        (entry.flag === LOWER_BOUND && score >= beta) ||
+        (entry.flag === UPPER_BOUND && score <= alpha)
+      ) {
+        searchContext.stats.cutoffs++;
+        return {
+          score,
+          move: entry.move ? { ...entry.move } : null,
+          ...(progressTracker?.trackPV && entry.principalVariation
+            ? {
+                principalVariation:
+                  entry.principalVariation?.map((move) => ({ ...move })) || [],
+              }
+            : {}),
+        };
+      }
+    }
+  }
+  function remember(result, flag = null) {
+    if (searchContext) {
+      const bound =
+        flag ||
+        (result.score <= alphaAtEntry
+          ? UPPER_BOUND
+          : result.score >= betaAtEntry
+            ? LOWER_BOUND
+            : EXACT);
+      searchContext.table.store(
+        cacheKey,
+        blackBitboard,
+        whiteBitboard,
+        toMove,
+        {
+          score: scoreToTable(result.score, ply),
+          flag: bound,
+          depth,
+          move: result.move,
+          principalVariation: result.principalVariation,
+        },
+      );
+      searchContext.stats.stores++;
+    }
+    return result;
   }
 
   // Order wins and blocks for the player whose turn is being searched.
@@ -73,7 +150,7 @@ export function minimaxAlphaBeta(
     isMaximizing ? computerPlayer : humanPlayer,
   );
   if (candidates.length === 0) {
-    return { score: 0, move: null };
+    return remember({ score: 0, move: null }, EXACT);
   }
 
   const limitedCandidates = selectSearchCandidates(
@@ -88,11 +165,14 @@ export function minimaxAlphaBeta(
   if (limitedCandidates[0].tactical === 2) {
     const move = limitedCandidates[0];
     const winningPly = moveHistory.length + 1;
-    return {
-      score: isMaximizing ? WIN_SCORE - winningPly : -WIN_SCORE + winningPly,
-      move,
-      ...(progressTracker?.trackPV ? { principalVariation: [move] } : {}),
-    };
+    return remember(
+      {
+        score: isMaximizing ? WIN_SCORE - winningPly : -WIN_SCORE + winningPly,
+        move,
+        ...(progressTracker?.trackPV ? { principalVariation: [move] } : {}),
+      },
+      EXACT,
+    );
   }
 
   const state =
@@ -134,6 +214,7 @@ export function minimaxAlphaBeta(
       const newMoveHistory = [...moveHistory, candidate];
 
       const undo = state.makeMove(position, computerPlayer);
+      searchContext?.hasher.toggleMove(position, computerPlayer);
       let evaluation;
       try {
         evaluation = minimaxAlphaBeta(
@@ -148,8 +229,10 @@ export function minimaxAlphaBeta(
           newMoveHistory,
           progressTracker,
           state,
+          searchContext,
         );
       } finally {
+        searchContext?.hasher.toggleMove(position, computerPlayer);
         state.undoMove(undo);
       }
 
@@ -165,13 +248,13 @@ export function minimaxAlphaBeta(
       }
     }
 
-    return {
+    return remember({
       score: maxEval,
       move: bestMove,
       ...(progressTracker?.trackPV
         ? { principalVariation: bestVariation }
         : {}),
-    };
+    });
   } else {
     let minEval = Infinity;
     let bestMove = null;
@@ -197,6 +280,7 @@ export function minimaxAlphaBeta(
       const newMoveHistory = [...moveHistory, candidate];
 
       const undo = state.makeMove(position, humanPlayer);
+      searchContext?.hasher.toggleMove(position, humanPlayer);
       let evaluation;
       try {
         evaluation = minimaxAlphaBeta(
@@ -211,8 +295,10 @@ export function minimaxAlphaBeta(
           newMoveHistory,
           progressTracker,
           state,
+          searchContext,
         );
       } finally {
+        searchContext?.hasher.toggleMove(position, humanPlayer);
         state.undoMove(undo);
       }
 
@@ -228,13 +314,13 @@ export function minimaxAlphaBeta(
       }
     }
 
-    return {
+    return remember({
       score: minEval,
       move: bestMove,
       ...(progressTracker?.trackPV
         ? { principalVariation: bestVariation }
         : {}),
-    };
+    });
   }
 }
 
@@ -245,7 +331,11 @@ export function findBestMoveDeepSearch(
   humanPlayer,
   progressCallback,
   searchDepth = 8,
-  { onIteration = () => {} } = {},
+  {
+    onIteration = () => {},
+    useTranspositionTable = true,
+    transpositionTable,
+  } = {},
 ) {
   if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
   let bestMove = null;
@@ -255,7 +345,17 @@ export function findBestMoveDeepSearch(
     whiteBitboard,
     computerPlayer,
   );
+  const searchContext = useTranspositionTable
+    ? createSearchContext(
+        blackBitboard,
+        whiteBitboard,
+        computerPlayer,
+        transpositionTable ? { table: transpositionTable } : {},
+      )
+    : null;
   for (let depth = 1; depth <= searchDepth; depth++) {
+    const hitsBefore = searchContext?.stats.hits || 0;
+    const cutoffsBefore = searchContext?.stats.cutoffs || 0;
     const tracker = {
       trackPV: true,
       principalVariation,
@@ -283,6 +383,7 @@ export function findBestMoveDeepSearch(
       [],
       tracker,
       state,
+      searchContext,
     );
     if (!result.move) break;
     bestMove = result.move;
@@ -294,6 +395,9 @@ export function findBestMoveDeepSearch(
       score: result.score,
       nodes: tracker.nodes,
       principalVariation,
+      cacheHits: (searchContext?.stats.hits || 0) - hitsBefore,
+      cacheCutoffs: (searchContext?.stats.cutoffs || 0) - cutoffsBefore,
+      tableSize: searchContext?.table.size || 0,
     });
     progressCallback?.(Math.floor((depth / searchDepth) * 100));
     if (Math.abs(result.score) >= WIN_SCORE - BOARD_SIZE * BOARD_SIZE) break;

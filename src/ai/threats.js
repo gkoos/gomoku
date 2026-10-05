@@ -263,25 +263,6 @@ export function findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer) {
   const opponentBitboard =
     humanPlayer === 'black' ? whiteBitboard : blackBitboard;
 
-  // Count total stones to determine position complexity
-  let totalStones = 0;
-  for (let slot = 0; slot < 8; slot++) {
-    const blackMask = blackBitboard[slot] >>> 0;
-    const whiteMask = whiteBitboard[slot] >>> 0;
-    const combinedMask = blackMask | whiteMask;
-
-    // Count set bits in this slot
-    let count = 0;
-    for (let bit = 0; bit < 32; bit++) {
-      if ((combinedMask & (1 << bit)) !== 0) {
-        count++;
-      }
-    }
-    totalStones += count;
-  }
-
-  const isComplexPosition = totalStones >= 10;
-
   // Helper function to check if a position has a human stone
   const hasHumanStone = (r, c) => {
     if (r < 0 || r >= BOARD_SIZE || c < 0 || c >= BOARD_SIZE) return false;
