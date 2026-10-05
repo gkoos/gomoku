@@ -8,7 +8,7 @@ export function generateCandidateMoves(
   playerColor = 'black',
 ) {
   const candidates = [];
-  const visited = new Map();
+  const visited = new Array(BOARD_CELLS);
   const stonePositions = [];
 
   // Helper function to check if position is empty
@@ -32,18 +32,18 @@ export function generateCandidateMoves(
       col < BOARD_SIZE &&
       isEmpty(row, col)
     ) {
-      const key = `${row},${col}`;
-      const existing = visited.get(key);
+      const position = row * BOARD_SIZE + col;
+      const existing = visited[position];
       if (existing) {
         existing.priority = Math.max(existing.priority, priority);
       } else {
         const candidate = {
           row,
           col,
-          position: row * BOARD_SIZE + col,
+          position,
           priority,
         };
-        visited.set(key, candidate);
+        visited[position] = candidate;
         candidates.push(candidate);
       }
     }
