@@ -2,6 +2,14 @@ import { BOARD_SIZE, BOARD_CELLS } from '../core/constants.js';
 
 import { checkWinCondition } from '../core/rules.js';
 import { evaluateMoveEnhanced } from './evaluation.js';
+import { analyzeLinePattern } from './patterns.js';
+
+const DIRECTIONS = [
+  [0, 1],
+  [1, 0],
+  [1, 1],
+  [1, -1],
+];
 
 export function selectOpenFourDefense(
   blackBitboard,
@@ -21,6 +29,25 @@ export function selectOpenFourDefense(
     const whiteTest = [...whiteBitboard];
     (computerPlayer === 'black' ? blackTest : whiteTest)[slot] |= mask;
     const opponent = humanPlayer === 'black' ? blackTest : whiteTest;
+    const own = computerPlayer === 'black' ? blackTest : whiteTest;
+    const row = Math.floor(position / BOARD_SIZE),
+      col = position % BOARD_SIZE;
+    // Two distinct winning squares cannot both be blocked on the next turn.
+    // Count only lines through this move; winning squares on different lines
+    // are distinct because their sole intersection is the occupied move.
+    const winningReplies = DIRECTIONS.reduce(
+      (count, [dr, dc]) =>
+        count +
+        analyzeLinePattern(own, opponent, row, col, dr, dc).winningMoves,
+      0,
+    );
+    if (
+      checkWinCondition(own, position) ||
+      (winningReplies >= 2 &&
+        checkImmediateThreat(blackTest, whiteTest, humanPlayer).length === 0)
+    ) {
+      return { row, col };
+    }
     let remaining = 0;
     for (const threat of threats) {
       if (threat.position === position) continue;

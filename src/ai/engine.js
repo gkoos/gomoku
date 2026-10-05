@@ -229,7 +229,7 @@ export async function findBestMove(
       return { row: threat.row, col: threat.col };
     }
 
-    // PRIORITY 4: Block opponent's Open Four (_XXXX_)
+    // PRIORITY 4: Prefer a winning counterattack, otherwise prevent an open four.
     progressCallback(8);
     const humanOpen4s = checkOpen4Threats(
       blackBitboard,
