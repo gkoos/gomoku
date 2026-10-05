@@ -1,6 +1,8 @@
 import { BOARD_SIZE, BOARD_CELLS, oppositeColor } from '../core/constants.js';
 import { MAX_STATIC_SCORE } from './config.js';
-import { evaluateLinePattern } from './evaluation.js';
+import { scoreLinePattern } from './evaluation.js';
+import { analyzePackedLinePattern } from './patterns.js';
+import { createLineBitboards, updateLineBitboards } from './line-bitboards.js';
 
 const DIRECTIONS = [
   [0, 1],
@@ -42,6 +44,7 @@ export function createIncrementalEvaluator(
   oppositeColor(perspective);
   const black = [...blackBitboard],
     white = [...whiteBitboard];
+  const lineBitboards = createLineBitboards(black, white);
   const scores = new Int32Array(BOARD_CELLS * 4),
     history = [];
   let total = 0,
@@ -55,14 +58,13 @@ export function createIncrementalEvaluator(
       slot = position >>> 5;
     const isBlack = (black[slot] & mask) !== 0;
     if (!isBlack && (white[slot] & mask) === 0) return 0;
-    const [dr, dc] = DIRECTIONS[direction];
-    const value = evaluateLinePattern(
-      isBlack ? black : white,
-      isBlack ? white : black,
-      Math.floor(position / BOARD_SIZE),
-      position % BOARD_SIZE,
-      dr,
-      dc,
+    const value = scoreLinePattern(
+      analyzePackedLinePattern(
+        isBlack ? lineBitboards.black : lineBitboards.white,
+        isBlack ? lineBitboards.white : lineBitboards.black,
+        position,
+        direction,
+      ),
     );
     return isBlack ? value : -value;
   }
@@ -95,6 +97,7 @@ export function createIncrementalEvaluator(
     };
     const stones = color === 'black' ? black : white;
     stones[slot] |= mask;
+    updateLineBitboards(lineBitboards, position, color, true);
     for (let offset = 0; offset < indices.length; offset++) {
       const index = indices[offset];
       previousScores[offset] = scores[index];
@@ -116,6 +119,7 @@ export function createIncrementalEvaluator(
       throw new Error('Moves must be undone in reverse order');
     const stones = frame.color === 'black' ? black : white;
     stones[frame.position >>> 5] &= ~(1 << (frame.position % 32));
+    updateLineBitboards(lineBitboards, frame.position, frame.color, false);
     const indices = AFFECTED_CONTRIBUTIONS[frame.position];
     for (let offset = 0; offset < indices.length; offset++) {
       scores[indices[offset]] = frame.previousScores[offset];
@@ -139,5 +143,5 @@ export function createIncrementalEvaluator(
     oppositeColor(color);
     return color === 'black' ? blackThreatLines > 0 : whiteThreatLines > 0;
   }
-  return { makeMove, undoMove, getScore, hasImmediateThreat };
+  return { makeMove, undoMove, getScore, hasImmediateThreat, lineBitboards };
 }

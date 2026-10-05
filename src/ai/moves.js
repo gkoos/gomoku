@@ -1,11 +1,12 @@
 import { BOARD_SIZE, BOARD_CELLS } from '../core/constants.js';
 
-import { checkWinCondition } from '../core/rules.js';
+import { createLineBitboards, findWinningSquares } from './line-bitboards.js';
 
 export function generateCandidateMoves(
   blackBitboard,
   whiteBitboard,
   playerColor = 'black',
+  lineBitboards = null,
 ) {
   const candidates = [];
   const visited = new Array(BOARD_CELLS);
@@ -158,20 +159,18 @@ export function generateCandidateMoves(
 
   // Classify tactics before either candidate limit. Every winning move is
   // adjacent to an existing stone, including completions of broken fours.
-  const blackTest = [...blackBitboard];
-  const whiteTest = [...whiteBitboard];
+  const lines =
+    lineBitboards || createLineBitboards(blackBitboard, whiteBitboard);
+  const blackWins = findWinningSquares(lines.black, lines.white);
+  const whiteWins = findWinningSquares(lines.white, lines.black);
+  const ownWins = playerColor === 'black' ? blackWins : whiteWins;
+  const opponentWins = playerColor === 'black' ? whiteWins : blackWins;
   let tacticalCount = 0;
   for (const candidate of candidates) {
-    const slot = Math.floor(candidate.position / 32);
-    const bit = candidate.position % 32;
-    blackTest[slot] |= 1 << bit;
-    whiteTest[slot] |= 1 << bit;
-    const blackWins = checkWinCondition(blackTest, candidate.position);
-    const whiteWins = checkWinCondition(whiteTest, candidate.position);
-    blackTest[slot] = blackBitboard[slot];
-    whiteTest[slot] = whiteBitboard[slot];
-    const ownWin = playerColor === 'black' ? blackWins : whiteWins;
-    const opponentWin = playerColor === 'black' ? whiteWins : blackWins;
+    const slot = candidate.position >>> 5;
+    const bit = 1 << (candidate.position & 31);
+    const ownWin = (ownWins[slot] & bit) !== 0;
+    const opponentWin = (opponentWins[slot] & bit) !== 0;
     candidate.tactical = ownWin ? 2 : opponentWin ? 1 : 0;
     if (candidate.tactical) tacticalCount++;
   }

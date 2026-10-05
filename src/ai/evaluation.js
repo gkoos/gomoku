@@ -324,8 +324,18 @@ export function evaluateLinePattern(
   dRow,
   dCol,
 ) {
-  const { stones, windows, winningMoves, openThree, openTwo } =
-    analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol);
+  return scoreLinePattern(
+    analyzeLinePattern(playerBitboard, opponentBitboard, row, col, dRow, dCol),
+  );
+}
+
+export function scoreLinePattern({
+  stones,
+  windows,
+  winningMoves,
+  openThree,
+  openTwo,
+}) {
   if (stones >= 5) return 100000;
   if (stones === 4) return winningMoves >= 2 ? 20000 : 10000;
   if (stones === 3) return openThree ? 1000 : 100;

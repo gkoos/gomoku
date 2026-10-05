@@ -1,3 +1,4 @@
+import { getLineWindow } from './line-bitboards.js';
 import { BOARD_SIZE } from '../core/constants.js';
 
 // Nine-bit masks represent offsets -4 through +4; bit 4 is the anchor.
@@ -42,6 +43,20 @@ export function analyzeLinePattern(
     else if ((playerBitboard[slot] & boardBit) !== 0) friendly |= lineBit;
   }
 
+  return classifyLinePattern(friendly, blockers);
+}
+
+export function analyzePackedLinePattern(own, opponent, position, direction) {
+  const { line, shift, borders } = getLineWindow(position, direction);
+  const friendly =
+    (shift >= 0 ? own[line] >>> shift : own[line] << -shift) & 511;
+  const blockers =
+    ((shift >= 0 ? opponent[line] >>> shift : opponent[line] << -shift) & 511) |
+    borders;
+  return classifyLinePattern(friendly & ~blockers, blockers);
+}
+
+function classifyLinePattern(friendly, blockers) {
   let stones = 0,
     windows = 0,
     winningSquares = 0;

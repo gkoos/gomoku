@@ -22,7 +22,9 @@ export function evaluateTacticalHorizon(
   if (!ownThreat && !otherThreat)
     return { score: state.getScore(), move: null };
 
-  const wins = ownThreat ? checkImmediateThreat(black, white, own) : [];
+  const wins = ownThreat
+    ? checkImmediateThreat(black, white, own, state.lineBitboards)
+    : [];
   if (wins.length) {
     const move = wins[0];
     return {
@@ -31,7 +33,9 @@ export function evaluateTacticalHorizon(
       ...(tracker?.trackPV ? { principalVariation: [move] } : {}),
     };
   }
-  const threats = otherThreat ? checkImmediateThreat(black, white, other) : [];
+  const threats = otherThreat
+    ? checkImmediateThreat(black, white, other, state.lineBitboards)
+    : [];
   if (threats.length >= 2) {
     // No single stone can cover two winning squares, and we cannot win first.
     const block = threats[0];

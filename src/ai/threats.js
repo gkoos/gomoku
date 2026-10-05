@@ -1,3 +1,9 @@
+import {
+  createLineBitboards,
+  findWinningSquares,
+  findOpenFourSquares,
+  threatMovesFromBitboard,
+} from './line-bitboards.js';
 import { BOARD_SIZE, BOARD_CELLS } from '../core/constants.js';
 
 import { checkWinCondition } from '../core/rules.js';
@@ -97,87 +103,26 @@ export function checkImmediateThreat(
   blackBitboard,
   whiteBitboard,
   playerColor,
+  lineBitboards = null,
 ) {
-  const threatMoves = [];
-  const targetBitboard =
-    playerColor === 'black' ? blackBitboard : whiteBitboard;
-
-  // Check each empty position on the board
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      const position = row * BOARD_SIZE + col;
-      const slot = Math.floor(position / 32);
-      const bit = position % 32;
-
-      if (slot >= 8) continue;
-
-      // Skip if position is occupied
-      const blackBit = ((blackBitboard[slot] >>> 0) & (1 << bit)) !== 0;
-      const whiteBit = ((whiteBitboard[slot] >>> 0) & (1 << bit)) !== 0;
-      if (blackBit || whiteBit) continue;
-
-      // Test placing a stone here for the target player
-      const testBitboard = [...targetBitboard];
-      testBitboard[slot] |= 1 << bit;
-
-      // Check if this would create a win (5 in a row)
-      if (checkWinCondition(testBitboard, position)) {
-        // This position completes a 5-in-a-row
-        threatMoves.push({ row, col, position, priority: 'win' });
-      }
-    }
-  }
-
-  return threatMoves;
+  const lines =
+    lineBitboards || createLineBitboards(blackBitboard, whiteBitboard);
+  const own = playerColor === 'black' ? lines.black : lines.white;
+  const opponent = playerColor === 'black' ? lines.white : lines.black;
+  return threatMovesFromBitboard(findWinningSquares(own, opponent), 'win');
 }
 
-export function checkOpen4Threats(blackBitboard, whiteBitboard, playerColor) {
-  const threatMoves = [];
-  const targetBitboard =
-    playerColor === 'black' ? blackBitboard : whiteBitboard;
-
-  const directions = [
-    [0, 1], // horizontal
-    [1, 0], // vertical
-    [1, 1], // diagonal \
-    [1, -1], // diagonal /
-  ];
-
-  // Check each empty position on the board
-  for (let row = 0; row < BOARD_SIZE; row++) {
-    for (let col = 0; col < BOARD_SIZE; col++) {
-      const position = row * BOARD_SIZE + col;
-      const slot = Math.floor(position / 32);
-      const bit = position % 32;
-
-      if (slot >= 8) continue;
-
-      // Skip if position is occupied
-      const blackBit = ((blackBitboard[slot] >>> 0) & (1 << bit)) !== 0;
-      const whiteBit = ((whiteBitboard[slot] >>> 0) & (1 << bit)) !== 0;
-      if (blackBit || whiteBit) continue;
-
-      // Check each direction for open 4 patterns
-      for (const [dRow, dCol] of directions) {
-        if (
-          hasOpen4PatternSimple(
-            targetBitboard,
-            blackBitboard,
-            whiteBitboard,
-            row,
-            col,
-            dRow,
-            dCol,
-          )
-        ) {
-          threatMoves.push({ row, col, position, priority: 'open4' });
-          break; // Found a threat, no need to check other directions
-        }
-      }
-    }
-  }
-
-  return threatMoves;
+export function checkOpen4Threats(
+  blackBitboard,
+  whiteBitboard,
+  playerColor,
+  lineBitboards = null,
+) {
+  const lines =
+    lineBitboards || createLineBitboards(blackBitboard, whiteBitboard);
+  const own = playerColor === 'black' ? lines.black : lines.white;
+  const opponent = playerColor === 'black' ? lines.white : lines.black;
+  return threatMovesFromBitboard(findOpenFourSquares(own, opponent), 'open4');
 }
 
 export function hasOpen4PatternSimple(

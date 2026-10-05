@@ -164,6 +164,7 @@ export function minimaxAlphaBeta(
     blackBitboard,
     whiteBitboard,
     isMaximizing ? computerPlayer : humanPlayer,
+    evaluationState?.lineBitboards,
   );
   if (candidates.length === 0) {
     return remember({ score: 0, move: null }, EXACT);
