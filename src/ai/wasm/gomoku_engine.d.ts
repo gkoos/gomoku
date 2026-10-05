@@ -1,6 +1,17 @@
 /* tslint:disable */
 /* eslint-disable */
 
+/**
+ * Complete root selection followed, when necessary, by iterative search.
+ */
+export class MoveEngine {
+    free(): void;
+    [Symbol.dispose](): void;
+    constructor(black: Uint32Array, white: Uint32Array, computer_black: boolean, difficulty: number, extension: number, table_capacity: number);
+    next_depth(): Float64Array;
+    root_move(): number;
+}
+
 export class PositionHasher {
     free(): void;
     [Symbol.dispose](): void;
@@ -68,10 +79,18 @@ export function generate_candidates(black: Uint32Array, white: Uint32Array, play
 
 export function occupied_positions(black: Uint32Array, white: Uint32Array): Uint32Array;
 
+export function score_root_move(black: Uint32Array, white: Uint32Array, position: number, computer_black: boolean, priority: number): number;
+
+/**
+ * Diagnostic root-only selection: -2 requires search, -1 is terminal.
+ */
+export function select_root(black: Uint32Array, white: Uint32Array, computer_black: boolean, easy: boolean): number;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly __wbg_moveengine_free: (a: number, b: number) => void;
     readonly __wbg_positionhasher_free: (a: number, b: number) => void;
     readonly __wbg_searchengine_free: (a: number, b: number) => void;
     readonly __wbg_searchstate_free: (a: number, b: number) => void;
@@ -82,11 +101,15 @@ export interface InitOutput {
     readonly empty_positions: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly evaluate_position: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly generate_candidates: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
+    readonly moveengine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
+    readonly moveengine_next_depth: (a: number) => [number, number, number, number];
+    readonly moveengine_root_move: (a: number) => number;
     readonly occupied_positions: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly positionhasher_black_to_move: (a: number) => number;
     readonly positionhasher_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly positionhasher_toggle_move: (a: number, b: number, c: number) => [number, number];
     readonly positionhasher_words: (a: number) => [number, number];
+    readonly score_root_move: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly searchengine_black_to_move: (a: number) => number;
     readonly searchengine_fixed_depth: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly searchengine_hash_words: (a: number) => [number, number];
@@ -106,6 +129,7 @@ export interface InitOutput {
     readonly searchstate_undo_move: (a: number, b: number) => [number, number];
     readonly searchstate_winning_references: (a: number, b: number) => [number, number];
     readonly searchstate_winning_squares: (a: number, b: number) => [number, number];
+    readonly select_root: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __externref_table_dealloc: (a: number) => void;

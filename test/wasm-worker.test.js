@@ -1,7 +1,11 @@
 ﻿import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
-import { initSync, SearchEngine } from '../src/ai/wasm/gomoku_engine.js';
+import {
+  initSync,
+  SearchEngine,
+  MoveEngine,
+} from '../src/ai/wasm/gomoku_engine.js';
 import {
   createWasmChooseMove,
   createWasmDeepSearch,
@@ -99,7 +103,7 @@ test('Wasm worker preserves every difficulty cap and request IDs', async () => {
         chooseMove: createWasmChooseMove({
           loadEngine: async () => {
             loaded++;
-            return { SearchEngine };
+            return { MoveEngine };
           },
           reportError: assert.fail,
         }),
@@ -128,7 +132,7 @@ test('Wasm worker preserves every difficulty cap and request IDs', async () => {
 
 test('root tactics and Easy scoring retain JavaScript behavior with Wasm enabled', async () => {
   const choose = createWasmChooseMove({
-    loadEngine: async () => ({ SearchEngine }),
+    loadEngine: async () => ({ MoveEngine }),
     reportError: assert.fail,
   });
   const cases = [
@@ -167,7 +171,7 @@ test('root tactics and Easy scoring retain JavaScript behavior with Wasm enabled
       }
 });
 
-test('Easy does not load Wasm; failed initialization falls back once to JavaScript', async () => {
+test('failed initialization falls back once for every difficulty', async () => {
   let loads = 0;
   const errors = [];
   const choose = createWasmChooseMove({
@@ -179,7 +183,7 @@ test('Easy does not load Wasm; failed initialization falls back once to JavaScri
   });
   const [b, w] = nearlyFull();
   await choose(bits([]), bits([]), 'black', 'white', 'easy', () => {});
-  assert.equal(loads, 0);
+  assert.equal(loads, 1);
   const expected = await findBestMove(
     b,
     w,
@@ -195,4 +199,38 @@ test('Easy does not load Wasm; failed initialization falls back once to JavaScri
     );
   assert.equal(loads, 1);
   assert.equal(errors.length, 1);
+});
+
+test('complete Wasm move selection preserves searched iterations and shares initialization', async () => {
+  const b = bits([112]),
+    w = bits([113, 97]);
+  let loads = 0;
+  const choose = createWasmChooseMove({
+    loadEngine: async () => {
+      loads++;
+      return { MoveEngine };
+    },
+    reportError: assert.fail,
+  });
+  const expected = [];
+  const move = await findBestMove(b, w, 'black', 'white', 'medium', () => {}, {
+    onIteration: (r) => expected.push(r),
+  });
+  const actual = [];
+  assert.deepEqual(
+    coords(
+      await choose(b, w, 'black', 'white', 'medium', () => {}, {
+        onIteration: (r) => actual.push(r),
+      }),
+    ),
+    coords(move),
+  );
+  const normalize = (r) => ({
+    ...r,
+    move: coords(r.move),
+    principalVariation: r.principalVariation.map(coords),
+  });
+  assert.deepEqual(actual.map(normalize), expected.map(normalize));
+  await choose(bits([]), bits([]), 'black', 'white', 'easy', () => {});
+  assert.equal(loads, 1);
 });

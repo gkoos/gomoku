@@ -35,46 +35,7 @@ export function createWasmDeepSearch(SearchEngine) {
       options.tacticalExtension ?? TACTICAL_EXTENSION_PLIES,
       options.useTranspositionTable === false ? 0 : TRANSPOSITION_TABLE_SIZE,
     );
-    let bestMove = null;
-    try {
-      for (;;) {
-        const result = search.next_depth();
-        if (!result.length) break;
-        const [
-          completedDepth,
-          score,
-          nodes,
-          cacheHits,
-          cacheCutoffs,
-          tableSize,
-          pvLength,
-        ] = result;
-        const principalVariation = Array.from(
-          result.slice(7, 7 + pvLength),
-          (position) => ({
-            row: Math.floor(position / 15),
-            col: position % 15,
-            position,
-          }),
-        );
-        bestMove = principalVariation[0];
-        options.onIteration?.({
-          depth: completedDepth,
-          move: bestMove,
-          score,
-          nodes,
-          cacheHits,
-          cacheCutoffs,
-          tableSize,
-          principalVariation,
-        });
-        onProgress?.(Math.floor((completedDepth / depth) * 100));
-      }
-      onProgress?.(100);
-      return bestMove;
-    } finally {
-      search.free();
-    }
+    return runIterations(search, onProgress, depth, options);
   };
 }
 
@@ -93,25 +54,97 @@ export function createWasmChooseMove({
     onProgress,
     options = {},
   ) {
-    let deepSearch;
-    if (['medium', 'hard', 'expert'].includes(difficulty)) {
-      loading ??= Promise.resolve()
-        .then(loadEngine)
-        .then(
-          ({ SearchEngine }) => createWasmDeepSearch(SearchEngine),
-          (error) => {
-            reportError(
-              'Wasm initialization failed; using JavaScript search:',
-              error,
-            );
-            return null;
-          },
+    if (options.transpositionTable)
+      return findBestMove(
+        black,
+        white,
+        computer,
+        human,
+        difficulty,
+        onProgress,
+        options,
+      );
+    loading ??= Promise.resolve()
+      .then(loadEngine)
+      .catch((error) => {
+        reportError(
+          'Wasm initialization failed; using JavaScript search:',
+          error,
         );
-      deepSearch = await loading;
+        return null;
+      });
+    const engine = await loading;
+    if (!engine)
+      return findBestMove(
+        black,
+        white,
+        computer,
+        human,
+        difficulty,
+        onProgress,
+        options,
+      );
+    const level = { easy: 0, medium: 1, hard: 2, expert: 3 }[difficulty] ?? 0;
+    const search = new engine.MoveEngine(
+      Uint32Array.from(black),
+      Uint32Array.from(white),
+      computer === 'black',
+      level,
+      options.tacticalExtension ?? TACTICAL_EXTENSION_PLIES,
+      options.useTranspositionTable === false ? 0 : TRANSPOSITION_TABLE_SIZE,
+    );
+    const root = search.root_move();
+    if (root !== -2) {
+      try {
+        onProgress?.(100);
+        return root < 0 ? null : { row: Math.floor(root / 15), col: root % 15 };
+      } finally {
+        search.free();
+      }
     }
-    return findBestMove(black, white, computer, human, difficulty, onProgress, {
-      ...options,
-      ...(deepSearch ? { deepSearch } : {}),
-    });
+    return runIterations(search, onProgress, [0, 6, 8, 10][level], options);
   };
+}
+
+function runIterations(search, onProgress, depth, options) {
+  let bestMove = null;
+  try {
+    for (;;) {
+      const result = search.next_depth();
+      if (!result.length) break;
+      const [
+        completedDepth,
+        score,
+        nodes,
+        cacheHits,
+        cacheCutoffs,
+        tableSize,
+        pvLength,
+      ] = result;
+      const principalVariation = Array.from(
+        result.slice(7, 7 + pvLength),
+        (position) => ({
+          row: Math.floor(position / 15),
+          col: position % 15,
+          position,
+        }),
+      );
+      bestMove = principalVariation[0];
+      options.onIteration?.({
+        depth: completedDepth,
+        move: bestMove,
+        score,
+        nodes,
+        cacheHits,
+        cacheCutoffs,
+        tableSize,
+        principalVariation,
+      });
+      onProgress?.(Math.floor((completedDepth / depth) * 100));
+    }
+    onProgress?.(100);
+    return bestMove;
+  } finally {
+    search.free();
+  }
 }

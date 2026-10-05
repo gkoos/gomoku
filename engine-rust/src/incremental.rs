@@ -26,6 +26,15 @@ impl Evaluator {
     pub fn new(black: Bitboard, white: Bitboard, perspective_black: bool) -> Self {
         let lines = LineBoards::new(&black, &white);
         let winning = WinningCache::new(&lines);
+        Self::with_lines(black, white, perspective_black, lines, winning)
+    }
+    pub fn with_lines(
+        black: Bitboard,
+        white: Bitboard,
+        perspective_black: bool,
+        lines: LineBoards,
+        winning: WinningCache,
+    ) -> Self {
         let mut result = Self {
             black,
             white,

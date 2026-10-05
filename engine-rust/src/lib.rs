@@ -293,3 +293,106 @@ impl SearchEngine {
         self.inner.state.history_length() as u32
     }
 }
+pub mod root;
+
+/// Complete root selection followed, when necessary, by iterative search.
+#[wasm_bindgen]
+pub struct MoveEngine {
+    choice: i32,
+    search: Option<search::Search>,
+}
+#[wasm_bindgen]
+impl MoveEngine {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        black: &[u32],
+        white: &[u32],
+        computer_black: bool,
+        difficulty: u32,
+        extension: u32,
+        table_capacity: u32,
+    ) -> Result<Self, JsValue> {
+        if difficulty > 3 || extension > 225 || table_capacity > 1_000_000 {
+            return Err(JsValue::from_str(
+                "Invalid difficulty or search configuration",
+            ));
+        }
+        let prepared = root::prepare(
+            board(black)?,
+            board(white)?,
+            computer_black,
+            difficulty == 0,
+        );
+        let choice = prepared.choice;
+        let search = if choice == -2 {
+            let state = incremental::Evaluator::with_lines(
+                prepared.black,
+                prepared.white,
+                computer_black,
+                prepared.lines,
+                prepared.winning,
+            );
+            Some(
+                search::Search::with_state(
+                    state,
+                    computer_black,
+                    [0, 6, 8, 10][difficulty as usize],
+                    extension as usize,
+                    table_capacity as usize,
+                )
+                .map_err(JsValue::from_str)?,
+            )
+        } else {
+            None
+        };
+        Ok(Self { choice, search })
+    }
+    pub fn root_move(&self) -> i32 {
+        self.choice
+    }
+    pub fn next_depth(&mut self) -> Result<Vec<f64>, JsValue> {
+        match &mut self.search {
+            Some(search) => Ok(search
+                .next_iteration()
+                .map_err(JsValue::from_str)?
+                .map_or_else(Vec::new, |i| i.packed())),
+            None => Ok(Vec::new()),
+        }
+    }
+}
+
+/// Diagnostic root-only selection: -2 requires search, -1 is terminal.
+#[wasm_bindgen]
+pub fn select_root(
+    black: &[u32],
+    white: &[u32],
+    computer_black: bool,
+    easy: bool,
+) -> Result<i32, JsValue> {
+    Ok(root::prepare(board(black)?, board(white)?, computer_black, easy).choice)
+}
+#[wasm_bindgen]
+pub fn score_root_move(
+    black: &[u32],
+    white: &[u32],
+    position: u32,
+    computer_black: bool,
+    priority: i32,
+) -> Result<f64, JsValue> {
+    let b = board(black)?;
+    let w = board(white)?;
+    if position >= 225
+        || bitboards::contains(&b, position as usize)
+        || bitboards::contains(&w, position as usize)
+    {
+        return Err(JsValue::from_str("Move must be an empty board square"));
+    }
+    Ok(root::score_move(
+        &b,
+        &w,
+        &mut lines::LineBoards::new(&b, &w),
+        position as usize,
+        computer_black,
+        priority,
+    ))
+}

@@ -1,6 +1,6 @@
 ﻿# Rust/Wasm engine
 
-This crate provides the computational engine for the browser worker. It implements occupancy utilities, nine-cell directional pattern classification, full-board static evaluation, maintained line masks, winning-square caches, incremental make/undo evaluation, candidate generation, Zobrist hashing, transposition caching, and iterative alpha-beta search. The production worker uses Wasm for Medium, Hard, and Expert deep search. Root tactical orchestration and Easy scoring remain in JavaScript; JavaScript search also provides an initialization fallback.
+This crate provides the computational engine for the browser worker. It implements occupancy utilities, nine-cell directional pattern classification, full-board static evaluation, maintained line masks, winning-square caches, incremental make/undo evaluation, candidate generation, Zobrist hashing, transposition caching, and iterative alpha-beta search. The production worker uses Wasm for root tactical orchestration, Easy scoring, and Medium/Hard/Expert deep search. JavaScript retains a reference implementation and initialization fallback.
 
 ## Layout
 
@@ -10,6 +10,7 @@ This crate provides the computational engine for the browser worker. It implemen
 - `src/lines.rs`: shared geometry, 88 line masks per color, packed extraction, and reference-counted winning squares.
 - `src/incremental.rs`: reversible score updates with fixed-size undo buffers and preallocated move history.
 - `src/moves.rs`: shift-generated candidate neighborhoods, density priorities, tactical classification, stable tie ordering, and fixed-size output buffers.
+- `src/root.rs`: root priorities, open-four defense, and Easy move scoring.
 - `src/rules.rs`: anchored wins and root terminal validation.
 - `src/zobrist.rs`: reversible two-word position hashes matching JavaScript.
 - `src/transposition.rs`: bounded FIFO search cache with position verification and mate normalization.
@@ -43,7 +44,7 @@ npm run wasm:benchmark
 
 `npm run wasm:build` also copies browser bindings and the binary to `src/ai/wasm/`, recording source and artifact hashes in `build.json`. Commit these assets with Rust changes. Development and production builds reject missing or stale assets, but require no Rust installation when assets are current. `npm test` exercises the committed browser module.
 
-Vite bundles the web binding module into the worker and emits Wasm as a separate asset. `wasm-runtime.js` initializes it lazily for search difficulties; `wasm-search.js` forwards completed iterations and frees search state afterward. Initialization failure is reported once and uses JavaScript search for that worker. Cloudflare builds continue to need only Node/npm.
+Vite bundles the web binding module into the worker and emits Wasm as a separate asset. `wasm-runtime.js` initializes it lazily for all difficulties; `wasm-search.js` forwards completed iterations and frees search state afterward. Initialization failure is reported once and uses JavaScript search for that worker. Cloudflare builds continue to need only Node/npm.
 
 Bindings accept eight-word unsigned arrays. Analyze accepts a square index (0–224) and direction index: horizontal, vertical, descending diagonal, ascending diagonal. Evaluation accepts black occupancy, white occupancy, and a boolean black perspective. Pattern results pack stones, windows, and winning-move counts into the low three bytes, with open-three/open-two flags in bits 24/25. This compact representation avoids allocating result objects for each analysis.
 
@@ -68,6 +69,14 @@ Each move updates exactly four directional masks, recomputes only their winning-
 The standalone `generate_candidates(black, white, player_black)` binding reconstructs line and winning-square state. `SearchState.candidates(player_black)` reuses the maintained cache. Both return an Int32Array of triples: square position, priority, tactical classification. Classification is 2 for an immediate win, 1 for a block, and 0 for a quiet move; -1 denotes opening candidates, where JavaScript omits the tactical property. Row and column are derived from position.
 
 The native `generate_into` function accepts a caller-owned `Candidates` buffer containing up to 225 fixed-size records. It generates radius-one and density-qualified radius-two frontiers with row-mask shifts, computes original priorities, sorts by tactics/priority/source rank, and preserves all tactical moves beyond the normal cap. The total ordering permits allocation-free unstable sorting while preserving JavaScript tie order. Only Wasm output conversion allocates a returned vector. Candidate membership, widths, and scoring are unchanged from the JavaScript algorithm.
+
+## Root move-selection API
+
+`MoveEngine(black, white, computer_black, difficulty, extension, table_capacity)` is the production entry point. Difficulty values 0/1/2/3 select Easy/Medium/Hard/Expert. `root_move()` returns a chosen square, -1 for terminal positions, or -2 when iterative search is required. `next_depth()` then uses the same packed iteration format as `SearchEngine`; free the instance afterward. Root tactics preserve JavaScript priorities and row-major ties, including winning counterattacks ahead of open-four defense. Easy uses its original enhanced pattern weights, blocking bonuses, candidate priority and local-density/center scoring.
+
+Root preparation constructs line masks and winning caches once. Defense temporarily updates four line masks and refreshes winning entries only when testing a forcing counterattack. Remaining opponent open-four threats are checked against updated masks rather than reconstructed boards. Search takes ownership of prepared masks/caches and initializes contributions once.
+
+`select_root` and `score_root_move` are diagnostic bindings used to verify root choices and exact heuristic scores. `wasm:check` includes 9,280 root selections and 20,030 move scores across fixtures, random densities, both colors, all open-four orientations and board edges. `wasm:benchmark` also measures root defense, counterattack and Easy scoring separately from deep search.
 
 ## Search API and caching
 

@@ -85,6 +85,23 @@ impl Search {
         extension: usize,
         capacity: usize,
     ) -> Result<Self, &'static str> {
+        Self::with_state(
+            Evaluator::new(black, white, perspective),
+            perspective,
+            max_depth,
+            extension,
+            capacity,
+        )
+    }
+    pub fn with_state(
+        state: Evaluator,
+        perspective: bool,
+        max_depth: usize,
+        extension: usize,
+        capacity: usize,
+    ) -> Result<Self, &'static str> {
+        let black = state.black;
+        let white = state.white;
         if max_depth > 225 {
             return Err("Search depth must be between 0 and 225");
         }
@@ -96,7 +113,7 @@ impl Search {
         }
         let terminal = rules::result(&black, &white).is_some();
         Ok(Self {
-            state: Evaluator::new(black, white, perspective),
+            state,
             hasher: Hasher::new(&black, &white, perspective),
             table: if capacity == 0 {
                 None

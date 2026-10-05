@@ -1,5 +1,62 @@
 /* @ts-self-types="./gomoku_engine.d.ts" */
 
+/**
+ * Complete root selection followed, when necessary, by iterative search.
+ */
+export class MoveEngine {
+    __destroy_into_raw() {
+        const ptr = this.__wbg_ptr;
+        this.__wbg_ptr = 0;
+        MoveEngineFinalization.unregister(this);
+        return ptr;
+    }
+    free() {
+        const ptr = this.__destroy_into_raw();
+        wasm.__wbg_moveengine_free(ptr, 0);
+    }
+    /**
+     * @param {Uint32Array} black
+     * @param {Uint32Array} white
+     * @param {boolean} computer_black
+     * @param {number} difficulty
+     * @param {number} extension
+     * @param {number} table_capacity
+     */
+    constructor(black, white, computer_black, difficulty, extension, table_capacity) {
+        const ptr0 = passArray32ToWasm0(black, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray32ToWasm0(white, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.moveengine_new(ptr0, len0, ptr1, len1, computer_black, difficulty, extension, table_capacity);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        this.__wbg_ptr = ret[0];
+        MoveEngineFinalization.register(this, this.__wbg_ptr, this);
+        return this;
+    }
+    /**
+     * @returns {Float64Array}
+     */
+    next_depth() {
+        const ret = wasm.moveengine_next_depth(this.__wbg_ptr);
+        if (ret[3]) {
+            throw takeFromExternrefTable0(ret[2]);
+        }
+        var v1 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+        wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+        return v1;
+    }
+    /**
+     * @returns {number}
+     */
+    root_move() {
+        const ret = wasm.moveengine_root_move(this.__wbg_ptr);
+        return ret;
+    }
+}
+if (Symbol.dispose) MoveEngine.prototype[Symbol.dispose] = MoveEngine.prototype.free;
+
 export class PositionHasher {
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
@@ -439,6 +496,46 @@ export function occupied_positions(black, white) {
     wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
     return v3;
 }
+
+/**
+ * @param {Uint32Array} black
+ * @param {Uint32Array} white
+ * @param {number} position
+ * @param {boolean} computer_black
+ * @param {number} priority
+ * @returns {number}
+ */
+export function score_root_move(black, white, position, computer_black, priority) {
+    const ptr0 = passArray32ToWasm0(black, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray32ToWasm0(white, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.score_root_move(ptr0, len0, ptr1, len1, position, computer_black, priority);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0];
+}
+
+/**
+ * Diagnostic root-only selection: -2 requires search, -1 is terminal.
+ * @param {Uint32Array} black
+ * @param {Uint32Array} white
+ * @param {boolean} computer_black
+ * @param {boolean} easy
+ * @returns {number}
+ */
+export function select_root(black, white, computer_black, easy) {
+    const ptr0 = passArray32ToWasm0(black, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray32ToWasm0(white, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.select_root(ptr0, len0, ptr1, len1, computer_black, easy);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0];
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
@@ -466,6 +563,9 @@ function __wbg_get_imports() {
     };
 }
 
+const MoveEngineFinalization = (typeof FinalizationRegistry === 'undefined')
+    ? { register: () => {}, unregister: () => {} }
+    : new FinalizationRegistry(ptr => wasm.__wbg_moveengine_free(ptr, 1));
 const PositionHasherFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_positionhasher_free(ptr, 1));
