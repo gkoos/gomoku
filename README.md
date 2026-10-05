@@ -17,6 +17,8 @@ Choose Black or White and an AI difficulty, then start a game. Five or more ston
 
 Requires npm and a Node.js version compatible with Vite 7.
 
+Medium, Hard, and Expert search runs in WebAssembly inside a worker. Generated browser assets are checked in, so development and deployment builds need only Node/npm. See the [Rust/Wasm guide](engine-rust/README.md) to change or rebuild the engine.
+
 ```bash
 npm install
 npm run dev

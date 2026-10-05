@@ -1,5 +1,12 @@
-﻿import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { sourceDigest, artifactFiles, digest } from './wasm-artifact.js';
+import { spawnSync } from 'node:child_process';
+import {
+  existsSync,
+  mkdirSync,
+  writeFileSync,
+  readFileSync,
+  copyFileSync,
+} from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -45,3 +52,17 @@ for (const target of ['web', 'nodejs']) {
     }),
   );
 }
+
+// Check in browser assets so static hosting builds only need Node/npm.
+const browserOutput = resolve(root, 'src/ai/wasm');
+mkdirSync(browserOutput, { recursive: true });
+const artifacts = {};
+for (const file of artifactFiles) {
+  const generated = resolve(root, 'engine-rust/pkg/web', file);
+  copyFileSync(generated, resolve(browserOutput, file));
+  artifacts[file] = digest(readFileSync(generated), file);
+}
+writeFileSync(
+  resolve(browserOutput, 'build.json'),
+  JSON.stringify({ sourceHash: sourceDigest(), artifacts }, null, 2) + '\n',
+);

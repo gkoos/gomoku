@@ -1,6 +1,6 @@
-﻿# Rust/Wasm engine prototype
+﻿# Rust/Wasm engine
 
-This crate is the computational prototype of the engine port on `feat/rust-wasm-engine`. It implements occupancy utilities, nine-cell directional pattern classification, full-board static evaluation, maintained line masks, winning-square caches, incremental make/undo evaluation, candidate generation, Zobrist hashing, transposition caching, and iterative alpha-beta search. The browser still uses the JavaScript engine. Root tactical orchestration and browser worker integration have not been ported yet.
+This crate provides the computational engine for the browser worker. It implements occupancy utilities, nine-cell directional pattern classification, full-board static evaluation, maintained line masks, winning-square caches, incremental make/undo evaluation, candidate generation, Zobrist hashing, transposition caching, and iterative alpha-beta search. The production worker uses Wasm for Medium, Hard, and Expert deep search. Root tactical orchestration and Easy scoring remain in JavaScript; JavaScript search also provides an initialization fallback.
 
 ## Layout
 
@@ -39,9 +39,11 @@ npm run wasm:check
 npm run wasm:benchmark
 ```
 
-`wasm:check` builds the release module and generates bindings under `engine-rust/pkg/web` and `engine-rust/pkg/nodejs`, then compares the actual Wasm module with the JavaScript reference. It checks every ternary nine-cell configuration in four directions, random boards at several densities, every board anchor, both evaluation perspectives, signed-word boundaries, padding, overlaps, and invalid binding inputs. The state parity script additionally checks line masks and winning boards against full reconstruction through 1,396 make/undo snapshots, packed windows, all-square updates, crossing reference counts, failed moves, stale undo tokens, and detached output arrays. Search parity checks compare 204 completed iterations and 400 fixed searches, including scores, principal variations, nodes, cache hits/cutoffs/size, zero/nonzero extension budgets, tiny-table eviction, narrowing/widening alpha-beta windows, terminal roots, ten-ply caps, and root hash/occupancy restoration. Candidate parity checks compare complete move lists across 4,628 board/color cases, including density thresholds, both colors, cached and standalone paths, signed words, padding, and make/undo sequences. Generated bindings and Cargo build output are ignored by Git. `npm run wasm:build` builds without running the parity script.
+`wasm:check` builds the release module and generates bindings under `engine-rust/pkg/web` and `engine-rust/pkg/nodejs`, then compares the actual Wasm module with the JavaScript reference. It checks every ternary nine-cell configuration in four directions, random boards at several densities, every board anchor, both evaluation perspectives, signed-word boundaries, padding, overlaps, and invalid binding inputs. The state parity script additionally checks line masks and winning boards against full reconstruction through 1,396 make/undo snapshots, packed windows, all-square updates, crossing reference counts, failed moves, stale undo tokens, and detached output arrays. Search parity checks compare 204 completed iterations and 400 fixed searches, including scores, principal variations, nodes, cache hits/cutoffs/size, zero/nonzero extension budgets, tiny-table eviction, narrowing/widening alpha-beta windows, terminal roots, ten-ply caps, and root hash/occupancy restoration. Candidate parity checks compare complete move lists across 4,628 board/color cases, including density thresholds, both colors, cached and standalone paths, signed words, padding, and make/undo sequences. Bindings under engine-rust/pkg and Cargo build output are ignored by Git. `npm run wasm:build` builds without running the parity script.
 
-For browser use, the web binding module exports an asynchronous default initializer. Initialize it with the emitted Wasm asset, then call named exports. This prototype is not yet connected to Vite or the production worker. No Rust build is required for existing `npm test`, `npm run dev`, or `npm run build` commands.
+`npm run wasm:build` also copies browser bindings and the binary to `src/ai/wasm/`, recording source and artifact hashes in `build.json`. Commit these assets with Rust changes. Development and production builds reject missing or stale assets, but require no Rust installation when assets are current. `npm test` exercises the committed browser module.
+
+Vite bundles the web binding module into the worker and emits Wasm as a separate asset. `wasm-runtime.js` initializes it lazily for search difficulties; `wasm-search.js` forwards completed iterations and frees search state afterward. Initialization failure is reported once and uses JavaScript search for that worker. Cloudflare builds continue to need only Node/npm.
 
 Bindings accept eight-word unsigned arrays. Analyze accepts a square index (0–224) and direction index: horizontal, vertical, descending diagonal, ascending diagonal. Evaluation accepts black occupancy, white occupancy, and a boolean black perspective. Pattern results pack stones, windows, and winning-move counts into the low three bytes, with open-three/open-two flags in bits 24/25. This compact representation avoids allocating result objects for each analysis.
 
@@ -79,7 +81,7 @@ Each search owns one incremental evaluator, hasher, bounded table, and prealloca
 
 Search takes immediate wins directly, restricts a single mandatory block, and preserves tactical candidates and matching PV moves through width limits. At depth zero it follows forced blocking sequences within the supplied extension budget. Quiet leaves use cached evaluation and bypass the table. Search restores occupancy, scores, winning caches, and hashes before returning each iteration, including ordinary propagated errors.
 
-This is synchronous recursive search. Returning between depths permits worker orchestration later but does not allow cancellation during an iteration. Node-budget resumability, pondering, progress messages, root tactical shortcuts, and production worker integration remain separate work. It does not yet replace the browser's JavaScript move-selection pipeline.
+This is synchronous recursive search. The adapter publishes results between completed depths. Move now plays the latest completed result (or the legal fallback) and terminates the worker. Reset also terminates it and rejects stale replies. Cancellation cannot be processed as a message during an iteration. Pondering and resumable searches remain future work.
 
 ## Performance measurements
 
@@ -92,4 +94,4 @@ On this Windows machine, Node 24.2.0 with release-built Rust 1.99.0 measured:
 | seeded-1 | 6 | 160.6 ms | 41.8 ms | 3.85? |
 | seeded-4 | 5 | 54.0 ms | 15.3 ms | 3.52? |
 
-These sampled timings are not a guarantee across positions or browsers. Re-run locally and measure browser play after integration.
+These sampled timings are not a guarantee across positions or browsers. Re-run locally; browser performance should be measured separately.

@@ -27,7 +27,7 @@ export function findBestMoveAdaptive(
 
   const searchDepth = { medium: 6, hard: 8, expert: 10 }[difficulty];
   if (searchDepth) {
-    const deepMove = findBestMoveDeepSearch(
+    const deepMove = (searchOptions.deepSearch || findBestMoveDeepSearch)(
       blackBitboard,
       whiteBitboard,
       computerPlayer,

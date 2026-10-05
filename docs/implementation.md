@@ -13,6 +13,8 @@
 | ai/search.js, ai/tactical-search.js | Iterative alpha-beta and horizon replies |
 | ai/zobrist.js, ai/search-context.js, ai/transposition-table.js | Hashing and search cache |
 | ai/worker-handler.js, ai-worker.js | Message handling and worker installation |
+| ai/wasm-search.js, ai/wasm-runtime.js, ai/wasm/ | Wasm adapter, initialization, generated browser assets |
+| engine-rust/src/ | Native search, patterns, candidates, incremental state and caching |
 | ai/client.js | Worker lifecycle and completed-search tracking |
 | game/controller.js, game/setup.js | Game phases and setup state |
 | ui/view.js, main.js | DOM rendering and browser bootstrap |
@@ -83,17 +85,21 @@ Entries contain exact scores, lower bounds, or upper bounds. Bounds are reused o
 
 ## Worker lifecycle and Move now
 
+The production worker keeps root tactical selection and Easy scoring in JavaScript. Medium, Hard, and Expert initialize Wasm once per worker and use Rust for deep search. The adapter calls `SearchEngine.next_depth()` and forwards completed iterations through the existing protocol. It frees search state when finished or a callback throws. Initialization failures are reported once and retain JavaScript search for that worker.
+
 The client sends FIND_BEST_MOVE with requestId and data containing position and difficulty. The worker echoes the ID in PROGRESS_UPDATE, SEARCH_ITERATION, and BEST_MOVE_FOUND replies. SEARCH_ITERATION forwards completed depth and move; richer statistics remain available through the direct engine callback.
 
 The client starts with a legal fallback and retains each completed search result. Move now plays the latest completed move, or the fallback before depth one finishes, then terminates the worker. Reset also cancels pending work. Worker identity and request-ID checks reject obsolete replies. Later searches can create replacement workers.
 
-Search runs synchronously inside the worker. Cancellation terminates it rather than depending on a message being processed during recursion. There is no deadline. Progress describes traversal/iteration progress, not remaining wall-clock time.
+Search runs synchronously inside the worker. Cancellation terminates it rather than depending on a message being processed during recursion. There is no deadline. Wasm progress reports completed depths, not remaining wall-clock time.
 
 The controller has idle, setup, playing, and finished phases. Guards prevent stale replies from placing stones after resets, during setup, or after game end. Errors trigger legal fallback behavior.
 
 ## Validation and development
 
 Run npm test for regression tests and npm run build for production bundling.
+
+Browser bindings and the Wasm binary in `src/ai/wasm/` are committed. Development and production builds check their hashes against Rust sources; stale or missing assets require `npm run wasm:build`. This keeps Cloudflare builds Node-only. Rebuilding requires Rust and the pinned wasm-bindgen CLI; commit regenerated assets with Rust changes. Text hashes normalize line endings across Windows/Linux checkouts. See the [Rust/Wasm guide](../engine-rust/README.md) for native tests, parity checks and repeatable benchmarks.
 
 Coverage includes reference candidate ordering, exhaustive line patterns, signed words and edges, tactical counterattacks, forced branches, horizon budgets, difficulty depth caps, cache parity/collisions, make/undo restoration, worker messages, and controller cancellation. Baseline fixtures preserve representative expected results.
 

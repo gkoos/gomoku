@@ -1,0 +1,8 @@
+{
+  "sourceHash": "ba9e9aca2b91ecdc9fdcc0ee280ef3e3c453c96f151ee43aaf341846859898cb",
+  "artifacts": {
+    "gomoku_engine.js": "e89e26864b30ec65137590e3e65ce6700a1553c5226bb7797a0d20a2304e12ac",
+    "gomoku_engine_bg.wasm": "5672481cb7a082bc4b1e6f9c58e425d56eea778a8fb93443dbeb9585335d8f1b",
+    "gomoku_engine.d.ts": "78db604430b2258be2282f8d9bd29b8031f5676a362933de3ef9eaf22ae6cf27"
+  }
+}
