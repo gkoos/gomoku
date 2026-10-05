@@ -29,9 +29,9 @@ A modern, responsive Gomoku (Five in a Row) game built with vanilla JavaScript a
 
 ## Computer AI
 
-The engine checks immediate wins, mandatory blocks, open fours, and other four-stone threats before choosing a positional move. Evaluation scores contiguous and broken formations according to their winning extensions.
+The engine checks immediate wins, mandatory blocks, open fours, and other four-stone threats before choosing a positional move. Creating a blockable four is evaluated alongside alternatives rather than selected automatically. Evaluation scores contiguous and broken formations according to their winning extensions.
 
-Easy uses heuristic move scoring. Medium and Hard use alpha-beta search at fixed depths of 6 and 8 plies. Tactical candidates survive branching limits. Search currently has no transposition table, iterative deepening, or time budget; double-open-three detection remains unfinished.
+Easy uses heuristic move scoring. Medium and Hard use iterative deepening with alpha-beta search, up to 6 and 8 plies respectively. Completed iterations supply principal-variation move ordering for the next depth. Tactical candidates survive branching limits. Search has no time deadline. The Move now button is enabled while an AI request is pending: it plays the last completed search result and terminates the worker. If depth 1 has not completed, it uses a legal candidate move. Search currently has no transposition table; double-open-three detection remains unfinished.
 
 ## Architecture
 

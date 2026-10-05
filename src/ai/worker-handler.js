@@ -6,10 +6,11 @@ const defaultChooseMove = (
   _opponent,
   difficulty,
   onProgress,
+  { onIteration } = {},
 ) =>
   engineChooseMove(
     { blackBitboard, whiteBitboard, toMove },
-    { difficulty, onProgress },
+    { difficulty, onProgress, onIteration },
   );
 import { findLegalFallback } from '../core/rules.js';
 export function createWorkerHandler({
@@ -42,6 +43,10 @@ export function createWorkerHandler({
         difficulty,
         (progress) =>
           postMessage({ type: 'PROGRESS_UPDATE', requestId, progress }),
+        {
+          onIteration: ({ depth, move }) =>
+            postMessage({ type: 'SEARCH_ITERATION', requestId, depth, move }),
+        },
       );
       postMessage({ type: 'BEST_MOVE_FOUND', requestId, move });
     } catch (error) {

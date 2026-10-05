@@ -16,6 +16,8 @@ export function minimaxAlphaBeta(
   moveHistory = [],
   progressTracker = null,
 ) {
+  if (progressTracker?.nodes !== undefined) progressTracker.nodes++;
+
   // Check for immediate wins/losses
   const computerBitboard =
     computerPlayer === 'black' ? blackBitboard : whiteBitboard;
@@ -75,19 +77,17 @@ export function minimaxAlphaBeta(
     return { score: 0, move: null };
   }
 
-  // Limit candidates based on depth to maintain performance
-  const maxCandidates = Math.max(8, Math.floor(20 - depth * 2)); // Increased base candidates
-  const tacticalCount = candidates.filter(
-    (candidate) => candidate.tactical,
-  ).length;
-  const limitedCandidates = candidates.slice(
-    0,
-    Math.max(maxCandidates, tacticalCount),
+  const limitedCandidates = selectSearchCandidates(
+    candidates,
+    depth,
+    moveHistory,
+    progressTracker?.principalVariation,
   );
 
   if (isMaximizing) {
     let maxEval = -Infinity;
     let bestMove = null;
+    let bestVariation = [];
 
     for (let i = 0; i < limitedCandidates.length; i++) {
       const candidate = limitedCandidates[i];
@@ -134,6 +134,7 @@ export function minimaxAlphaBeta(
       if (evaluation.score > maxEval) {
         maxEval = evaluation.score;
         bestMove = candidate;
+        bestVariation = [candidate, ...(evaluation.principalVariation || [])];
       }
 
       alpha = Math.max(alpha, evaluation.score);
@@ -142,10 +143,17 @@ export function minimaxAlphaBeta(
       }
     }
 
-    return { score: maxEval, move: bestMove };
+    return {
+      score: maxEval,
+      move: bestMove,
+      ...(progressTracker?.trackPV
+        ? { principalVariation: bestVariation }
+        : {}),
+    };
   } else {
     let minEval = Infinity;
     let bestMove = null;
+    let bestVariation = [];
 
     for (let i = 0; i < limitedCandidates.length; i++) {
       const candidate = limitedCandidates[i];
@@ -182,6 +190,7 @@ export function minimaxAlphaBeta(
       if (evaluation.score < minEval) {
         minEval = evaluation.score;
         bestMove = candidate;
+        bestVariation = [candidate, ...(evaluation.principalVariation || [])];
       }
 
       beta = Math.min(beta, evaluation.score);
@@ -190,7 +199,13 @@ export function minimaxAlphaBeta(
       }
     }
 
-    return { score: minEval, move: bestMove };
+    return {
+      score: minEval,
+      move: bestMove,
+      ...(progressTracker?.trackPV
+        ? { principalVariation: bestVariation }
+        : {}),
+    };
   }
 }
 
@@ -201,44 +216,96 @@ export function findBestMoveDeepSearch(
   humanPlayer,
   progressCallback,
   searchDepth = 8,
+  { onIteration = () => {} } = {},
 ) {
-  const depth = searchDepth;
+  if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
+  let bestMove = null;
+  let principalVariation = [];
+  for (let depth = 1; depth <= searchDepth; depth++) {
+    const tracker = {
+      trackPV: true,
+      principalVariation,
+      nodes: 0,
+      lastProgress: 0,
+      reportProgress(progress) {
+        const overall = Math.floor(
+          ((depth - 1 + progress / 100) / searchDepth) * 100,
+        );
+        if (overall > this.lastProgress) {
+          this.lastProgress = overall;
+          progressCallback?.(overall);
+        }
+      },
+    };
+    const result = minimaxAlphaBeta(
+      blackBitboard,
+      whiteBitboard,
+      depth,
+      -Infinity,
+      Infinity,
+      true,
+      computerPlayer,
+      humanPlayer,
+      [],
+      tracker,
+    );
+    if (!result.move) break;
+    bestMove = result.move;
+    principalVariation = result.principalVariation || [];
+    // Publish only fully completed depths; partial root searches are biased.
+    onIteration({
+      depth,
+      move: bestMove,
+      score: result.score,
+      nodes: tracker.nodes,
+      principalVariation,
+    });
+    progressCallback?.(Math.floor((depth / searchDepth) * 100));
+    if (Math.abs(result.score) >= WIN_SCORE - BOARD_SIZE * BOARD_SIZE) break;
+  }
+  progressCallback?.(100);
+  return bestMove;
+}
 
-  if (progressCallback) progressCallback(5);
-
-  // Create progress tracker
-  const progressTracker = {
-    lastReportedProgress: 0,
-    reportProgress: function (progress) {
-      if (progressCallback && progress >= this.lastReportedProgress + 2) {
-        // Throttle updates
-        this.lastReportedProgress = progress;
-        progressCallback(Math.min(90, progress));
-      }
-    },
-  };
-
-  if (progressCallback) progressCallback(10);
-
-  // Use minimax with alpha-beta pruning
-  const result = minimaxAlphaBeta(
-    blackBitboard,
-    whiteBitboard,
-    depth,
-    -Infinity,
-    Infinity,
-    true,
-    computerPlayer,
-    humanPlayer,
-    [], // empty move history
-    progressTracker,
+export function selectSearchCandidates(
+  candidates,
+  depth,
+  moveHistory = [],
+  principalVariation = [],
+) {
+  // Limit candidates based on depth to maintain performance
+  const maxCandidates = Math.max(8, Math.floor(20 - depth * 2)); // Increased base candidates
+  const tacticalCount = candidates.filter(
+    (candidate) => candidate.tactical,
+  ).length;
+  const limitedCandidates = candidates.slice(
+    0,
+    Math.max(maxCandidates, tacticalCount),
   );
 
-  if (progressCallback) progressCallback(100);
-
-  if (result && result.move) {
-    return result.move;
-  } else {
-    return null;
+  // Search the previous iteration's principal variation first. Only follow it
+  // while the current path matches; another branch is a different position.
+  const pv = principalVariation;
+  if (
+    moveHistory.every((move, index) => move.position === pv[index]?.position)
+  ) {
+    const preferred = candidates.find(
+      (move) => move.position === pv[moveHistory.length]?.position,
+    );
+    if (preferred) {
+      const index = limitedCandidates.findIndex(
+        (move) => move.position === preferred.position,
+      );
+      if (index >= 0) limitedCandidates.splice(index, 1);
+      else {
+        const removable = limitedCandidates.findLastIndex(
+          (move) => !move.tactical,
+        );
+        if (removable >= 0) limitedCandidates.splice(removable, 1);
+      }
+      limitedCandidates.unshift(preferred);
+    }
   }
+
+  return limitedCandidates;
 }

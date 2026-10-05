@@ -6,7 +6,6 @@ import {
   selectOpenFourDefense,
   checkImmediateThreat,
   checkOpen4Threats,
-  findSimple4Threats,
   checkSimpleOpen3Threats,
   checkDoubleOpen3Threats,
 } from './threats.js';
@@ -23,6 +22,7 @@ export function findBestMoveAdaptive(
   humanPlayer,
   difficulty,
   progressCallback,
+  searchOptions = {},
 ) {
   if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
   if (progressCallback) progressCallback(10);
@@ -41,6 +41,7 @@ export function findBestMoveAdaptive(
         }
       },
       8, // 8-ply depth for hard
+      searchOptions,
     );
 
     if (deepMove) {
@@ -64,6 +65,7 @@ export function findBestMoveAdaptive(
         }
       },
       6, // 6-ply depth for medium
+      searchOptions,
     );
 
     if (deepMove) {
@@ -156,6 +158,7 @@ export async function findBestMove(
   humanPlayer,
   difficulty,
   progressCallback = () => {},
+  searchOptions = {},
 ) {
   try {
     if (getBitboardResult(blackBitboard, whiteBitboard)) {
@@ -185,11 +188,6 @@ export async function findBestMove(
       progressCallback(100);
       return { row: 7, col: 7 }; // Center of 15x15 board
     }
-
-    // For hard difficulty in very complex positions, skip some threat checks and go straight to deep search
-    const isVeryComplexPosition = totalStones >= 15; // Lowered from 20 to 15
-    const skipEarlyReturnsForDeepSearch =
-      difficulty === 'hard' && isVeryComplexPosition;
 
     // Report progress
     progressCallback(2);
@@ -250,33 +248,7 @@ export async function findBestMove(
       return defense;
     }
 
-    // PRIORITY 5: AI's Closed Four (XXXX_, etc.) - Skip in very complex positions for hard difficulty
-    if (!skipEarlyReturnsForDeepSearch) {
-      progressCallback(10);
-      const aiClosed4Threats = findSimple4Threats(
-        blackBitboard,
-        whiteBitboard,
-        computerPlayer,
-      );
-      if (aiClosed4Threats.length > 0) {
-        progressCallback(100);
-        return aiClosed4Threats[0];
-      }
-    }
-
-    // PRIORITY 6: Block opponent's Closed Four (XXXX_, etc.) - Skip in very complex positions for hard difficulty
-    if (!skipEarlyReturnsForDeepSearch) {
-      progressCallback(12);
-      const humanClosed4Threats = findSimple4Threats(
-        blackBitboard,
-        whiteBitboard,
-        humanPlayer,
-      );
-      if (humanClosed4Threats.length > 0) {
-        progressCallback(100);
-        return humanClosed4Threats[0];
-      }
-    }
+    // Blockable fours are scored/searched with other candidates, not returned blindly.
 
     // PRIORITY 7: AI's Double Three (2 × _XXX_)
     progressCallback(14);
@@ -304,8 +276,8 @@ export async function findBestMove(
       return { row: threat.row, col: threat.col };
     }
 
-    // PRIORITY 9: AI's Open Three (_XXX_) - Skip in very complex positions for hard difficulty
-    if (!skipEarlyReturnsForDeepSearch) {
+    // Easy uses open-three shortcuts; Medium and Hard compare them in search.
+    if (difficulty === 'easy') {
       progressCallback(18);
       const aiOpen3s = checkSimpleOpen3Threats(
         blackBitboard,
@@ -319,8 +291,8 @@ export async function findBestMove(
       }
     }
 
-    // PRIORITY 10: Block opponent's Open Three (_XXX_) - Skip in very complex positions for hard difficulty
-    if (!skipEarlyReturnsForDeepSearch) {
+    // Easy: prevent the opponent from creating an open four.
+    if (difficulty === 'easy') {
       progressCallback(20);
       const opponentOpen3s = checkSimpleOpen3Threats(
         blackBitboard,
@@ -330,32 +302,8 @@ export async function findBestMove(
       if (opponentOpen3s.length > 0) {
         const threat = opponentOpen3s[0];
 
-        // For hard difficulty in complex positions, consider deep search even when blocking threats
-        if (difficulty === 'hard' && totalStones >= 10) {
-          // Do a quick evaluation to see if the threat is truly urgent
-          let threatUrgency = 0;
-
-          // Check how many other threats exist
-          const allThreats = [
-            ...checkImmediateThreat(blackBitboard, whiteBitboard, humanPlayer),
-            ...checkOpen4Threats(blackBitboard, whiteBitboard, humanPlayer),
-            ...findSimple4Threats(blackBitboard, whiteBitboard, humanPlayer),
-            ...opponentOpen3s,
-          ];
-
-          threatUrgency = allThreats.length;
-
-          // If there are multiple threats or this is a very complex position, use deep search
-          if (threatUrgency <= 2 && totalStones >= 15) {
-            // Fall through to deep search instead of immediate blocking
-          } else {
-            progressCallback(100);
-            return { row: threat.row, col: threat.col };
-          }
-        } else {
-          progressCallback(100);
-          return { row: threat.row, col: threat.col };
-        }
+        progressCallback(100);
+        return { row: threat.row, col: threat.col };
       }
     }
 
@@ -373,6 +321,7 @@ export async function findBestMove(
           const mappedProgress = Math.min(95, 22 + (progress / 100) * 73);
           progressCallback(Math.floor(mappedProgress));
         },
+        searchOptions,
       );
 
       if (bestMove) {
@@ -404,7 +353,7 @@ export async function findBestMove(
 
 export function chooseMove(
   position,
-  { difficulty = 'medium', onProgress = () => {} } = {},
+  { difficulty = 'medium', onProgress = () => {}, onIteration = () => {} } = {},
 ) {
   return findBestMove(
     position.blackBitboard,
@@ -413,5 +362,6 @@ export function chooseMove(
     oppositeColor(position.toMove),
     difficulty,
     onProgress,
+    { onIteration },
   );
 }

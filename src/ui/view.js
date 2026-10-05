@@ -13,6 +13,7 @@ export function createView({
   makeMove,
   setHumanPlayer,
   setDifficulty,
+  forceComputerMove,
 }) {
   function createGameUI() {
     const { board, currentPlayer, humanPlayer, aiDifficulty, gameInProgress } =
@@ -59,6 +60,7 @@ export function createView({
       </div>
       <div class="game-info">
         <div id="game-status"></div>
+        ${!isSetupMode ? `<button id="move-now-btn" class="start-button" ${!gameInProgress ? 'style="visibility: hidden;"' : ''} disabled title="Play the best move found so far">Move now</button>` : ''}
         ${
           isSetupMode
             ? '<button id="clear-board-btn" class="reset-button">Clear Board</button>'
@@ -72,6 +74,9 @@ export function createView({
     // Add event listeners based on mode
     if (!isSetupMode) {
       document.getElementById('reset-btn').addEventListener('click', initGame);
+      document
+        .getElementById('move-now-btn')
+        .addEventListener('click', forceComputerMove);
       document.getElementById('start-btn').addEventListener('click', startGame);
       document
         .getElementById('setup-btn')
@@ -236,6 +241,7 @@ export function createView({
     document.getElementById('start-btn').style.visibility = 'hidden';
     document.getElementById('setup-btn').style.visibility = 'hidden';
     document.getElementById('reset-btn').style.visibility = 'visible';
+    document.getElementById('move-now-btn').style.visibility = 'visible';
     document.getElementById('game-board').classList.remove('disabled');
   }
   function placeStone(row, col, color) {
@@ -252,7 +258,13 @@ export function createView({
     if (color) cell.classList.add('stone', color);
   }
 
+  function setThinking(thinking) {
+    const button = document.getElementById('move-now-btn');
+    if (button) button.disabled = !thinking;
+  }
+
   return {
+    setThinking,
     createGameUI,
     createBoard,
     highlightWinningStones,

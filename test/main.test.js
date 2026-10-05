@@ -414,3 +414,107 @@ test('controllers have independent setup state and explicit phases', () => {
   snapshot.board[1][1] = 'black';
   assert.equal(first.state().board[1][1], null);
 });
+
+test('Move now uses the deepest completed result and ignores obsolete workers', () => {
+  const h = harness(),
+    oldWorker = h.start('black'),
+    request = h.requests(oldWorker).at(-1);
+  const button = h.elements.get('move-now-btn');
+  assert.equal(button.disabled, false);
+  oldWorker.reply({
+    type: 'SEARCH_ITERATION',
+    requestId: request.requestId,
+    depth: 2,
+    move: { row: 5, col: 5 },
+  });
+  oldWorker.reply({
+    type: 'SEARCH_ITERATION',
+    requestId: request.requestId,
+    depth: 1,
+    move: { row: 4, col: 4 },
+  });
+  oldWorker.reply({
+    type: 'SEARCH_ITERATION',
+    requestId: request.requestId,
+    depth: 3,
+    move: { row: -1, col: 5 },
+  });
+  assert.equal(h.state().completedDepth, 2);
+  button.listeners.get('click')();
+  assert.ok(oldWorker.terminated);
+  assert.equal(h.state().board[5][5], 'black');
+  assert.equal(h.state().activeAIRequest, null);
+  assert.equal(button.disabled, true);
+  button.listeners.get('click')();
+  assert.equal(stoneCount(h.state()), 1);
+  h.run('makeMove(6,6)');
+  const nextWorker = h.workers.at(-1),
+    nextRequest = h.requests(nextWorker).at(-1);
+  assert.notEqual(nextWorker, oldWorker);
+  assert.notEqual(nextRequest.requestId, request.requestId);
+  oldWorker.reply({
+    type: 'BEST_MOVE_FOUND',
+    requestId: request.requestId,
+    move: { row: 3, col: 3 },
+  });
+  oldWorker.reply({
+    type: 'SEARCH_ITERATION',
+    requestId: request.requestId,
+    depth: 8,
+    move: { row: 3, col: 3 },
+  });
+  h.flush(150);
+  assert.equal(stoneCount(h.state()), 2);
+  nextWorker.reply({
+    type: 'BEST_MOVE_FOUND',
+    requestId: nextRequest.requestId,
+    move: { row: 8, col: 8 },
+  });
+  h.flush(150);
+  assert.equal(stoneCount(h.state()), 3);
+  assert.equal(button.disabled, true);
+});
+test('Move now can act before depth one completes', () => {
+  const h = harness(),
+    worker = h.start('black');
+  h.elements.get('move-now-btn').listeners.get('click')();
+  assert.ok(worker.terminated);
+  assert.equal(stoneCount(h.state()), 1);
+  assert.equal(h.state().board[7][7], 'black');
+});
+test('Move now cancels a delayed final result without applying it twice', () => {
+  const h = harness(),
+    worker = h.start('black'),
+    request = h.requests(worker).at(-1);
+  worker.reply({
+    type: 'BEST_MOVE_FOUND',
+    requestId: request.requestId,
+    move: { row: 4, col: 4 },
+  });
+  const oldTimer = [...h.timers.values()].find((t) => t.delay === 150);
+  h.elements.get('move-now-btn').listeners.get('click')();
+  oldTimer.callback();
+  assert.equal(h.timers.size, 0);
+  assert.equal(stoneCount(h.state()), 1);
+  assert.equal(h.state().board[4][4], 'black');
+});
+test('reset clears completed results and disables Move now', () => {
+  const h = harness(),
+    worker = h.start('black'),
+    request = h.requests(worker).at(-1);
+  worker.reply({
+    type: 'SEARCH_ITERATION',
+    requestId: request.requestId,
+    depth: 3,
+    move: { row: 4, col: 4 },
+  });
+  h.run('initGame()');
+  assert.equal(h.elements.get('move-now-btn').disabled, true);
+  assert.equal(h.state().completedDepth, 0);
+  h.elements.get('move-now-btn').listeners.get('click')();
+  assert.equal(stoneCount(h.state()), 0);
+  h.start('black');
+  h.elements.get('move-now-btn').listeners.get('click')();
+  assert.equal(h.state().board[7][7], 'black');
+  assert.equal(h.state().board[4][4], null);
+});

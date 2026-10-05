@@ -691,3 +691,9 @@ h1 {
 }
 
 
+
+#move-now-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+  pointer-events: none;
+}

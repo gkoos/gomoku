@@ -1,3 +1,4 @@
+import { generateCandidateMoves } from '../ai/moves.js';
 import { BOARD_SIZE } from '../core/constants.js';
 import { board2Bitboards } from '../core/bitboards.js';
 import { getBoardResult, getWinningLine } from '../core/rules.js';
@@ -66,6 +67,7 @@ export function createGameController({
     reportError,
     canAcceptResponse: canComputerMove,
     onProgress: (progress) => updateAIProgress(progress),
+    onThinkingChange: (thinking) => view.setThinking(thinking),
     onError: makeRandomMove,
     onMove(move) {
       if (finishTerminalPosition()) return;
@@ -262,10 +264,18 @@ export function createGameController({
     )
       return;
     const { blackBitboard, whiteBitboard } = board2Bitboards(board);
-    aiClient.findMove({
-      position: { blackBitboard, whiteBitboard, toMove: computerPlayer },
-      difficulty: aiDifficulty,
-    });
+    const fallback = generateCandidateMoves(
+      blackBitboard,
+      whiteBitboard,
+      computerPlayer,
+    )[0];
+    aiClient.findMove(
+      {
+        position: { blackBitboard, whiteBitboard, toMove: computerPlayer },
+        difficulty: aiDifficulty,
+      },
+      fallback,
+    );
   }
 
   // Check win condition (5 in a row)
@@ -339,6 +349,10 @@ export function createGameController({
     if (currentPlayer === computerPlayer) makeComputerMove();
   }
 
+  function forceComputerMove() {
+    return aiClient.forceMove();
+  }
+
   function isGameInProgress() {
     return phase === 'playing' || phase === 'finished';
   }
@@ -355,6 +369,7 @@ export function createGameController({
       gameOver: isGameOver(),
       gameInProgress: isGameInProgress(),
       activeAIRequest: aiClient.pendingRequestId,
+      completedDepth: aiClient.completedDepth,
       phase,
     };
   }
@@ -381,6 +396,7 @@ export function createGameController({
     makeMove,
     setHumanPlayer,
     setDifficulty,
+    forceComputerMove,
   });
   const {
     createGameUI,
@@ -403,6 +419,7 @@ export function createGameController({
     setHumanPlayer,
     setDifficulty,
     makeComputerMove,
+    forceComputerMove,
     cleanup,
     getState,
     Setup,
