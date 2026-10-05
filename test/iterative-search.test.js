@@ -103,7 +103,7 @@ test('a winning double four beats the first blockable three extension for every 
       });
       assert.deepEqual([move.row, move.col], [7, 8]);
       if (difficulty !== 'easy') {
-        assert.equal(iterations.at(-1).depth, 3);
+        assert.equal(iterations.at(-1).depth, 1);
         assert.equal(iterations.at(-1).score, 999997);
       }
     }
@@ -153,7 +153,7 @@ test('worker publishes completed depths with the original request ID before its 
   const iterations = messages.filter((m) => m.type === 'SEARCH_ITERATION');
   assert.deepEqual(
     iterations.map((m) => m.depth),
-    [1, 2, 3],
+    [1],
   );
   assert.ok(messages.every((m) => m.requestId === 91));
   assert.deepEqual(messages.at(-1).move, iterations.at(-1).move);

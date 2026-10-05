@@ -1,3 +1,4 @@
+import { TACTICAL_EXTENSION_PLIES } from './config.js';
 import { createPositionHasher } from './zobrist.js';
 import { createTranspositionTable } from './transposition-table.js';
 
@@ -23,6 +24,7 @@ export function transpositionKey(
   perspective,
   history,
   tracker,
+  tacticalExtension = TACTICAL_EXTENSION_PLIES,
 ) {
   const pv = tracker?.principalVariation || [];
   const followsPV = history.every(
@@ -39,6 +41,8 @@ export function transpositionKey(
     context.hasher.key +
     '/' +
     depth +
+    '/q' +
+    tacticalExtension +
     '/' +
     perspective +
     '/' +

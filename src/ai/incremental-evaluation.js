@@ -44,7 +44,9 @@ export function createIncrementalEvaluator(
     white = [...whiteBitboard];
   const scores = new Int32Array(BOARD_CELLS * 4),
     history = [];
-  let total = 0;
+  let total = 0,
+    blackThreatLines = 0,
+    whiteThreatLines = 0;
 
   function contribution(index) {
     const position = index >>> 2,
@@ -68,6 +70,8 @@ export function createIncrementalEvaluator(
   for (let index = 0; index < scores.length; index++) {
     scores[index] = contribution(index);
     total += scores[index];
+    if (scores[index] >= 10000) blackThreatLines++;
+    if (scores[index] <= -10000) whiteThreatLines++;
   }
 
   function makeMove(position, color) {
@@ -80,13 +84,25 @@ export function createIncrementalEvaluator(
       throw new Error('Move occupies an existing stone');
     const indices = AFFECTED_CONTRIBUTIONS[position];
     const previousScores = new Int32Array(indices.length);
-    const frame = { token: {}, position, color, total, previousScores };
+    const frame = {
+      token: {},
+      position,
+      color,
+      total,
+      previousScores,
+      blackThreatLines,
+      whiteThreatLines,
+    };
     const stones = color === 'black' ? black : white;
     stones[slot] |= mask;
     for (let offset = 0; offset < indices.length; offset++) {
       const index = indices[offset];
       previousScores[offset] = scores[index];
       const next = contribution(index);
+      if (scores[index] >= 10000) blackThreatLines--;
+      if (scores[index] <= -10000) whiteThreatLines--;
+      if (next >= 10000) blackThreatLines++;
+      if (next <= -10000) whiteThreatLines++;
       total += next - scores[index];
       scores[index] = next;
     }
@@ -106,6 +122,8 @@ export function createIncrementalEvaluator(
     }
     // Preserve the raw total: clamping between moves would lose information.
     total = frame.total;
+    blackThreatLines = frame.blackThreatLines;
+    whiteThreatLines = frame.whiteThreatLines;
     history.pop();
   }
 
@@ -115,5 +133,11 @@ export function createIncrementalEvaluator(
     return Math.max(-MAX_STATIC_SCORE, Math.min(MAX_STATIC_SCORE, score));
   }
 
-  return { makeMove, undoMove, getScore };
+  // Only four/five patterns reach 10000 in the line evaluator. Counting these
+  // contributions lets quiet leaves skip tactical scans without clamped totals.
+  function hasImmediateThreat(color) {
+    oppositeColor(color);
+    return color === 'black' ? blackThreatLines > 0 : whiteThreatLines > 0;
+  }
+  return { makeMove, undoMove, getScore, hasImmediateThreat };
 }

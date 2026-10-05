@@ -7,7 +7,8 @@ import {
   scoreFromTable,
 } from './transposition-table.js';
 import { BOARD_SIZE } from '../core/constants.js';
-import { WIN_SCORE } from './config.js';
+import { WIN_SCORE, TACTICAL_EXTENSION_PLIES } from './config.js';
+import { evaluateTacticalHorizon } from './tactical-search.js';
 import { checkWinCondition, getBitboardResult } from '../core/rules.js';
 import { generateCandidateMoves } from './moves.js';
 import { createIncrementalEvaluator } from './incremental-evaluation.js';
@@ -25,6 +26,7 @@ export function minimaxAlphaBeta(
   progressTracker = null,
   evaluationState = null,
   searchContext = null,
+  tacticalExtension = TACTICAL_EXTENSION_PLIES,
 ) {
   if (progressTracker?.nodes !== undefined) progressTracker.nodes++;
 
@@ -64,13 +66,26 @@ export function minimaxAlphaBeta(
     }
   }
 
-  // Incremental evaluation already makes leaf scoring O(1); caching leaves
-  // would add hashing/table overhead without avoiding a search subtree.
+  // Quiet leaves retain O(1) scoring. Extend forced replies separately,
+  // without probing or storing horizon entries in the transposition table.
   if (depth === 0) {
     const state =
       evaluationState ||
       createIncrementalEvaluator(blackBitboard, whiteBitboard, computerPlayer);
-    return { score: state.getScore(), move: null };
+    return tacticalExtension === 0
+      ? { score: state.getScore(), move: null }
+      : evaluateTacticalHorizon(
+          blackBitboard,
+          whiteBitboard,
+          isMaximizing,
+          computerPlayer,
+          humanPlayer,
+          moveHistory.length,
+          progressTracker,
+          state,
+          searchContext,
+          tacticalExtension,
+        );
   }
 
   const toMove = isMaximizing ? computerPlayer : humanPlayer;
@@ -82,6 +97,7 @@ export function minimaxAlphaBeta(
         computerPlayer,
         moveHistory,
         progressTracker,
+        tacticalExtension,
       )
     : null;
   const alphaAtEntry = alpha,
@@ -230,6 +246,7 @@ export function minimaxAlphaBeta(
           progressTracker,
           state,
           searchContext,
+          tacticalExtension,
         );
       } finally {
         searchContext?.hasher.toggleMove(position, computerPlayer);
@@ -296,6 +313,7 @@ export function minimaxAlphaBeta(
           progressTracker,
           state,
           searchContext,
+          tacticalExtension,
         );
       } finally {
         searchContext?.hasher.toggleMove(position, humanPlayer);
@@ -335,8 +353,17 @@ export function findBestMoveDeepSearch(
     onIteration = () => {},
     useTranspositionTable = true,
     transpositionTable,
+    tacticalExtension = TACTICAL_EXTENSION_PLIES,
   } = {},
 ) {
+  if (
+    !Number.isInteger(tacticalExtension) ||
+    tacticalExtension < 0 ||
+    tacticalExtension > BOARD_SIZE * BOARD_SIZE
+  )
+    throw new RangeError(
+      'Tactical extension must be an integer between 0 and 225',
+    );
   if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
   let bestMove = null;
   let principalVariation = [];
@@ -384,6 +411,7 @@ export function findBestMoveDeepSearch(
       tracker,
       state,
       searchContext,
+      tacticalExtension,
     );
     if (!result.move) break;
     bestMove = result.move;

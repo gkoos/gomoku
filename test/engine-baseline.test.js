@@ -27,6 +27,11 @@ for (const fixture of cases)
           true,
           color,
           opponent,
+          [],
+          null,
+          null,
+          null,
+          0, // Historical fixed-horizon baseline.
         ),
         choice: await findBestMove(
           black,

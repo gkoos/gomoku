@@ -234,7 +234,7 @@ test('mandatory blocks include broken fours, signed bits and the final board cel
       assert.equal(run(b, w, 2, player).move.position, target);
     }
 });
-test('depth-zero scoring and existing terminal positions retain their semantics', () => {
+test('depth-zero resolves immediate wins and preserves existing terminal positions', () => {
   const b = bitboard([
       [0, 0],
       [0, 1],
@@ -243,8 +243,8 @@ test('depth-zero scoring and existing terminal positions retain their semantics'
     ]),
     w = bitboard();
   const horizon = run(b, w, 0, 'black');
-  assert.equal(horizon.move, null);
-  assert.equal(horizon.score, evaluatePosition(b, w, 'black', 'white'));
+  assert.equal(horizon.move.position, 4);
+  assert.equal(horizon.score, WIN_SCORE - 1);
   b[0] |= 1 << 4;
   assert.deepEqual(run(b, w, 4, 'black'), { score: WIN_SCORE, move: null });
   assert.deepEqual(run(b, w, 4, 'white'), { score: -WIN_SCORE, move: null });
