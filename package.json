@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test"
+    "test": "node --test",
+    "wasm:build": "node scripts/build-wasm.js",
+    "wasm:check": "npm run wasm:build && node scripts/check-wasm-parity.js",
+    "rust:test": "cargo test --locked --manifest-path engine-rust/Cargo.toml"
   },
   "devDependencies": {
     "vite": "^7.0.0"

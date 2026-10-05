@@ -5,3 +5,5 @@
 
 These pages describe the current implementation. See the [project README](../README.md) for installation and development commands.
 
+
+- [Rust/Wasm prototype](../engine-rust/README.md): initial port, toolchain, and parity validation.

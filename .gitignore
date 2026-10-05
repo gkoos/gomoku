@@ -22,3 +22,5 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+/engine-rust/target/
+/engine-rust/pkg/
