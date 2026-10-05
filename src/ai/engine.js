@@ -6,8 +6,6 @@ import {
   selectOpenFourDefense,
   checkImmediateThreat,
   checkOpen4Threats,
-  checkSimpleOpen3Threats,
-  checkDoubleOpen3Threats,
 } from './threats.js';
 import {
   evaluateMoveEnhanced,
@@ -249,63 +247,6 @@ export async function findBestMove(
     }
 
     // Blockable fours are scored/searched with other candidates, not returned blindly.
-
-    // PRIORITY 7: AI's Double Three (2 × _XXX_)
-    progressCallback(14);
-    const aiDoubleOpen3s = checkDoubleOpen3Threats(
-      blackBitboard,
-      whiteBitboard,
-      computerPlayer,
-    );
-    if (aiDoubleOpen3s.length > 0) {
-      const threat = aiDoubleOpen3s[0];
-      progressCallback(100);
-      return { row: threat.row, col: threat.col };
-    }
-
-    // PRIORITY 8: Block opponent's Double Three (2 × _XXX_)
-    progressCallback(16);
-    const opponentDoubleOpen3s = checkDoubleOpen3Threats(
-      blackBitboard,
-      whiteBitboard,
-      humanPlayer,
-    );
-    if (opponentDoubleOpen3s.length > 0) {
-      const threat = opponentDoubleOpen3s[0];
-      progressCallback(100);
-      return { row: threat.row, col: threat.col };
-    }
-
-    // Easy uses open-three shortcuts; Medium and Hard compare them in search.
-    if (difficulty === 'easy') {
-      progressCallback(18);
-      const aiOpen3s = checkSimpleOpen3Threats(
-        blackBitboard,
-        whiteBitboard,
-        computerPlayer,
-      );
-      if (aiOpen3s.length > 0) {
-        const threat = aiOpen3s[0];
-        progressCallback(100);
-        return { row: threat.row, col: threat.col };
-      }
-    }
-
-    // Easy: prevent the opponent from creating an open four.
-    if (difficulty === 'easy') {
-      progressCallback(20);
-      const opponentOpen3s = checkSimpleOpen3Threats(
-        blackBitboard,
-        whiteBitboard,
-        humanPlayer,
-      );
-      if (opponentOpen3s.length > 0) {
-        const threat = opponentOpen3s[0];
-
-        progressCallback(100);
-        return { row: threat.row, col: threat.col };
-      }
-    }
 
     // GENERAL DEEP SEARCH for remaining moves (difficulty-based depth)
     progressCallback(22);
