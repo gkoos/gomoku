@@ -55,12 +55,11 @@ export function minimaxAlphaBeta(
     }
   }
 
-  const state =
-    evaluationState ||
-    createIncrementalEvaluator(blackBitboard, whiteBitboard, computerPlayer);
-
   // A win at the horizon is terminal, just like a win at any earlier ply.
   if (depth === 0) {
+    const state =
+      evaluationState ||
+      createIncrementalEvaluator(blackBitboard, whiteBitboard, computerPlayer);
     return {
       score: state.getScore(),
       move: null,
@@ -83,6 +82,22 @@ export function minimaxAlphaBeta(
     moveHistory,
     progressTracker?.principalVariation,
   );
+
+  // A winning move ends the game one ply later; no child board or quiet
+  // alternatives can improve on that win distance.
+  if (limitedCandidates[0].tactical === 2) {
+    const move = limitedCandidates[0];
+    const winningPly = moveHistory.length + 1;
+    return {
+      score: isMaximizing ? WIN_SCORE - winningPly : -WIN_SCORE + winningPly,
+      move,
+      ...(progressTracker?.trackPV ? { principalVariation: [move] } : {}),
+    };
+  }
+
+  const state =
+    evaluationState ||
+    createIncrementalEvaluator(blackBitboard, whiteBitboard, computerPlayer);
 
   if (isMaximizing) {
     let maxEval = -Infinity;
@@ -293,12 +308,19 @@ export function selectSearchCandidates(
   moveHistory = [],
   principalVariation = [],
 ) {
+  // Winning now takes precedence over blocking. Without an immediate win,
+  // a single opposing winning square is the only non-losing reply.
+  const wins = candidates.filter((move) => move.tactical === 2);
+  const blocks = candidates.filter((move) => move.tactical === 1);
+  if (wins.length === 0 && blocks.length === 1) return blocks;
+  const eligibleCandidates = wins.length ? wins : candidates;
+
   // Limit candidates based on depth to maintain performance
   const maxCandidates = Math.max(8, Math.floor(20 - depth * 2)); // Increased base candidates
-  const tacticalCount = candidates.filter(
+  const tacticalCount = eligibleCandidates.filter(
     (candidate) => candidate.tactical,
   ).length;
-  const limitedCandidates = candidates.slice(
+  const limitedCandidates = eligibleCandidates.slice(
     0,
     Math.max(maxCandidates, tacticalCount),
   );
@@ -309,7 +331,7 @@ export function selectSearchCandidates(
   if (
     moveHistory.every((move, index) => move.position === pv[index]?.position)
   ) {
-    const preferred = candidates.find(
+    const preferred = eligibleCandidates.find(
       (move) => move.position === pv[moveHistory.length]?.position,
     );
     if (preferred) {
