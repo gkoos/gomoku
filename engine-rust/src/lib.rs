@@ -195,3 +195,101 @@ impl SearchState {
         result.packed()
     }
 }
+pub mod rules;
+pub mod search;
+pub mod transposition;
+pub mod zobrist;
+
+#[wasm_bindgen]
+pub struct PositionHasher {
+    inner: zobrist::Hasher,
+}
+#[wasm_bindgen]
+impl PositionHasher {
+    #[wasm_bindgen(constructor)]
+    pub fn new(black: &[u32], white: &[u32], black_to_move: bool) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: zobrist::Hasher::new(&board(black)?, &board(white)?, black_to_move),
+        })
+    }
+    pub fn words(&self) -> Vec<u32> {
+        self.inner.words.to_vec()
+    }
+    pub fn black_to_move(&self) -> bool {
+        self.inner.black_to_move
+    }
+    pub fn toggle_move(&mut self, position: u32, black: bool) -> Result<(), JsValue> {
+        if position >= 225 {
+            return Err(JsValue::from_str("Move is outside the board"));
+        }
+        self.inner.toggle(position as usize, black);
+        Ok(())
+    }
+}
+
+/// One synchronous completed depth per call; no browser orchestration yet.
+#[wasm_bindgen]
+pub struct SearchEngine {
+    inner: search::Search,
+}
+#[wasm_bindgen]
+impl SearchEngine {
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        black: &[u32],
+        white: &[u32],
+        perspective_black: bool,
+        max_depth: u32,
+        extension: u32,
+        table_capacity: u32,
+    ) -> Result<Self, JsValue> {
+        Ok(Self {
+            inner: search::Search::new(
+                board(black)?,
+                board(white)?,
+                perspective_black,
+                max_depth as usize,
+                extension as usize,
+                table_capacity as usize,
+            )
+            .map_err(JsValue::from_str)?,
+        })
+    }
+    pub fn next_depth(&mut self) -> Result<Vec<f64>, JsValue> {
+        Ok(self
+            .inner
+            .next_iteration()
+            .map_err(JsValue::from_str)?
+            .map_or_else(Vec::new, |i| i.packed()))
+    }
+    pub fn fixed_depth(
+        &mut self,
+        depth: u32,
+        maximizing: bool,
+        alpha: i32,
+        beta: i32,
+    ) -> Result<Vec<f64>, JsValue> {
+        Ok(self
+            .inner
+            .fixed(depth as usize, maximizing, alpha, beta)
+            .map_err(JsValue::from_str)?
+            .packed())
+    }
+    pub fn hash_words(&self) -> Vec<u32> {
+        self.inner.hasher.words.to_vec()
+    }
+    pub fn black_to_move(&self) -> bool {
+        self.inner.hasher.black_to_move
+    }
+    pub fn occupancy(&self, black: bool) -> Vec<u32> {
+        (if black {
+            self.inner.state.black
+        } else {
+            self.inner.state.white
+        })
+        .to_vec()
+    }
+    pub fn history_length(&self) -> u32 {
+        self.inner.state.history_length() as u32
+    }
+}

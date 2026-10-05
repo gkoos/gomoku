@@ -9,8 +9,9 @@
     "preview": "vite preview",
     "test": "node --test",
     "wasm:build": "node scripts/build-wasm.js",
-    "wasm:check": "npm run wasm:build && node scripts/check-wasm-parity.js && node scripts/check-wasm-state.js && node scripts/check-wasm-moves.js",
-    "rust:test": "cargo test --locked --manifest-path engine-rust/Cargo.toml"
+    "wasm:check": "npm run wasm:build && node scripts/check-wasm-parity.js && node scripts/check-wasm-state.js && node scripts/check-wasm-moves.js && node scripts/check-wasm-search.js",
+    "rust:test": "cargo test --locked --manifest-path engine-rust/Cargo.toml",
+    "wasm:benchmark": "npm run wasm:build && node scripts/benchmark-wasm-search.js"
   },
   "devDependencies": {
     "vite": "^7.0.0"

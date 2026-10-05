@@ -1,6 +1,6 @@
 ﻿# Rust/Wasm engine prototype
 
-This crate is the first stage of the engine port on `feat/rust-wasm-engine`. It implements occupancy utilities, nine-cell directional pattern classification, full-board static evaluation, maintained line masks, winning-square caches, incremental make/undo evaluation, and candidate generation. The browser still uses the JavaScript engine. Tactical orchestration, search, hashing, and worker integration have not been ported yet.
+This crate is the computational prototype of the engine port on `feat/rust-wasm-engine`. It implements occupancy utilities, nine-cell directional pattern classification, full-board static evaluation, maintained line masks, winning-square caches, incremental make/undo evaluation, candidate generation, Zobrist hashing, transposition caching, and iterative alpha-beta search. The browser still uses the JavaScript engine. Root tactical orchestration and browser worker integration have not been ported yet.
 
 ## Layout
 
@@ -10,6 +10,10 @@ This crate is the first stage of the engine port on `feat/rust-wasm-engine`. It 
 - `src/lines.rs`: shared geometry, 88 line masks per color, packed extraction, and reference-counted winning squares.
 - `src/incremental.rs`: reversible score updates with fixed-size undo buffers and preallocated move history.
 - `src/moves.rs`: shift-generated candidate neighborhoods, density priorities, tactical classification, stable tie ordering, and fixed-size output buffers.
+- `src/rules.rs`: anchored wins and root terminal validation.
+- `src/zobrist.rs`: reversible two-word position hashes matching JavaScript.
+- `src/transposition.rs`: bounded FIFO search cache with position verification and mate normalization.
+- `src/search.rs`: iterative alpha-beta, PV ordering, forced branches, and bounded tactical horizon.
 - `src/lib.rs`: native module exports and validated WebAssembly bindings.
 
 Occupancy stays in `[u32; 8]` for direct parity with JavaScript. Bit 31 is ordinary unsigned occupancy; only bit zero of the final word represents a valid square. Standalone pattern extraction reads nine squares for reference evaluation. Maintained extraction uses precomputed shifts and boundary masks on the four directional lines. Geometry and affected-score mappings are initialized once and shared across evaluator instances.
@@ -32,9 +36,10 @@ From the repository root:
 ```powershell
 npm run rust:test
 npm run wasm:check
+npm run wasm:benchmark
 ```
 
-`wasm:check` builds the release module and generates bindings under `engine-rust/pkg/web` and `engine-rust/pkg/nodejs`, then compares the actual Wasm module with the JavaScript reference. It checks every ternary nine-cell configuration in four directions, random boards at several densities, every board anchor, both evaluation perspectives, signed-word boundaries, padding, overlaps, and invalid binding inputs. The state parity script additionally checks line masks and winning boards against full reconstruction through 1,396 make/undo snapshots, packed windows, all-square updates, crossing reference counts, failed moves, stale undo tokens, and detached output arrays. Candidate parity checks compare complete move lists across 4,628 board/color cases, including density thresholds, both colors, cached and standalone paths, signed words, padding, and make/undo sequences. Generated bindings and Cargo build output are ignored by Git. `npm run wasm:build` builds without running the parity script.
+`wasm:check` builds the release module and generates bindings under `engine-rust/pkg/web` and `engine-rust/pkg/nodejs`, then compares the actual Wasm module with the JavaScript reference. It checks every ternary nine-cell configuration in four directions, random boards at several densities, every board anchor, both evaluation perspectives, signed-word boundaries, padding, overlaps, and invalid binding inputs. The state parity script additionally checks line masks and winning boards against full reconstruction through 1,396 make/undo snapshots, packed windows, all-square updates, crossing reference counts, failed moves, stale undo tokens, and detached output arrays. Search parity checks compare 204 completed iterations and 400 fixed searches, including scores, principal variations, nodes, cache hits/cutoffs/size, zero/nonzero extension budgets, tiny-table eviction, narrowing/widening alpha-beta windows, terminal roots, ten-ply caps, and root hash/occupancy restoration. Candidate parity checks compare complete move lists across 4,628 board/color cases, including density thresholds, both colors, cached and standalone paths, signed words, padding, and make/undo sequences. Generated bindings and Cargo build output are ignored by Git. `npm run wasm:build` builds without running the parity script.
 
 For browser use, the web binding module exports an asynchronous default initializer. Initialize it with the emitted Wasm asset, then call named exports. This prototype is not yet connected to Vite or the production worker. No Rust build is required for existing `npm test`, `npm run dev`, or `npm run build` commands.
 
@@ -62,4 +67,29 @@ The standalone `generate_candidates(black, white, player_black)` binding reconst
 
 The native `generate_into` function accepts a caller-owned `Candidates` buffer containing up to 225 fixed-size records. It generates radius-one and density-qualified radius-two frontiers with row-mask shifts, computes original priorities, sorts by tactics/priority/source rank, and preserves all tactical moves beyond the normal cap. The total ordering permits allocation-free unstable sorting while preserving JavaScript tie order. Only Wasm output conversion allocates a returned vector. Candidate membership, widths, and scoring are unchanged from the JavaScript algorithm.
 
-This is a correctness baseline, not yet a replacement for the JavaScript search. Measure complete search after the remaining port before drawing performance conclusions.
+## Search API and caching
+
+The Wasm `SearchEngine` constructor accepts black/white arrays, black perspective, maximum depth, tactical-extension budget, and table capacity. Capacity zero disables caching. Defaults are supplied by callers; the current engine policy uses caps 6/8/10, extension 4, and capacity 32,768. Depth and extension are restricted to 0?225, and table capacity to at most 1,000,000.
+
+`next_depth()` completes one synchronous iterative-deepening pass. Its Float64Array contains depth, score, nodes, cache hits, cache cutoffs, table size, PV length, and PV square positions. The first PV position is the chosen move. An empty array indicates completion or a terminal root. Terminal wins/losses stop iteration early. Call `free()` when finished.
+
+`fixed_depth(depth, maximizing, alpha, beta)` supports diagnostic searches and bound tests. The allocated maximum must cover depth, and alpha must be below beta. These diagnostics can retain cache entries across calls; iterative search uses a full window internally. Getters expose copied occupancy and hash words for state-restoration checks. Search always tracks PVs, so there is no untracked-PV cache mode.
+
+Each search owns one incremental evaluator, hasher, bounded table, and preallocated candidate buffer per ply. The hash uses the same deterministic stone/side keys as JavaScript. Table keys contain exact depth, extension budget, perspective, and applicable prior-PV suffix; hits also verify both complete boards and side to move. Entries distinguish exact/lower/upper bounds and normalize mate distance. Fixed-size PV arrays and reversible state avoid creating child boards at each node. The table uses a HashMap plus a FIFO queue, with JavaScript-compatible bound replacement rules.
+
+Search takes immediate wins directly, restricts a single mandatory block, and preserves tactical candidates and matching PV moves through width limits. At depth zero it follows forced blocking sequences within the supplied extension budget. Quiet leaves use cached evaluation and bypass the table. Search restores occupancy, scores, winning caches, and hashes before returning each iteration, including ordinary propagated errors.
+
+This is synchronous recursive search. Returning between depths permits worker orchestration later but does not allow cancellation during an iteration. Node-budget resumability, pondering, progress messages, root tactical shortcuts, and production worker integration remain separate work. It does not yet replace the browser's JavaScript move-selection pipeline.
+
+## Performance measurements
+
+`wasm:benchmark` uses two fixed baseline positions, two warmup runs, seven timed runs per implementation, alternating execution order, and median times. It includes search construction and iteration calls and verifies identical scores, node counts, and PVs. It measures Node-hosted Wasm rather than browser runtime.
+
+On this Windows machine, Node 24.2.0 with release-built Rust 1.99.0 measured:
+
+| Position | Cap | JavaScript | Wasm | Speedup |
+| --- | --- | --- | --- | --- |
+| seeded-1 | 6 | 160.6 ms | 41.8 ms | 3.85? |
+| seeded-4 | 5 | 54.0 ms | 15.3 ms | 3.52? |
+
+These sampled timings are not a guarantee across positions or browsers. Re-run locally and measure browser play after integration.
