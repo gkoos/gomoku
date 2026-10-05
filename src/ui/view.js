@@ -38,6 +38,7 @@ export function createView({
             <option value="easy" ${aiDifficulty === 'easy' ? 'selected' : ''}>Easy</option>
             <option value="medium" ${aiDifficulty === 'medium' ? 'selected' : ''}>Medium</option>
             <option value="hard" ${aiDifficulty === 'hard' ? 'selected' : ''}>Hard</option>
+            <option value="expert" ${aiDifficulty === 'expert' ? 'selected' : ''}>Expert</option>
           </select>
           <button id="start-btn" class="start-button" ${gameInProgress ? 'style="visibility: hidden;"' : ''}>Start Game</button>
           <button id="setup-btn" class="start-button" ${gameInProgress ? 'style="visibility: hidden;"' : ''}>Setup Board</button>

@@ -183,7 +183,7 @@ test('every difficulty chooses a true open four ahead of a closed four', async (
     [14, 0],
     [14, 2],
   ]);
-  for (const difficulty of ['easy', 'medium', 'hard']) {
+  for (const difficulty of ['easy', 'medium', 'hard', 'expert']) {
     const move = await ai.findBestMove(
       black,
       white,
@@ -408,7 +408,7 @@ test('all difficulties neutralize crossing open-four threats with the shared def
         ? [bitboard(defense), bitboard(attack)]
         : [bitboard(attack), bitboard(defense)];
     const human = computer === 'black' ? 'white' : 'black';
-    for (const difficulty of ['easy', 'medium', 'hard']) {
+    for (const difficulty of ['easy', 'medium', 'hard', 'expert']) {
       const move = await ai.findBestMove(
         black,
         white,
@@ -534,7 +534,7 @@ test('terminal wins at the root produce a terminal score and no move', async () 
   ]);
   for (const computer of ['black', 'white']) {
     const [black, white] = computer === 'black' ? [won, empty] : [empty, won];
-    for (const difficulty of ['easy', 'medium', 'hard']) {
+    for (const difficulty of ['easy', 'medium', 'hard', 'expert']) {
       assert.equal(
         await ai.findBestMove(
           black,
@@ -584,7 +584,7 @@ test('full-board draws return no move at every entry point', async () => {
   const b = bitboard(black),
     w = bitboard(white);
   assert.equal(ai.getBitboardResult(b, w).draw, true);
-  for (const difficulty of ['easy', 'medium', 'hard']) {
+  for (const difficulty of ['easy', 'medium', 'hard', 'expert']) {
     assert.equal(
       await ai.findBestMove(b, w, 'black', 'white', difficulty),
       null,

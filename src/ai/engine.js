@@ -25,8 +25,8 @@ export function findBestMoveAdaptive(
   if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
   if (progressCallback) progressCallback(10);
 
-  // For hard difficulty, use deep minimax search with 8-ply
-  if (difficulty === 'hard') {
+  const searchDepth = { medium: 6, hard: 8, expert: 10 }[difficulty];
+  if (searchDepth) {
     const deepMove = findBestMoveDeepSearch(
       blackBitboard,
       whiteBitboard,
@@ -38,31 +38,7 @@ export function findBestMoveAdaptive(
           progressCallback(Math.floor(mappedProgress));
         }
       },
-      8, // 8-ply depth for hard
-      searchOptions,
-    );
-
-    if (deepMove) {
-      if (progressCallback) progressCallback(100);
-      return deepMove;
-    }
-    // Fallback to regular search if deep search fails
-  }
-
-  // For medium difficulty, use deep minimax search with 6-ply
-  if (difficulty === 'medium') {
-    const deepMove = findBestMoveDeepSearch(
-      blackBitboard,
-      whiteBitboard,
-      computerPlayer,
-      humanPlayer,
-      (progress) => {
-        if (progressCallback) {
-          const mappedProgress = 10 + (progress / 100) * 80;
-          progressCallback(Math.floor(mappedProgress));
-        }
-      },
-      6, // 6-ply depth for medium
+      searchDepth,
       searchOptions,
     );
 

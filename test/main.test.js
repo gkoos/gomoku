@@ -518,3 +518,15 @@ test('reset clears completed results and disables Move now', () => {
   assert.equal(h.state().board[7][7], 'black');
   assert.equal(h.state().board[4][4], null);
 });
+
+test('Expert selection reaches the worker and remains locked during play', () => {
+  const h = harness();
+  assert.match(h.elements.get('app').innerHTML, /value="expert"/);
+  const change = h.elements.get('ai-difficulty').listeners.get('change');
+  change({ target: { value: 'expert' } });
+  assert.equal(h.state().aiDifficulty, 'expert');
+  const worker = h.start();
+  assert.equal(h.requests(worker).at(-1).data.difficulty, 'expert');
+  change({ target: { value: 'easy' } });
+  assert.equal(h.state().aiDifficulty, 'expert');
+});

@@ -22,7 +22,7 @@ export function createGameController({
   let phase = 'idle';
   let humanPlayer = 'black'; // Human player color
   let computerPlayer = 'white'; // Computer player color
-  let aiDifficulty = 'medium'; // AI difficulty: easy, medium, hard
+  let aiDifficulty = 'medium'; // AI difficulty: easy, medium, hard, expert
 
   let gameGeneration = 0;
   let openingTimer = null;
@@ -379,7 +379,10 @@ export function createGameController({
     computerPlayer = color === 'black' ? 'white' : 'black';
   }
   function setDifficulty(value) {
-    if (!isGameInProgress() && ['easy', 'medium', 'hard'].includes(value))
+    if (
+      !isGameInProgress() &&
+      ['easy', 'medium', 'hard', 'expert'].includes(value)
+    )
       aiDifficulty = value;
   }
   const view = createView({

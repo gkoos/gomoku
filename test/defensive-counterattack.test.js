@@ -65,7 +65,7 @@ test('every difficulty chooses a winning fork before open-four defense, in both 
         checkOpen4Threats(p.blackBitboard, p.whiteBitboard, opponent).length,
         2,
       );
-      for (const difficulty of ['easy', 'medium', 'hard']) {
+      for (const difficulty of ['easy', 'medium', 'hard', 'expert']) {
         const move = await chooseMove(p, { difficulty });
         assert.deepEqual([move.row, move.col], transform(7, 8));
         const attacked = play(p, move, color);
@@ -104,7 +104,7 @@ test('a single blockable four does not displace a necessary open-four defense', 
   for (const color of ['black', 'white']) {
     const opponent = color === 'black' ? 'white' : 'black';
     const p = position(color, undefined, false);
-    for (const difficulty of ['easy', 'medium', 'hard']) {
+    for (const difficulty of ['easy', 'medium', 'hard', 'expert']) {
       const move = await chooseMove(p, { difficulty });
       assert.equal(move.row, 10);
       assert.ok(move.col === 4 || move.col === 8);
@@ -136,7 +136,7 @@ test('a fork cannot override an opponent win on the next move', async () => {
     threats,
   );
   assert.notDeepEqual(move, { row: 7, col: 8 });
-  for (const difficulty of ['easy', 'medium', 'hard']) {
+  for (const difficulty of ['easy', 'medium', 'hard', 'expert']) {
     const block = await chooseMove(p, { difficulty });
     assert.deepEqual(block, { row: 0, col: 4 });
   }
