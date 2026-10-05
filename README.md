@@ -29,125 +29,29 @@ A modern, responsive Gomoku (Five in a Row) game built with vanilla JavaScript a
 
 ## Computer AI
 
-The AI opponent implements a fairly sophisticated game engine with multiple algorithms and optimizations:
+The engine checks immediate wins, mandatory blocks, open fours, and other four-stone threats before choosing a positional move. Evaluation scores contiguous and broken formations according to their winning extensions.
 
-### Core Algorithms
+Easy uses heuristic move scoring. Medium and Hard use alpha-beta search at fixed depths of 6 and 8 plies. Tactical candidates survive branching limits. Search currently has no transposition table, iterative deepening, or time budget; double-open-three detection remains unfinished.
 
-#### Pattern-Based Evaluation
-- **Threat Detection**: Multi-layered threat analysis system
-  - Immediate win detection (5-in-a-row completion)
-  - Open four patterns (unstoppable 4-stone formations)
-  - Double open three threats (fork creation)
-  - Four-stone patterns with gaps (X_XXX, XX_XX, XXX_X patterns)
-  - **Smart blocked pattern filtering**: Avoids wasting moves on patterns that cannot extend to wins
-- **Pattern Scoring**: Weighted evaluation based on:
-  - Stone count in sequences (2, 3, 4, 5 stones)
-  - Open ends (0, 1, or 2 open sides)
-  - Extension potential (ability to create winning threats)
-  - Strategic position value (center bias)
+## Architecture
 
-#### Alpha-Beta Pruning Search
-- **Minimax Algorithm**: Classic game tree search with alpha-beta pruning
-- **Iterative Deepening**: Progressively deeper searches within time constraints
-- **Aspiration Windows**: Narrow search windows around expected values for faster pruning
-- **Move Ordering**: Prioritizes promising moves to improve pruning efficiency
+- `src/core/`: shared board constants, bitboard conversion, and array/bitboard rules.
+- `src/ai/`: patterns, threats, candidate generation, evaluation, search, and engine orchestration.
+- `src/ai/engine.js`: `chooseMove(position, { difficulty, onProgress })`, where a position contains black and white bitboards and `toMove`. The opponent is derived from `toMove`.
+- `src/ai/worker-handler.js`: injectable message handling; `src/ai-worker.js` installs it in an ES module worker.
+- `src/ai/client.js`: worker lifecycle, request IDs, delayed responses, cancellation, and failure handling.
+- `src/game/`: game controller with explicit idle/setup/playing/finished phases and a separate setup instance per game.
+- `src/ui/view.js`: DOM rendering and input callbacks.
+- `src/main.js`: browser bootstrap and worker creation.
 
-#### Advanced Optimizations
+Engine code has no browser messaging or DOM dependencies. Tests import modules directly. The baseline fixtures preserve candidate ordering, evaluation, search scores, and Easy move selection for 12 positions and both colors.
 
-##### Bitboard Representation
-- **32-bit Bitboards**: Efficient board state representation using 8 slots (256 bits total)
-- **Fast Operations**: Bitwise operations for rapid position checks and updates
-- **Memory Efficient**: Compact storage for game states and pattern matching
-
-##### Search Enhancements
-- **Transposition Table**: Caches evaluated positions to avoid redundant calculations
-- **Killer Move Heuristic**: Prioritizes moves that caused cutoffs in similar positions
-- **History Heuristic**: Statistical move ordering based on historical performance
-- **Time Management**: Adaptive search depth based on remaining time and position complexity
-
-##### Zobrist Hashing
-- **Position Hashing**: 64-bit hash keys for fast position lookup and comparison
-- **Incremental Updates**: Efficient hash updates during move generation
-- **Collision Detection**: Handles hash collisions gracefully
-
-### AI Difficulty Levels
-
-#### Easy
-- **Search Method**: Heuristic evaluation with pattern matching
-- **Search Depth**: No deep search (immediate tactical analysis only)
-- **Move Evaluation**: Basic threat detection and pattern scoring
-- **Candidate Moves**: Quick evaluation of promising positions
-- **Response Time**: ~1-2 seconds average
-- **Behavior**: Focuses on immediate threats and basic tactical moves
-
-#### Medium
-- **Search Method**: Deep minimax search with alpha-beta pruning
-- **Search Depth**: 6-ply lookahead (3 full turns ahead)
-- **Move Evaluation**: Full pattern analysis with strategic positioning
-- **Candidate Moves**: Evaluates top candidates with moderate planning
-- **Response Time**: ~3-8 seconds average
-- **Behavior**: Moderate strategic planning with threat analysis
-
-#### Hard
-- **Search Method**: Deep minimax search with alpha-beta pruning
-- **Search Depth**: 8-ply lookahead (4 full turns ahead)
-- **Move Evaluation**: Complete threat analysis including complex patterns
-- **Candidate Moves**: Comprehensive evaluation for maximum strength
-- **Advanced Features**:
-  - Multi-move tactical sequences
-  - Complex position evaluation
-  - Advanced threat detection
-  - Strategic endgame optimization
-- **Response Time**: ~5-15+ seconds average (varies by position complexity)
-- **Behavior**: Deep strategic planning with sophisticated threat analysis
-
-### Move Prioritization System
-
-The AI uses a strict priority hierarchy:
-
-1. **AI Winning Moves** (Priority 1)
-   - 5-in-a-row completion
-   - Open four creation (guaranteed win next move)
-   - Double open three creation (fork/multiple threats)
-
-2. **Defensive Blocking** (Priority 2)
-   - Block opponent's immediate wins
-   - Block opponent's open fours
-   - Block opponent's double open threes
-
-3. **Tactical Moves** (Priority 3)
-   - Create four-stone threats (only if extendable to wins)
-   - Block opponent's four-stone threats (only genuine threats)
-   - Strategic position improvement
-
-4. **Positional Play** (Priority 4)
-   - Alpha-beta search evaluation
-   - Pattern-based scoring
-   - Board control optimization
-
-### Enhanced Threat Analysis
-
-The AI features sophisticated pattern recognition that distinguishes between genuine threats and blocked patterns:
-
-- **Genuine Threats**: Patterns like `XXX.` or `.XXX.` that can extend to create wins
-- **Blocked Patterns**: Patterns like `|XXX.|` (blocked by opponent stones or board edges) are ignored
-- **Deep Search Fallback**: When no immediate threats exist, uses deep minimax search for strategic moves
-- **Context Awareness**: Considers board complexity and position type when evaluating threats
-
-### Performance Optimizations
-
-- **Web Worker Implementation**: Non-blocking AI computation for smooth UI
-- **Progressive Search**: Incremental depth increases with time management
-- **Early Termination**: Immediate response for obvious moves (wins/blocks)
-- **Candidate Move Filtering**: Reduces search space by focusing on relevant positions
-- **Memory Management**: Efficient cleanup of search tables and caches
-
-The AI never gets stuck or fails to respond, with multiple fallback mechanisms ensuring reliable gameplay at all difficulty levels.
+Run `npm test` for regression tests, `npm run dev` for development, and `npm run build` followed by `npm run preview` to check production assets.
 
 ## Setup
 
 ### Prerequisites
-- Node.js (version 14 or higher)
+- Node.js compatible with Vite 7 (see the installed package engines requirement)
 - npm
 
 ### Installation

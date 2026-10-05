@@ -1,0 +1,290 @@
+[
+  {
+    "name": "seeded-0",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": "66a8e349ac54d64722bcce7a201b50fee347483c985ed09714de019392729f9d"
+  },
+  {
+    "name": "seeded-1",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      0,
+      8192,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": "1246231fcd0d8c5209398dce274dc10d4d8a352b8d8c6c66ad31548b6f2ec62f"
+  },
+  {
+    "name": "seeded-2",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      8,
+      1,
+      65536,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      128,
+      0,
+      268435456,
+      4096,
+      0,
+      0
+    ],
+    "expected": "a8c45eb6b7521858fd5d14f10fcad8ce156f7ebad9337404ee2ff69104ca75be"
+  },
+  {
+    "name": "seeded-3",
+    "blackBitboard": [
+      0,
+      0,
+      32768,
+      524288,
+      536870914,
+      32769,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      -2146959360,
+      1179648,
+      16400,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": "e3ef43c21d7f99c847081b0eba942cc6101e217f687bae851e738f0076c00095"
+  },
+  {
+    "name": "seeded-4",
+    "blackBitboard": [
+      0,
+      2097152,
+      4456456,
+      24576,
+      -2080374784,
+      12288,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      1572864,
+      2097152,
+      -2147450876,
+      33816576,
+      33280,
+      0,
+      0
+    ],
+    "expected": "1c6aff40e93fe80f8728e4a328a9c20f16db2ebdaf64daa74dc65c5e0067a64c"
+  },
+  {
+    "name": "seeded-5",
+    "blackBitboard": [
+      0,
+      8650752,
+      16,
+      -2147467252,
+      134226954,
+      2563,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      65536,
+      536936576,
+      528402,
+      1342244864,
+      50432,
+      0,
+      0
+    ],
+    "expected": "77c5d4ba86eb0135f787246b58e24d1467dd60aa4002fb4ea13b36f15ebf5627"
+  },
+  {
+    "name": "seeded-6",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": "66a8e349ac54d64722bcce7a201b50fee347483c985ed09714de019392729f9d"
+  },
+  {
+    "name": "seeded-7",
+    "blackBitboard": [
+      0,
+      131072,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": "910ab0da556f571b1c72e5fdc59b9365f2e46b0bea15d4f90782a7aa5bccdfe7"
+  },
+  {
+    "name": "seeded-8",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      4,
+      -2147352576,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      537133056,
+      0,
+      16384,
+      0,
+      0,
+      0
+    ],
+    "expected": "a1ae84fcc7e5011a7c3a6413eb36b2835a4ef58c1608e1c66c38552825b999ee"
+  },
+  {
+    "name": "seeded-9",
+    "blackBitboard": [
+      0,
+      2097152,
+      2097153,
+      536870912,
+      0,
+      1025,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      17039360,
+      0,
+      8192,
+      67125248,
+      8192,
+      0,
+      0
+    ],
+    "expected": "d9f56966ed393875ed20f7b2daedc277397380551945421e7b711f73ed80f6bc"
+  },
+  {
+    "name": "seeded-10",
+    "blackBitboard": [
+      0,
+      0,
+      2097184,
+      524289,
+      180232,
+      4608,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      4718592,
+      537460736,
+      536879104,
+      0,
+      114688,
+      0,
+      0
+    ],
+    "expected": "281fc55c09a93cef2bc322b2614af648af4bc669800d86b8c14bc04117456e05"
+  },
+  {
+    "name": "seeded-11",
+    "blackBitboard": [
+      0,
+      13238272,
+      425986,
+      1179672,
+      67110918,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      -2127560704,
+      68,
+      1879113728,
+      -536862719,
+      32768,
+      0,
+      0
+    ],
+    "expected": "198a716e8ab2fdb588e71b461a9f631883e0d5d505a4ce82b9f65d4b1d182501"
+  }
+]
