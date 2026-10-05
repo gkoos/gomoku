@@ -2,6 +2,27 @@ import { BOARD_SIZE, BOARD_CELLS } from '../core/constants.js';
 
 import { createLineBitboards, findWinningSquares } from './line-bitboards.js';
 
+const ROW_MASK = (1 << BOARD_SIZE) - 1;
+const SOURCE_COLUMNS = Array.from({ length: BOARD_SIZE }, (_, col) => {
+  const start = Math.max(0, col - 2),
+    end = Math.min(BOARD_SIZE - 1, col + 2);
+  return ((1 << (end - start + 1)) - 1) << start;
+});
+const ADJACENT_COLUMNS = Array.from({ length: BOARD_SIZE }, (_, col) => {
+  const start = Math.max(0, col - 1),
+    end = Math.min(BOARD_SIZE - 1, col + 1);
+  return ((1 << (end - start + 1)) - 1) << start;
+});
+const OFFSET_ORDER = new Uint8Array(25);
+let order = 0;
+for (let dr = -1; dr <= 1; dr++)
+  for (let dc = -1; dc <= 1; dc++)
+    if (dr || dc) OFFSET_ORDER[(dr + 2) * 5 + dc + 2] = order++;
+for (let dr = -2; dr <= 2; dr++)
+  for (let dc = -2; dc <= 2; dc++)
+    if (Math.abs(dr) > 1 || Math.abs(dc) > 1)
+      OFFSET_ORDER[(dr + 2) * 5 + dc + 2] = order++;
+
 export function generateCandidateMoves(
   blackBitboard,
   whiteBitboard,
@@ -10,151 +31,148 @@ export function generateCandidateMoves(
   winningSquareBitboards = null,
 ) {
   const candidates = [];
-  const visited = new Array(BOARD_CELLS);
-  const stonePositions = [];
-
-  // Helper function to check if position is empty
-  const isEmpty = (row, col) => {
-    if (row < 0 || row >= BOARD_SIZE || col < 0 || col >= BOARD_SIZE)
-      return false;
-    const pos = row * BOARD_SIZE + col;
-    const slot = Math.floor(pos / 32);
-    const bit = pos % 32;
-    const blackBit = ((blackBitboard[slot] >>> 0) & (1 << bit)) !== 0;
-    const whiteBit = ((whiteBitboard[slot] >>> 0) & (1 << bit)) !== 0;
-    return !blackBit && !whiteBit;
-  };
-
-  // Helper function to add candidate with priority score
-  const addCandidate = (row, col, priority = 0) => {
-    if (
-      row >= 0 &&
-      row < BOARD_SIZE &&
-      col >= 0 &&
-      col < BOARD_SIZE &&
-      isEmpty(row, col)
-    ) {
-      const position = row * BOARD_SIZE + col;
-      const existing = visited[position];
-      if (existing) {
-        existing.priority = Math.max(existing.priority, priority);
-      } else {
-        const candidate = {
-          row,
-          col,
-          position,
-          priority,
-        };
-        visited[position] = candidate;
-        candidates.push(candidate);
-      }
-    }
-  };
-
-  // First pass: collect all stone positions efficiently
+  const occupiedRows = new Uint16Array(BOARD_SIZE);
+  const stones = [];
   for (let slot = 0; slot < 8; slot++) {
-    const blackMask = blackBitboard[slot] >>> 0;
-    const whiteMask = whiteBitboard[slot] >>> 0;
-    const combinedMask = blackMask | whiteMask;
-
-    if (combinedMask === 0) continue; // Skip empty slots
-
-    for (let bit = 0; bit < 32; bit++) {
-      if ((combinedMask & (1 << bit)) !== 0) {
-        const position = slot * 32 + bit;
-        if (position >= BOARD_CELLS) break;
-
-        const row = Math.floor(position / BOARD_SIZE);
-        const col = position % BOARD_SIZE;
-        stonePositions.push({ row, col });
-      }
+    let mask = blackBitboard[slot] | whiteBitboard[slot];
+    if (slot === 7) mask &= 1;
+    while (mask) {
+      const position = slot * 32 + 31 - Math.clz32(mask & -mask);
+      const row = Math.floor(position / BOARD_SIZE),
+        col = position % BOARD_SIZE;
+      occupiedRows[row] |= 1 << col;
+      stones.push(position);
+      mask &= mask - 1;
     }
   }
-
-  // If no stones on board, start from center with high priority
-  if (stonePositions.length === 0) {
-    addCandidate(7, 7, 1000); // Center of 15x15 board
-    addCandidate(6, 6, 900);
-    addCandidate(6, 7, 950);
-    addCandidate(6, 8, 900);
-    addCandidate(7, 6, 950);
-    addCandidate(7, 8, 950);
-    addCandidate(8, 6, 900);
-    addCandidate(8, 7, 950);
-    addCandidate(8, 8, 900);
-    return candidates.sort((a, b) => b.priority - a.priority);
+  if (!stones.length) {
+    return [
+      [7, 7, 1000],
+      [6, 6, 900],
+      [6, 7, 950],
+      [6, 8, 900],
+      [7, 6, 950],
+      [7, 8, 950],
+      [8, 6, 900],
+      [8, 7, 950],
+      [8, 8, 900],
+    ]
+      .map(([row, col, priority]) => ({
+        row,
+        col,
+        position: row * BOARD_SIZE + col,
+        priority,
+      }))
+      .sort((a, b) => b.priority - a.priority);
   }
 
-  // Each stone contributes to the density of at most 25 board cells.
-  // Counts include both colors and the center stone, matching the original scans.
+  // Numeric density preserves the existing priority formula.
   const neighborhoodDensity = new Uint8Array(BOARD_CELLS);
-  for (const { row, col } of stonePositions) {
+  for (const position of stones) {
+    const row = Math.floor(position / BOARD_SIZE),
+      col = position % BOARD_SIZE;
     for (
       let r = Math.max(0, row - 2);
       r <= Math.min(BOARD_SIZE - 1, row + 2);
       r++
-    ) {
+    )
       for (
         let c = Math.max(0, col - 2);
         c <= Math.min(BOARD_SIZE - 1, col + 2);
         c++
-      ) {
+      )
         neighborhoodDensity[r * BOARD_SIZE + c]++;
-      }
-    }
   }
-
-  // Generate candidates around stones with smart distance and density scoring
-  for (const stone of stonePositions) {
-    const { row, col } = stone;
-
-    // Immediate adjacency (distance 1) - highest priority
-    for (let dRow = -1; dRow <= 1; dRow++) {
-      for (let dCol = -1; dCol <= 1; dCol++) {
-        if (dRow === 0 && dCol === 0) continue;
-
-        const newRow = row + dRow;
-        const newCol = col + dCol;
-
-        // Off-board neighbors cannot become candidates.
-        if (
-          newRow < 0 ||
-          newRow >= BOARD_SIZE ||
-          newCol < 0 ||
-          newCol >= BOARD_SIZE
-        )
-          continue;
-        const density = neighborhoodDensity[newRow * BOARD_SIZE + newCol];
-
-        // Priority: higher for denser areas and center positions
-        const centerBonus = 14 - (Math.abs(newRow - 7) + Math.abs(newCol - 7));
-        const priority = 100 + density * 20 + centerBonus;
-
-        addCandidate(newRow, newCol, priority);
-      }
+  const adjacentExpansion = new Uint16Array(BOARD_SIZE);
+  const extendedExpansion = new Uint16Array(BOARD_SIZE);
+  const denseRows = new Uint16Array(BOARD_SIZE);
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    const occupied = occupiedRows[row];
+    adjacentExpansion[row] =
+      (occupied | (occupied << 1) | (occupied >>> 1)) & ROW_MASK;
+    let sources = occupied,
+      dense = 0;
+    while (sources) {
+      const col = 31 - Math.clz32(sources & -sources);
+      if (neighborhoodDensity[row * BOARD_SIZE + col] >= 3) dense |= 1 << col;
+      sources &= sources - 1;
     }
-
-    // Extended range (distance 2) - lower priority, only in dense areas
-    const localDensity = neighborhoodDensity[row * BOARD_SIZE + col];
-
-    // Only add distance-2 candidates in areas with sufficient stone density
-    if (localDensity >= 3) {
-      for (let dRow = -2; dRow <= 2; dRow++) {
-        for (let dCol = -2; dCol <= 2; dCol++) {
-          if (Math.abs(dRow) <= 1 && Math.abs(dCol) <= 1) continue; // Skip already added
-          if (dRow === 0 && dCol === 0) continue;
-
-          const newRow = row + dRow;
-          const newCol = col + dCol;
-
-          // Lower priority for distance-2 moves
-          const centerBonus =
-            14 - (Math.abs(newRow - 7) + Math.abs(newCol - 7));
-          const priority = 30 + localDensity * 5 + centerBonus;
-
-          addCandidate(newRow, newCol, priority);
+    denseRows[row] = dense;
+    extendedExpansion[row] =
+      (dense | (dense << 1) | (dense >>> 1) | (dense << 2) | (dense >>> 2)) &
+      ROW_MASK;
+  }
+  const ranks = new Uint16Array(BOARD_CELLS);
+  for (let row = 0; row < BOARD_SIZE; row++) {
+    const adjacent =
+      adjacentExpansion[row] |
+      (adjacentExpansion[row - 1] || 0) |
+      (adjacentExpansion[row + 1] || 0);
+    const extended =
+      extendedExpansion[row] |
+      (extendedExpansion[row - 1] || 0) |
+      (extendedExpansion[row + 1] || 0) |
+      (extendedExpansion[row - 2] || 0) |
+      (extendedExpansion[row + 2] || 0);
+    let frontier = (adjacent | extended) & ~occupiedRows[row] & ROW_MASK;
+    while (frontier) {
+      const bit = frontier & -frontier,
+        col = 31 - Math.clz32(bit);
+      const position = row * BOARD_SIZE + col;
+      const centerBonus = 14 - Math.abs(row - 7) - Math.abs(col - 7);
+      let priority =
+        adjacent & bit
+          ? 100 + neighborhoodDensity[position] * 20 + centerBonus
+          : 0;
+      let firstRank = -1,
+        extendedDensity = 0;
+      if (adjacent & bit) {
+        const radius = extended & bit ? 2 : 1;
+        for (
+          let r = Math.max(0, row - radius);
+          r <= Math.min(BOARD_SIZE - 1, row + radius);
+          r++
+        ) {
+          const nearRow = Math.abs(row - r) <= 1;
+          const near = nearRow ? occupiedRows[r] & ADJACENT_COLUMNS[col] : 0;
+          let distant = denseRows[r] & SOURCE_COLUMNS[col];
+          if (nearRow) distant &= ~ADJACENT_COLUMNS[col];
+          const sources = near | distant;
+          if (!sources) continue;
+          const c = 31 - Math.clz32(sources & -sources);
+          firstRank =
+            (r * BOARD_SIZE + c) * 24 +
+            OFFSET_ORDER[(row - r + 2) * 5 + col - c + 2];
+          break;
         }
+        // A distance-two source has at most 16 density cells outside this
+        // candidate's neighborhood. Thus its priority is at most 110+5D,
+        // below the adjacent priority 100+20D for every D >= 1.
+      } else {
+        for (
+          let r = Math.max(0, row - 2);
+          r <= Math.min(BOARD_SIZE - 1, row + 2);
+          r++
+        ) {
+          let sources = denseRows[r] & SOURCE_COLUMNS[col];
+          if (firstRank < 0 && sources) {
+            const c = 31 - Math.clz32(sources & -sources);
+            firstRank =
+              (r * BOARD_SIZE + c) * 24 +
+              OFFSET_ORDER[(row - r + 2) * 5 + col - c + 2];
+          }
+          while (sources) {
+            const c = 31 - Math.clz32(sources & -sources);
+            const density = neighborhoodDensity[r * BOARD_SIZE + c];
+            if (density > extendedDensity) extendedDensity = density;
+            sources &= sources - 1;
+          }
+        }
+        priority = 30 + extendedDensity * 5 + centerBonus;
       }
+      ranks[position] = firstRank;
+      candidates.push({ row, col, position, priority });
+      frontier &= frontier - 1;
     }
   }
 
@@ -183,7 +201,12 @@ export function generateCandidateMoves(
 
   // Wins precede blocks, which precede positional moves. Keep all tactics even
   // when they exceed the usual branching limit.
-  candidates.sort((a, b) => b.tactical - a.tactical || b.priority - a.priority);
-  const maxCandidates = stonePositions.length < 10 ? 30 : 50;
+  candidates.sort(
+    (a, b) =>
+      b.tactical - a.tactical ||
+      b.priority - a.priority ||
+      ranks[a.position] - ranks[b.position],
+  );
+  const maxCandidates = stones.length < 10 ? 30 : 50;
   return candidates.slice(0, Math.max(maxCandidates, tacticalCount));
 }
