@@ -163,3 +163,35 @@ impl SearchState {
             .packed())
     }
 }
+pub mod moves;
+
+/// Triples of position, priority, tactical classification (-1 for opening moves).
+#[wasm_bindgen]
+pub fn generate_candidates(
+    black: &[u32],
+    white: &[u32],
+    player_black: bool,
+) -> Result<Vec<i32>, JsValue> {
+    let black = board(black)?;
+    let white = board(white)?;
+    let lines = lines::LineBoards::new(&black, &white);
+    let winning = lines::WinningCache::new(&lines);
+    let mut result = moves::Candidates::default();
+    moves::generate_into(&black, &white, player_black, &winning, &mut result);
+    Ok(result.packed())
+}
+
+#[wasm_bindgen]
+impl SearchState {
+    pub fn candidates(&self, player_black: bool) -> Vec<i32> {
+        let mut result = moves::Candidates::default();
+        moves::generate_into(
+            &self.inner.black,
+            &self.inner.white,
+            player_black,
+            &self.inner.winning,
+            &mut result,
+        );
+        result.packed()
+    }
+}
