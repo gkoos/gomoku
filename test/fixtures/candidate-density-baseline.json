@@ -1,0 +1,650 @@
+[
+  {
+    "name": "stones-0-sample-0",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "b16e722f54f0dbb11328ea44b74367c36495cc4e1be220a9bfa046ca844f6765",
+      "white": "b16e722f54f0dbb11328ea44b74367c36495cc4e1be220a9bfa046ca844f6765"
+    }
+  },
+  {
+    "name": "stones-8-sample-0",
+    "blackBitboard": [
+      1073741840,
+      0,
+      2,
+      0,
+      0,
+      0,
+      -2147483648,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      4194304,
+      64,
+      0,
+      17,
+      0,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "6d67363be9eed3adb7a78e4366c44658a6a47f3aa97e2a2f52c5ec300cb7399c",
+      "white": "6d67363be9eed3adb7a78e4366c44658a6a47f3aa97e2a2f52c5ec300cb7399c"
+    }
+  },
+  {
+    "name": "stones-24-sample-0",
+    "blackBitboard": [
+      0,
+      0,
+      65538,
+      260,
+      524289,
+      65728,
+      2228232,
+      0
+    ],
+    "whiteBitboard": [
+      152043520,
+      1073750016,
+      1073742848,
+      1024,
+      537141248,
+      33554432,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "d2b5922c81c1d5d23357b15ddcfcdb00e33a4059b20eeb95e043bd07a78da835",
+      "white": "d2b5922c81c1d5d23357b15ddcfcdb00e33a4059b20eeb95e043bd07a78da835"
+    }
+  },
+  {
+    "name": "stones-64-sample-0",
+    "blackBitboard": [
+      203440136,
+      4195330,
+      9447424,
+      1347829760,
+      17334408,
+      -2080301056,
+      1090782208,
+      0
+    ],
+    "whiteBitboard": [
+      1074003968,
+      1073789440,
+      1073742337,
+      -2080374607,
+      536877056,
+      1074266241,
+      -2142756853,
+      1
+    ],
+    "expected": {
+      "black": "5d2184083759e850cba5b40141e39af2f6c288efb8093bde7ad0d790ed5e3c99",
+      "white": "5d2184083759e850cba5b40141e39af2f6c288efb8093bde7ad0d790ed5e3c99"
+    }
+  },
+  {
+    "name": "stones-120-sample-0",
+    "blackBitboard": [
+      2105432,
+      1279289922,
+      -2144185636,
+      -1582817280,
+      1665237122,
+      467804162,
+      118489249,
+      0
+    ],
+    "whiteBitboard": [
+      751829506,
+      841748876,
+      235216897,
+      1208276273,
+      271597872,
+      530880,
+      1619008328,
+      1
+    ],
+    "expected": {
+      "black": "a2c481b755f266ab0030caa9f37ba62fa909d7e2c5b93cf4a4a004b650501fce",
+      "white": "25578c789f57da7e941847609119e1c7fcc5dbb6773b6157952b81f958e33f67"
+    }
+  },
+  {
+    "name": "stones-0-sample-1",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "b16e722f54f0dbb11328ea44b74367c36495cc4e1be220a9bfa046ca844f6765",
+      "white": "b16e722f54f0dbb11328ea44b74367c36495cc4e1be220a9bfa046ca844f6765"
+    }
+  },
+  {
+    "name": "stones-8-sample-1",
+    "blackBitboard": [
+      67108864,
+      0,
+      0,
+      4096,
+      4,
+      4096,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      524288,
+      0,
+      16384,
+      16,
+      8388608,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "da50c992a47c5e4295835e44b296cf718049ec306a119450dab196b3f57d7002",
+      "white": "da50c992a47c5e4295835e44b296cf718049ec306a119450dab196b3f57d7002"
+    }
+  },
+  {
+    "name": "stones-24-sample-1",
+    "blackBitboard": [
+      132096,
+      201326592,
+      0,
+      8192,
+      318769152,
+      8,
+      -2113929216,
+      0
+    ],
+    "whiteBitboard": [
+      1073741824,
+      131082,
+      0,
+      17467392,
+      8389632,
+      1073741824,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "b3b340dfe0e44583c19935a2171cba27a818592f996612ef226d49a931ba02eb",
+      "white": "b3b340dfe0e44583c19935a2171cba27a818592f996612ef226d49a931ba02eb"
+    }
+  },
+  {
+    "name": "stones-64-sample-1",
+    "blackBitboard": [
+      -2147450876,
+      402653186,
+      -2109702072,
+      1090519104,
+      17829922,
+      31460401,
+      536870946,
+      0
+    ],
+    "whiteBitboard": [
+      176162816,
+      536884041,
+      1073807360,
+      805437446,
+      138938432,
+      1314816,
+      -2147155944,
+      0
+    ],
+    "expected": {
+      "black": "05ee482c8ffa0dc55b357582d84a88843861cdf82286d33697462897a4fbd43d",
+      "white": "a3db2dd4735cc0d09b352f7dfa74c2280ec405220ff761faf651ab27738051cb"
+    }
+  },
+  {
+    "name": "stones-120-sample-1",
+    "blackBitboard": [
+      1687846914,
+      459315232,
+      162565057,
+      -2143111360,
+      27525130,
+      1108344850,
+      10768454,
+      0
+    ],
+    "whiteBitboard": [
+      285237257,
+      613024706,
+      -1509940224,
+      1831092231,
+      1913262080,
+      879305352,
+      118071553,
+      0
+    ],
+    "expected": {
+      "black": "c90baa7c755f9bd35e465ad2ece81fba383c1b04e92963edb0b9090635a6fafd",
+      "white": "7cf558ceb3072b7e4796bc8d5459e08feeba863a89d7aabfdfaefbe40b3ab9be"
+    }
+  },
+  {
+    "name": "stones-0-sample-2",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "b16e722f54f0dbb11328ea44b74367c36495cc4e1be220a9bfa046ca844f6765",
+      "white": "b16e722f54f0dbb11328ea44b74367c36495cc4e1be220a9bfa046ca844f6765"
+    }
+  },
+  {
+    "name": "stones-8-sample-2",
+    "blackBitboard": [
+      0,
+      2097152,
+      0,
+      0,
+      536870912,
+      8192,
+      67108864,
+      0
+    ],
+    "whiteBitboard": [
+      16400,
+      0,
+      0,
+      0,
+      0,
+      32768,
+      65536,
+      0
+    ],
+    "expected": {
+      "black": "88e68a76d602a6bd928928e943af1ab6c01fb9c3ac748d07bdfb20b343b58bce",
+      "white": "88e68a76d602a6bd928928e943af1ab6c01fb9c3ac748d07bdfb20b343b58bce"
+    }
+  },
+  {
+    "name": "stones-24-sample-2",
+    "blackBitboard": [
+      134217728,
+      0,
+      268435456,
+      1050116,
+      34817,
+      67108864,
+      8388608,
+      1
+    ],
+    "whiteBitboard": [
+      8388608,
+      537133056,
+      536870912,
+      262144,
+      1073741824,
+      32769,
+      271843328,
+      0
+    ],
+    "expected": {
+      "black": "0a30877ace42ed863844deb25a86b4de7adc2a5c68eac77ac81afbea179c9237",
+      "white": "0a30877ace42ed863844deb25a86b4de7adc2a5c68eac77ac81afbea179c9237"
+    }
+  },
+  {
+    "name": "stones-64-sample-2",
+    "blackBitboard": [
+      1644167936,
+      0,
+      33562632,
+      5251072,
+      138412292,
+      102828484,
+      -1845329368,
+      0
+    ],
+    "whiteBitboard": [
+      2228226,
+      -1227874300,
+      1180034,
+      33554432,
+      69828739,
+      268435456,
+      18875396,
+      0
+    ],
+    "expected": {
+      "black": "0174240c9f65441dcfef8a5559e554e217577c1be600cbe891357611b57a1eb3",
+      "white": "b899b7ba1ed667c6f2618e916ad47812938f0d122eac6f239480f4b3bf23683a"
+    }
+  },
+  {
+    "name": "stones-120-sample-2",
+    "blackBitboard": [
+      537608960,
+      167841796,
+      146809522,
+      1744847330,
+      1424004299,
+      276955138,
+      1224278108,
+      0
+    ],
+    "whiteBitboard": [
+      -682574845,
+      6827266,
+      -1862264576,
+      71933952,
+      134873120,
+      1627666093,
+      -2130539008,
+      1
+    ],
+    "expected": {
+      "black": "3c8318a697c5001dcf3440577ee53e3b61eb424c1cb3d0f11f70d70b26d804e9",
+      "white": "ad9d092ea4224cb7daa35424d8503e96714a1452811fbd72dec6ac2be8cbbbda"
+    }
+  },
+  {
+    "name": "stones-0-sample-3",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "b16e722f54f0dbb11328ea44b74367c36495cc4e1be220a9bfa046ca844f6765",
+      "white": "b16e722f54f0dbb11328ea44b74367c36495cc4e1be220a9bfa046ca844f6765"
+    }
+  },
+  {
+    "name": "stones-8-sample-3",
+    "blackBitboard": [
+      0,
+      2097664,
+      32768,
+      0,
+      0,
+      4194304,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      1,
+      0,
+      0,
+      0,
+      -2147483648,
+      0,
+      33554436,
+      0
+    ],
+    "expected": {
+      "black": "2c36e911794fa5d260814456018e6ae12b265f812efc7f43ba00b67448d946d7",
+      "white": "2c36e911794fa5d260814456018e6ae12b265f812efc7f43ba00b67448d946d7"
+    }
+  },
+  {
+    "name": "stones-24-sample-3",
+    "blackBitboard": [
+      131136,
+      134217728,
+      1082130432,
+      32768,
+      143196160,
+      1073741824,
+      2097152,
+      0
+    ],
+    "whiteBitboard": [
+      66560,
+      -2130706432,
+      -2147483648,
+      5242880,
+      32768,
+      671088640,
+      -2147450880,
+      0
+    ],
+    "expected": {
+      "black": "cfdbd2584c2f1a20e6ba868d06102f4c7d6af4ea88006ff183c2759fed0e4dd0",
+      "white": "cfdbd2584c2f1a20e6ba868d06102f4c7d6af4ea88006ff183c2759fed0e4dd0"
+    }
+  },
+  {
+    "name": "stones-64-sample-3",
+    "blackBitboard": [
+      209718784,
+      272512,
+      542736,
+      394,
+      33587216,
+      76283904,
+      16792193,
+      0
+    ],
+    "whiteBitboard": [
+      554442816,
+      68682256,
+      -1589641182,
+      1090535472,
+      200,
+      134447200,
+      16384,
+      0
+    ],
+    "expected": {
+      "black": "77c0d8f7a625142b97c479322556d0fe0543985ecc45aaab9b56eef12a4e7209",
+      "white": "68a31ee3ed779153ef7b3af7ccca9db155ff6f8aec097748490636a5d877b9d1"
+    }
+  },
+  {
+    "name": "stones-120-sample-3",
+    "blackBitboard": [
+      472383517,
+      242512136,
+      -2111765500,
+      6297612,
+      282158544,
+      1895958016,
+      13000961,
+      0
+    ],
+    "whiteBitboard": [
+      536952898,
+      1073971828,
+      1493697242,
+      2038956033,
+      -1977090044,
+      -2113609493,
+      1076924952,
+      1
+    ],
+    "expected": {
+      "black": "cd842c294f9fdcba425976a195cbdc29f2f1b1da3412242ccb06bb4709f53a0b",
+      "white": "ca9af8824dd0f5524e1d82c845235dedc88c4829abe994d3b28410d21ce47266"
+    }
+  },
+  {
+    "name": "corners-and-slot-boundaries",
+    "blackBitboard": [
+      -2147483647,
+      -2147483648,
+      -2147483648,
+      -2147483648,
+      -2147483648,
+      -2147483648,
+      262144,
+      0
+    ],
+    "whiteBitboard": [
+      16384,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1,
+      1
+    ],
+    "expected": {
+      "black": "94d17817696cf1044c2f6ae356c4f636704a9939ad3c5001c627630f63db3ed7",
+      "white": "94d17817696cf1044c2f6ae356c4f636704a9939ad3c5001c627630f63db3ed7"
+    }
+  },
+  {
+    "name": "crowded-top-left",
+    "blackBitboard": [
+      1073905669,
+      40961,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "whiteBitboard": [
+      -2147155958,
+      81922,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "expected": {
+      "black": "50b23aca2426bb954ba573da1c5ff61d7898c6620909f41f7a63c9e61d9c7ea1",
+      "white": "8016e56c17c27c201e9842fc7fda395d5596ff0f32e82c4f85ce805dd1e55d7e"
+    }
+  },
+  {
+    "name": "crowded-bottom-right",
+    "blackBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      -2147155968,
+      -1610530814,
+      0
+    ],
+    "whiteBitboard": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      655360,
+      1073905669,
+      1
+    ],
+    "expected": {
+      "black": "55581a4473a7a99b6c40384b45505ddc9bfb5f44fa76736e046104f872aeae8f",
+      "white": "8fa30dba57ad2c91d076eb00630792d4abb735b0295f6b9ce859faeb93971ffc"
+    }
+  },
+  {
+    "name": "full-board",
+    "blackBitboard": [
+      1431655765,
+      1431655765,
+      1431655765,
+      1431655765,
+      1431655765,
+      1431655765,
+      1431655765,
+      1
+    ],
+    "whiteBitboard": [
+      -1431655766,
+      -1431655766,
+      -1431655766,
+      -1431655766,
+      -1431655766,
+      -1431655766,
+      -1431655766,
+      0
+    ],
+    "expected": {
+      "black": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+      "white": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    }
+  }
+]

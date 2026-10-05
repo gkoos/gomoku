@@ -83,6 +83,25 @@ export function generateCandidateMoves(
     return candidates.sort((a, b) => b.priority - a.priority);
   }
 
+  // Each stone contributes to the density of at most 25 board cells.
+  // Counts include both colors and the center stone, matching the original scans.
+  const neighborhoodDensity = new Uint8Array(BOARD_CELLS);
+  for (const { row, col } of stonePositions) {
+    for (
+      let r = Math.max(0, row - 2);
+      r <= Math.min(BOARD_SIZE - 1, row + 2);
+      r++
+    ) {
+      for (
+        let c = Math.max(0, col - 2);
+        c <= Math.min(BOARD_SIZE - 1, col + 2);
+        c++
+      ) {
+        neighborhoodDensity[r * BOARD_SIZE + c]++;
+      }
+    }
+  }
+
   // Generate candidates around stones with smart distance and density scoring
   for (const stone of stonePositions) {
     const { row, col } = stone;
@@ -95,15 +114,15 @@ export function generateCandidateMoves(
         const newRow = row + dRow;
         const newCol = col + dCol;
 
-        // Calculate density bonus (number of stones within distance 2)
-        let density = 0;
-        for (const otherStone of stonePositions) {
-          const dist = Math.max(
-            Math.abs(otherStone.row - newRow),
-            Math.abs(otherStone.col - newCol),
-          );
-          if (dist <= 2) density++;
-        }
+        // Off-board neighbors cannot become candidates.
+        if (
+          newRow < 0 ||
+          newRow >= BOARD_SIZE ||
+          newCol < 0 ||
+          newCol >= BOARD_SIZE
+        )
+          continue;
+        const density = neighborhoodDensity[newRow * BOARD_SIZE + newCol];
 
         // Priority: higher for denser areas and center positions
         const centerBonus = 14 - (Math.abs(newRow - 7) + Math.abs(newCol - 7));
@@ -114,14 +133,7 @@ export function generateCandidateMoves(
     }
 
     // Extended range (distance 2) - lower priority, only in dense areas
-    let localDensity = 0;
-    for (const otherStone of stonePositions) {
-      const dist = Math.max(
-        Math.abs(otherStone.row - row),
-        Math.abs(otherStone.col - col),
-      );
-      if (dist <= 2) localDensity++;
-    }
+    const localDensity = neighborhoodDensity[row * BOARD_SIZE + col];
 
     // Only add distance-2 candidates in areas with sufficient stone density
     if (localDensity >= 3) {
