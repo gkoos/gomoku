@@ -7,6 +7,7 @@ export function generateCandidateMoves(
   whiteBitboard,
   playerColor = 'black',
   lineBitboards = null,
+  winningSquareBitboards = null,
 ) {
   const candidates = [];
   const visited = new Array(BOARD_CELLS);
@@ -159,10 +160,15 @@ export function generateCandidateMoves(
 
   // Classify tactics before either candidate limit. Every winning move is
   // adjacent to an existing stone, including completions of broken fours.
-  const lines =
-    lineBitboards || createLineBitboards(blackBitboard, whiteBitboard);
-  const blackWins = findWinningSquares(lines.black, lines.white);
-  const whiteWins = findWinningSquares(lines.white, lines.black);
+  const lines = winningSquareBitboards
+    ? null
+    : lineBitboards || createLineBitboards(blackBitboard, whiteBitboard);
+  const blackWins =
+    winningSquareBitboards?.black ||
+    findWinningSquares(lines.black, lines.white);
+  const whiteWins =
+    winningSquareBitboards?.white ||
+    findWinningSquares(lines.white, lines.black);
   const ownWins = playerColor === 'black' ? blackWins : whiteWins;
   const opponentWins = playerColor === 'black' ? whiteWins : blackWins;
   let tacticalCount = 0;

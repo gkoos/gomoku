@@ -84,6 +84,10 @@ export function createLineBitboards(black, white) {
 }
 
 function winningLineSquares(stones, opponent, length) {
+  let fourth = stones & (stones - 1);
+  fourth &= fourth - 1;
+  fourth &= fourth - 1;
+  if (!fourth) return 0;
   const empty = ~(stones | opponent) & ((1 << length) - 1);
   const fours = stones & (stones >>> 1) & (stones >>> 2) & (stones >>> 3);
   // End extensions and the three possible interior gaps in a five-cell run.
@@ -129,6 +133,85 @@ function collectSquares(own, opponent, classify) {
 
 export function findWinningSquares(own, opponent) {
   return collectSquares(own, opponent, winningLineSquares);
+}
+
+export function createWinningSquareCache(lines) {
+  function colorState() {
+    return {
+      bitboard: Array(8).fill(0),
+      squares: new Uint16Array(LINES.length),
+      references: new Uint8Array(BOARD_CELLS),
+      count: 0,
+    };
+  }
+  const black = colorState(),
+    white = colorState();
+  const bitboards = { black: black.bitboard, white: white.bitboard };
+
+  function replaceLine(line, state, next) {
+    let changed = state.squares[line] ^ next;
+    if (!changed) return;
+    const cells = LINES[line];
+    while (changed) {
+      const bit = changed & -changed;
+      const position = cells[31 - Math.clz32(bit)];
+      const slot = position >>> 5,
+        boardBit = 1 << (position & 31);
+      if (next & bit) {
+        if (state.references[position]++ === 0) {
+          state.bitboard[slot] |= boardBit;
+          state.count++;
+        }
+      } else if (--state.references[position] === 0) {
+        state.bitboard[slot] &= ~boardBit;
+        state.count--;
+      }
+      changed &= changed - 1;
+    }
+    state.squares[line] = next;
+  }
+  function refreshLine(line) {
+    const length = LINES[line].length;
+    if (length < 5) return;
+    const own = lines.black[line],
+      other = lines.white[line];
+    replaceLine(line, black, winningLineSquares(own, other, length));
+    replaceLine(line, white, winningLineSquares(other, own, length));
+  }
+  for (let line = 0; line < LINES.length; line++) refreshLine(line);
+  // Record only changed line masks. Quiet moves need no cache undo work;
+  // reference counts keep crossing threats intact during restoration.
+  function refresh(position) {
+    let undo = null;
+    for (const [line] of MEMBERSHIPS[position]) {
+      const length = LINES[line].length;
+      if (length < 5) continue;
+      const own = lines.black[line],
+        other = lines.white[line];
+      const nextBlack = winningLineSquares(own, other, length);
+      const nextWhite = winningLineSquares(other, own, length);
+      if (nextBlack !== black.squares[line]) {
+        (undo ||= []).push([line, black, black.squares[line]]);
+        replaceLine(line, black, nextBlack);
+      }
+      if (nextWhite !== white.squares[line]) {
+        (undo ||= []).push([line, white, white.squares[line]]);
+        replaceLine(line, white, nextWhite);
+      }
+    }
+    return undo;
+  }
+  function restore(undo) {
+    if (undo)
+      for (const [line, state, previous] of undo)
+        replaceLine(line, state, previous);
+  }
+  return {
+    bitboards,
+    refresh,
+    restore,
+    hasThreat: (color) => (color === 'black' ? black : white).count !== 0,
+  };
 }
 
 export function findOpenFourSquares(own, opponent) {

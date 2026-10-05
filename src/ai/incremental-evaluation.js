@@ -2,7 +2,12 @@ import { BOARD_SIZE, BOARD_CELLS, oppositeColor } from '../core/constants.js';
 import { MAX_STATIC_SCORE } from './config.js';
 import { scoreLinePattern } from './evaluation.js';
 import { analyzePackedLinePattern } from './patterns.js';
-import { createLineBitboards, updateLineBitboards } from './line-bitboards.js';
+import {
+  createLineBitboards,
+  updateLineBitboards,
+  createWinningSquareCache,
+  threatMovesFromBitboard,
+} from './line-bitboards.js';
 
 const DIRECTIONS = [
   [0, 1],
@@ -45,11 +50,10 @@ export function createIncrementalEvaluator(
   const black = [...blackBitboard],
     white = [...whiteBitboard];
   const lineBitboards = createLineBitboards(black, white);
+  const winningSquares = createWinningSquareCache(lineBitboards);
   const scores = new Int32Array(BOARD_CELLS * 4),
     history = [];
-  let total = 0,
-    blackThreatLines = 0,
-    whiteThreatLines = 0;
+  let total = 0;
 
   function contribution(index) {
     const position = index >>> 2,
@@ -72,8 +76,6 @@ export function createIncrementalEvaluator(
   for (let index = 0; index < scores.length; index++) {
     scores[index] = contribution(index);
     total += scores[index];
-    if (scores[index] >= 10000) blackThreatLines++;
-    if (scores[index] <= -10000) whiteThreatLines++;
   }
 
   function makeMove(position, color) {
@@ -92,20 +94,15 @@ export function createIncrementalEvaluator(
       color,
       total,
       previousScores,
-      blackThreatLines,
-      whiteThreatLines,
     };
     const stones = color === 'black' ? black : white;
     stones[slot] |= mask;
     updateLineBitboards(lineBitboards, position, color, true);
+    frame.winningSquaresUndo = winningSquares.refresh(position);
     for (let offset = 0; offset < indices.length; offset++) {
       const index = indices[offset];
       previousScores[offset] = scores[index];
       const next = contribution(index);
-      if (scores[index] >= 10000) blackThreatLines--;
-      if (scores[index] <= -10000) whiteThreatLines--;
-      if (next >= 10000) blackThreatLines++;
-      if (next <= -10000) whiteThreatLines++;
       total += next - scores[index];
       scores[index] = next;
     }
@@ -120,14 +117,13 @@ export function createIncrementalEvaluator(
     const stones = frame.color === 'black' ? black : white;
     stones[frame.position >>> 5] &= ~(1 << (frame.position % 32));
     updateLineBitboards(lineBitboards, frame.position, frame.color, false);
+    winningSquares.restore(frame.winningSquaresUndo);
     const indices = AFFECTED_CONTRIBUTIONS[frame.position];
     for (let offset = 0; offset < indices.length; offset++) {
       scores[indices[offset]] = frame.previousScores[offset];
     }
     // Preserve the raw total: clamping between moves would lose information.
     total = frame.total;
-    blackThreatLines = frame.blackThreatLines;
-    whiteThreatLines = frame.whiteThreatLines;
     history.pop();
   }
 
@@ -137,11 +133,21 @@ export function createIncrementalEvaluator(
     return Math.max(-MAX_STATIC_SCORE, Math.min(MAX_STATIC_SCORE, score));
   }
 
-  // Only four/five patterns reach 10000 in the line evaluator. Counting these
-  // contributions lets quiet leaves skip tactical scans without clamped totals.
   function hasImmediateThreat(color) {
     oppositeColor(color);
-    return color === 'black' ? blackThreatLines > 0 : whiteThreatLines > 0;
+    return winningSquares.hasThreat(color);
   }
-  return { makeMove, undoMove, getScore, hasImmediateThreat, lineBitboards };
+  function getWinningMoves(color) {
+    oppositeColor(color);
+    return threatMovesFromBitboard(winningSquares.bitboards[color], 'win');
+  }
+  return {
+    makeMove,
+    undoMove,
+    getScore,
+    hasImmediateThreat,
+    lineBitboards,
+    winningSquareBitboards: winningSquares.bitboards,
+    getWinningMoves,
+  };
 }
