@@ -4,6 +4,29 @@ use crate::lines::{LineBoards, WinningCache, geometry};
 
 pub const MAX_PLIES: usize = 15;
 pub const NODE_BUDGET: usize = 2048;
+pub const HORIZON_PLIES: usize = 7;
+pub const HORIZON_NODES: usize = 32;
+
+/// Cheap eligibility test before allocating or probing the horizon cache.
+pub fn can_start(lines: &LineBoards, color: bool) -> bool {
+    let (own, enemy) = if color {
+        (&lines.black, &lines.white)
+    } else {
+        (&lines.white, &lines.black)
+    };
+    for line in 0..88 {
+        let length = geometry().lengths[line];
+        if length < 5 || own[line].count_ones() < 3 {
+            continue;
+        }
+        for start in 0..=length - 5 {
+            if ((own[line] >> start) & 31).count_ones() == 3 && (enemy[line] >> start) & 31 == 0 {
+                return true;
+            }
+        }
+    }
+    false
+}
 
 pub struct Outcome {
     pub line: Option<Vec<u16>>,
@@ -28,7 +51,7 @@ pub fn four_moves(lines: &LineBoards, color: bool) -> Bitboard {
     let mut board = [0; 8];
     for line in 0..88 {
         let length = geometry().lengths[line];
-        if length < 5 {
+        if length < 5 || own[line].count_ones() < 3 {
             continue;
         }
         for start in 0..=length - 5 {

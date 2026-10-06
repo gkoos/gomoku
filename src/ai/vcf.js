@@ -4,6 +4,8 @@ import { createLineBitboards, createWinningSquareCache, updateLineBitboards, fin
 
 export const VCF_MAX_PLIES = 15;
 export const VCF_NODE_BUDGET = 2048;
+export const VCF_HORIZON_PLIES = 7;
+export const VCF_HORIZON_NODES = 32;
 const empty = Array(8).fill(0);
 
 /** Only proven continuous-four wins affect selection; unknown is not a loss. */

@@ -10,6 +10,7 @@ export function createSearchContext(
 ) {
   return {
     table,
+    vcfCache: new Map(),
     hasher: createPositionHasher(black, white, toMove),
     stats: { hits: 0, cutoffs: 0, stores: 0 },
   };

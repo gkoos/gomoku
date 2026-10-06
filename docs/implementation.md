@@ -1,4 +1,4 @@
-ï»¿# Implementation guide
+# Implementation guide
 
 ## Module map
 
@@ -40,7 +40,7 @@ The opponent is derived from toMove. The result contains row and col, with possi
 
 ## Occupancy bitboards
 
-Each color has eight numeric 32-bit words. Position is row Ã— 15 + col; word is position >>> 5, bit is position & 31. Seven words cover positions 0â€“223. Only bit zero of the eighth word represents a square: position 224.
+Each color has eight numeric 32-bit words. Position is row × 15 + col; word is position >>> 5, bit is position & 31. Seven words cover positions 0–223. Only bit zero of the eighth word represents a square: position 224.
 
 JavaScript bitwise operations use signed 32-bit integers. Negative words can contain valid stones. Unsigned conversions are used where needed for hashing and comparisons. Enumeration and word-level rules mask padding bits in the final word.
 
@@ -88,6 +88,10 @@ Rust's search-specific candidate generator partitions directly to the selective 
 The table is a Map capped at 32,768 entries by default. New entries evict the oldest at capacity. A search context is shared across iterative depths for one move, rather than persisting across games.
 
 Keys include the position hash, exact remaining depth, perspective, tactical-extension budget, PV-tracking mode, and applicable remaining principal-variation suffix. Selective ordering can alter the searched move set, so these fields prevent incompatible reuse. Deeper entries are not automatically substituted for shallower horizons.
+
+Quiet tactical leaves use a separate VCF cache containing relative winning continuations or unknown results. Full black/white occupancy and the attacker identify a position, so this cache does not depend on Zobrist collision assumptions, evaluation weights, or the root perspective. Scores are constructed at the call site using the current root distance. Each search retains at most 2,048 entries and clears the cache when inserting beyond that bound. Unknown results are reusable only under the fixed seven-ply/32-node horizon limits. A line-mask eligibility check skips probes when no unblocked five-cell window contains three friendly stones. VCF operates on maintained line boards and winning caches in Rust and restores them before returning. Its internal nodes are bounded separately and are not included in the existing alpha-beta node counter.
+
+The rerunnable timing check is `node scripts/benchmark-vcf-horizon.js`. It accepts `--wasm=PATH` to benchmark a saved older Wasm artifact and `--output=PATH` to preserve results with the artifact SHA-256. It warms each fixture twice, then reports the median of seven runs along with completed depth, score, alpha-beta nodes and PV. Winning fixtures may finish at a shallower iteration, so these timings compare complete move calculations rather than identical searched trees. Run comparisons without concurrent CPU-heavy work.
 
 Entries contain exact scores, lower bounds, or upper bounds. Bounds are reused only when they justify a cutoff. Full unsigned occupancy snapshots and side to move are checked on hits to guard against hash collisions. Mate scores are normalized on storage and adjusted for current root distance on retrieval. Horizon evaluation bypasses the table.
 

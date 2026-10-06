@@ -88,9 +88,13 @@ Only completed iterations are published. A partially searched root is biased by 
 - Take the side-to-move's immediate win first.
 - With no own immediate win, two or more opposing winning squares imply an unavoidable loss.
 - One opposing winning square forces a block, followed by another tactical check.
-- Quiet positions return cached static evaluation.
+- Quiet positions with a possible four-creating move probe a bounded continuous-four (VCF) solver for the side to move. A verified forcing sequence returns a win score and continuation; otherwise they return static evaluation.
 
 The default budget follows at most four additional blocking moves. At the limit, immediate wins and unavoidable multiple-threat losses are still recognized; an unresolved single block falls back to static evaluation. This is a bounded forced-reply extension, not a general search of all forcing threats.
+
+At quiet positions reached before that blocking budget expires, VCF can follow up to seven additional plies with at most 32 solver nodes. The solver enumerates four-creating attacks without normal candidate pruning, forces each unique block, and rejects attacks when the defender can win first. It runs only for the actual side to move: an opponent's hypothetical attack on a different turn does not establish a loss. Setting the tactical extension to zero also disables horizon VCF.
+
+Scores include the current root distance plus the proven continuation's length. The solver returns the first verified win, so this length is a proven winning distance rather than a guarantee of the shortest possible mate. Unknown and exhausted probes fall back to evaluation; they never establish a loss. Root VCF retains its separate 15-ply/2,048-node limits.
 
 ## Caching and limitations
 

@@ -139,3 +139,34 @@ changes; this baseline can then measure their effect on the same openings.
 
 See the [loss analysis](external-loss-analysis.md) for rerunnable position probes,
 a confirmed defensive-shortcut weakness, and the next tactical experiments.
+
+## Continuous-four horizon follow-up
+
+The same 100 games, openings, colors, depth-six settings and Rapfi assets were
+replayed after adding side-to-move VCF probes at eligible quiet leaves. Root
+VCF remained at 15 plies/2,048 nodes; horizon VCF used seven plies. These local
+measurements compare complete moves, including changes in the searched tree.
+
+| Version | Wins | Draws | Losses | Mean move time | Median | p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Root VCF only | 7 | 0 | 93 | 19.8 ms | 14 ms | 57 ms |
+| Horizon VCF, 128 nodes | 11 | 0 | 89 | 63.6 ms | 35 ms | 243 ms |
+| Horizon VCF, 32 nodes (current) | 12 | 0 | 88 | 48.1 ms | 31 ms | 163 ms |
+
+The current version converted eight baseline losses into wins and three wins
+into losses. All 12 wins were as Black. Among the 85 games lost by both versions,
+42 lasted longer, 30 shorter and 13 unchanged; the mean difference was +1.74
+plies and the median zero. White's matched losses gained 2.52 plies on average.
+These are fixed-depth comparisons, not evidence of strength at equal thinking
+time. The current version takes about 2.4 times the baseline mean move time.
+
+Reports are saved locally under `.selfplay/external-rapfi-vcf-depth6/`,
+`.selfplay/external-rapfi-vcf-horizon-depth6/` (128 nodes), and
+`.selfplay/external-rapfi-vcf-horizon32-depth6/`. The current directory includes
+`length-comparison.json` against root VCF. Reproduce the current match with
+`node scripts/external-match.js --output=.selfplay/external-rapfi-vcf-horizon32-depth6`.
+Build the native executable first; existing match directories can only resume
+when their recorded binary and configuration hashes still match.
+
+The [implementation guide](implementation.md#hashing-and-transposition-table)
+describes the separate proof cache and rerunnable Wasm timing benchmark.

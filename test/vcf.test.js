@@ -4,6 +4,9 @@ import { readFileSync } from 'node:fs';
 import { initSync, solve_vcf, MoveEngine } from '../src/ai/wasm/gomoku_engine.js';
 import { solveVcf } from '../src/ai/vcf.js';
 import { findBestMove } from '../src/ai/engine.js';
+import { minimaxAlphaBeta } from '../src/ai/search.js';
+import { createSearchContext } from '../src/ai/search-context.js';
+import { createIncrementalEvaluator } from '../src/ai/incremental-evaluation.js';
 import { replay, winnerAfter, opening } from '../scripts/selfplay/core.js';
 import { winningSquares, verifyForcingLine } from '../scripts/external-match/tactics.js';
 initSync({ module: readFileSync(new URL('../src/ai/wasm/gomoku_engine_bg.wasm', import.meta.url)) });
@@ -14,6 +17,35 @@ const bits = prefix => {
 };
 const ladder = [110,109,111,0,112,14,128,210,143,224];
 const unpack = r => ({ proven: r[0] === 1, nodes: r[1], exhausted: r[2] === 1, line: Array.from(r.slice(4, 4 + r[3])) });
+
+test('horizon VCF respects side to move, root distance, disabled extensions and state restoration', () => {
+  const [b, w] = bits(ladder);
+  for (const perspective of ['black', 'white']) {
+    const maximizing = perspective === 'black';
+    const state = createIncrementalEvaluator(b, w, perspective);
+    const context = createSearchContext(b, w, 'black');
+    const hash = context.hasher.key, score = state.getScore();
+    const run = (ply, extension = 4, max = maximizing) => minimaxAlphaBeta(
+      b, w, 0, -Infinity, Infinity, max, perspective,
+      perspective === 'black' ? 'white' : 'black',
+      Array.from({ length: ply }, () => ({ position: 224, row: 14, col: 14 })),
+      { nodes: 0, trackPV: true }, state, context, extension,
+    );
+    const result = run(0);
+    assert.equal(result.score, maximizing ? 999995 : -999995);
+    const pv = result.principalVariation.map(move => move.position);
+    assert.equal(verifyForcingLine(ladder, 1, pv).proven, true);
+    assert.equal(context.vcfCache.size, 1);
+    assert.equal(run(2).score, maximizing ? 999993 : -999993);
+    assert.equal(context.vcfCache.size, 1, 'proof distance is relative to cached position');
+    assert.equal(run(0, 0).score, score);
+    assert.ok(Math.abs(run(0, 4, !maximizing).score) < 500000,
+      'Black having a VCF does not prove a loss on White’s turn');
+    assert.equal(state.getScore(), score);
+    assert.equal(context.hasher.key, hash);
+    assert.deepEqual([...b, ...w], [...bits(ladder)[0], ...bits(ladder)[1]]);
+  }
+});
 
 test('VCF ladder respects limits and matches independent proofs in every symmetry/color', async () => {
   for (let t = 0; t < 8; t++) {

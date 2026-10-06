@@ -109,8 +109,8 @@ export function minimaxAlphaBeta(
     }
   }
 
-  // Quiet leaves retain O(1) scoring. Extend forced replies separately,
-  // without probing or storing horizon entries in the transposition table.
+  // Extend forced replies and eligible VCF attacks separately. Static scoring
+  // remains O(1); horizon proofs use their own cache, not normal TT entries.
   if (depth === 0) {
     const state =
       evaluationState ||

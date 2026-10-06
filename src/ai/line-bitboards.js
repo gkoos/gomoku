@@ -149,6 +149,23 @@ export function findFourCreationSquares(own, opponent) {
   });
 }
 
+export function canStartFourSequence(own, opponent) {
+  const popcount = value => {
+    let count = 0;
+    while (value) { count++; value &= value - 1; }
+    return count;
+  };
+  for (let line = 0; line < LINES.length; line++) {
+    const length = LINES[line].length;
+    if (length < 5 || popcount(own[line]) < 3) continue;
+    for (let start = 0; start <= length - 5; start++) {
+      if (popcount((own[line] >>> start) & 31) === 3 &&
+          ((opponent[line] >>> start) & 31) === 0) return true;
+    }
+  }
+  return false;
+}
+
 export function createWinningSquareCache(lines) {
   function colorState() {
     return {

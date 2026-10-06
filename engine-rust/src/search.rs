@@ -4,6 +4,7 @@ use crate::moves::{Candidate, Candidates, SearchSelection, generate_for_search};
 use crate::rules::{self, BoardResult};
 use crate::transposition::{Bound, CacheKey, Entry, Table, from_table, to_table};
 use crate::zobrist::Hasher;
+use std::collections::HashMap;
 
 pub const WIN_SCORE: i32 = 1_000_000;
 const INFINITY: i32 = 2_000_000;
@@ -75,6 +76,9 @@ pub struct Search {
     nodes: u64,
     hits: u64,
     cutoffs: u64,
+    // Full occupancy and attacker verify identity; proof lengths stay relative
+    // to this position, so callers can apply their own root distance.
+    vcf_cache: HashMap<(Bitboard, Bitboard, bool), Option<Vec<u16>>>,
 }
 impl Search {
     pub fn new(
@@ -131,6 +135,7 @@ impl Search {
             nodes: 0,
             hits: 0,
             cutoffs: 0,
+            vcf_cache: HashMap::new(),
         })
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -300,6 +305,37 @@ impl Search {
             return Ok(ResultLine::prepend(block, ResultLine::single(score, win)));
         }
         if threats.count == 0 || remaining == 0 {
+            if threats.count == 0 && remaining > 0 && crate::vcf::can_start(&self.state.lines, own)
+            {
+                let key = (self.state.black, self.state.white, own);
+                let line = if let Some(cached) = self.vcf_cache.get(&key) {
+                    cached.clone()
+                } else {
+                    let proof = crate::vcf::solve(
+                        &mut self.state.lines,
+                        &mut self.state.winning,
+                        own,
+                        crate::vcf::HORIZON_PLIES,
+                        crate::vcf::HORIZON_NODES,
+                    );
+                    if self.vcf_cache.len() >= 2048 {
+                        self.vcf_cache.clear();
+                    }
+                    self.vcf_cache.insert(key, proof.line.clone());
+                    proof.line
+                };
+                if let Some(line) = line {
+                    let distance = (ply + line.len()) as i32;
+                    let mut result = ResultLine::quiet(if maximizing {
+                        WIN_SCORE - distance
+                    } else {
+                        -WIN_SCORE + distance
+                    });
+                    result.length = line.len();
+                    result.pv[..line.len()].copy_from_slice(&line);
+                    return Ok(result);
+                }
+            }
             return Ok(ResultLine::quiet(self.state.score_for_turn(
                 if maximizing {
                     self.perspective
@@ -582,6 +618,40 @@ mod tests {
             b[p >> 5] |= 1 << (p & 31);
         }
         b
+    }
+    #[test]
+    fn horizon_vcf_turn_distance_cache_and_restoration() {
+        let b = bits(&[110, 111, 112, 128, 143]);
+        let w = bits(&[109, 0, 14, 210, 224]);
+        for perspective in [true, false] {
+            let mut search = Search::new(b, w, perspective, 4, 4, 0).unwrap();
+            let before = (
+                search.state.lines.clone(),
+                search.state.winning.clone(),
+                search.hasher,
+            );
+            let maximizing = perspective;
+            let result = search.horizon(maximizing, 0, 4).unwrap();
+            assert_eq!(result.score, if maximizing { 999995 } else { -999995 });
+            assert_eq!(&result.pv[..result.length], &[113, 114, 98, 83, 158]);
+            assert_eq!(search.vcf_cache.len(), 1);
+            assert_eq!(
+                search.horizon(maximizing, 2, 4).unwrap().score,
+                if maximizing { 999993 } else { -999993 }
+            );
+            assert_eq!(search.vcf_cache.len(), 1);
+            assert!(search.horizon(!maximizing, 0, 4).unwrap().score.abs() < 500000);
+            assert!(search.horizon(maximizing, 0, 0).unwrap().score.abs() < 500000);
+            assert_eq!(
+                (
+                    search.state.lines.clone(),
+                    search.state.winning.clone(),
+                    search.hasher
+                ),
+                before
+            );
+            assert_eq!(search.state.history_length(), 0);
+        }
     }
     #[test]
     fn forced_win_preserves_distance_and_root_state() {
