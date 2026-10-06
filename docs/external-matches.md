@@ -212,3 +212,35 @@ with 17,593 rather than 18,450 alpha-beta nodes; median timing was 38.1 versus
 
 The [implementation guide](implementation.md#hashing-and-transposition-table)
 describes the separate proof cache and rerunnable Wasm timing benchmark.
+
+## One additional ply experiment
+
+The protected-attack engine was also run at depth seven against Rapfi depth six
+on the same 100 games, openings, colors and opponent assets. The executable was
+identical to the protected-attack depth-six run. The UI difficulty depths remain
+unchanged; this was a native benchmark experiment.
+
+| Configuration | Wins | Draws | Losses | Mean move time | Median | p95 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Previous PVS engine, depth 6 | 12 | 0 | 88 | 32.0 ms | 22 ms | 100 ms |
+| Protected attacks, depth 6 | 11 | 0 | 89 | 10.5 ms | 7 ms | 35 ms |
+| Protected attacks, depth 7 | 8 | 0 | 92 | 20.5 ms | 11 ms | 75 ms |
+
+The extra ply fits below the previous PVS engine's mean and p95 move times,
+but did not improve results in this sample. Compared with protected attacks at
+depth six, four losses became wins and seven wins became losses. All eight wins
+were as Black. Among 85 games lost by both depths, 36 lasted longer, 34 shorter
+and 15 unchanged; mean change was -0.42 plies and median zero. These measurements
+do not establish that depth seven is generally weaker; more depth also changes
+the depth-dependent selective candidate widths and the static horizon.
+
+Run `node scripts/external-match.js --depth=7 --rapfi-depth=6 --output=.selfplay/external-rapfi-forcing-depth7`
+to reproduce. The directory includes the full report, game records,
+`length-comparison.json` against protected depth six, and
+`length-comparison-before-protection.json` against the previous PVS engine.
+
+The length report rejects mismatched depths by default. For this experiment,
+run `node scripts/external-match/length-report.js --allow-depth-change --baseline=.selfplay/external-rapfi-forcing-depth6/report.json --current=.selfplay/external-rapfi-forcing-depth7/report.json --output=.selfplay/external-rapfi-forcing-depth7/length-comparison.json`.
+The opt-in only permits our engine's depth to differ. Opponent depth, openings,
+colors and the other checked settings must still match, and the output records
+both engine depths and the explicit permission to compare them.

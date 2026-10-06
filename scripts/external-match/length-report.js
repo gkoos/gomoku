@@ -7,8 +7,10 @@ import { compareLengths } from './lengths.js';
 const root = fileURLToPath(new URL('../../', import.meta.url));
 const opts = { baseline: '.selfplay/external-rapfi-depth6/report.json',
   current: '.selfplay/external-rapfi-searched-defense-depth6/report.json',
-  output: '.selfplay/external-rapfi-searched-defense-depth6/length-comparison.json' };
+  output: '.selfplay/external-rapfi-searched-defense-depth6/length-comparison.json',
+  allowDepthChange: false };
 for (const arg of process.argv.slice(2)) {
+  if (arg === '--allow-depth-change') { opts.allowDepthChange = true; continue; }
   const m = /^--(baseline|current|output)=(.+)$/.exec(arg);
   if (!m) throw new Error(`Unknown argument: ${arg}`);
   opts[m[1]] = m[2];
@@ -30,12 +32,15 @@ const load = file => {
 };
 const baseline = load(opts.baseline), current = load(opts.current);
 for (const key of ['games', 'seed', 'depth', 'rapfi-depth', 'turn-seconds', 'threads', 'rule', 'boardSize']) {
+  if (key === 'depth' && opts.allowDepthChange) continue;
   if (baseline.report.config[key] !== current.report.config[key]) throw new Error(`Settings differ: ${key}`);
 }
 if (JSON.stringify(baseline.report.config.rapfi) !== JSON.stringify(current.report.config.rapfi) ||
     baseline.report.config.manager.sha256 !== current.report.config.manager.sha256) throw new Error('Opponent or manager differs');
 const result = { baselineFile: baseline.file, baselineSha256: baseline.sha256,
   currentFile: current.file, currentSha256: current.sha256,
+  depthComparison: { baseline: baseline.report.config.depth,
+    current: current.report.config.depth, allowDepthChange: opts.allowDepthChange },
   analyzerSha256: sha(['./length-report.js', './lengths.js', '../selfplay/core.js'].map(p =>
     readFileSync(new URL(p, import.meta.url), 'utf8').replaceAll('\r\n', '\n')).join('\n')),
   ...compareLengths(baseline.report.gamesDetail, current.report.gamesDetail) };
