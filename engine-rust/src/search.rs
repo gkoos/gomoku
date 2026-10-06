@@ -457,11 +457,8 @@ impl Search {
                 None
             };
             generate_for_search(
-                &self.state.black,
-                &self.state.white,
+                &self.state,
                 to_move,
-                &self.state.winning,
-                &self.state.density.0,
                 &mut self.buffers[ply],
                 SearchSelection { depth, preferred },
             );
@@ -639,11 +636,8 @@ mod tests {
                         search.select(depth, 0);
                         let mut actual = Candidates::default();
                         generate_for_search(
-                            &b,
-                            &w,
+                            &search.state,
                             color,
-                            &search.state.winning,
-                            &search.state.density.0,
                             &mut actual,
                             SearchSelection { depth, preferred },
                         );

@@ -93,7 +93,11 @@ pub fn generate_with_density(
     density: &[u8; 225],
     result: &mut Candidates,
 ) {
-    generate_ranked(black, white, player_black, winning, density, result, None);
+    let mut occupied = [0u16; 15];
+    for p in positions(black, white, false) {
+        occupied[p / 15] |= 1 << (p % 15);
+    }
+    generate_ranked(occupied, player_black, winning, density, result, None);
 }
 
 #[derive(Clone, Copy)]
@@ -102,27 +106,36 @@ pub struct SearchSelection {
     pub preferred: Option<usize>,
 }
 pub fn generate_for_search(
-    black: &Bitboard,
-    white: &Bitboard,
+    state: &crate::incremental::Evaluator,
     player_black: bool,
-    winning: &WinningCache,
-    density: &[u8; 225],
     result: &mut Candidates,
     selection: SearchSelection,
 ) {
     generate_ranked(
-        black,
-        white,
+        state.lines.occupied_rows(),
         player_black,
-        winning,
-        density,
+        &state.winning,
+        &state.density.0,
         result,
         Some(selection),
     );
 }
+pub fn generate_from_state(
+    state: &crate::incremental::Evaluator,
+    player_black: bool,
+    result: &mut Candidates,
+) {
+    generate_ranked(
+        state.lines.occupied_rows(),
+        player_black,
+        &state.winning,
+        &state.density.0,
+        result,
+        None,
+    );
+}
 fn generate_ranked(
-    black: &Bitboard,
-    white: &Bitboard,
+    occupied: [u16; 15],
     player_black: bool,
     winning: &WinningCache,
     density: &[u8; 225],
@@ -130,14 +143,7 @@ fn generate_ranked(
     selection: Option<SearchSelection>,
 ) {
     result.len = 0;
-    let mut occupied = [0u16; 15];
-    let mut stone_count = 0;
-    for p in positions(black, white, false) {
-        let row = p / 15;
-        let col = p % 15;
-        occupied[row] |= 1 << col;
-        stone_count += 1;
-    }
+    let stone_count: usize = occupied.iter().map(|row| row.count_ones() as usize).sum();
     if stone_count == 0 {
         for (row, col, priority) in [
             (7, 7, 1000),

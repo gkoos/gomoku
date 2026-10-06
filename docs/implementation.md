@@ -54,6 +54,8 @@ The UI also holds a two-dimensional board for rendering and setup. Converting th
 
 Precomputed memberships map squares to line IDs and bit positions. Make/undo changes four masks. Precomputed nine-square window metadata allows anchored extraction with shifts, masks, and boundary blockers. The JavaScript reference classifies bitwise windows directly. Rust converts extracted friendly/blocker masks into a ternary index using a precomputed mask map, then reads a build-generated lookup table. All 19,683 nine-cell configurations have compact two-byte entries; public pattern fields and packing remain unchanged. Directional extraction still uses maintained line bitboards.
 
+Rust search and maintained-state candidate generation also reuse the first 15 line masks (the horizontal rows). OR combines both colors into row occupancy; popcount supplies the stone count. Standard make/undo already updates these masks, so this adds no state or update work. Standalone candidate generation retains its board-to-row reconstruction path.
+
 Bulk threat detection finds consecutive and broken four completions in line masks. Their squares combine into global eight-word winning boards, deduplicating crossings.
 
 ## Incremental state and make/undo

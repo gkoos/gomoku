@@ -150,3 +150,41 @@ Against the previous compact-pattern-table build, three warmups and eleven alter
 | Forcing chain | 6 | 0.052 | 0.052 | Approximately unchanged |
 
 Every iteration matches the saved build exactly: scores, PVs, nodes, cache hits, cutoffs and table size. These are Node-hosted measurements. Reproduce against a saved baseline with `npm run wasm:compare -- --baseline=.profiles/search-width-before/gomoku_engine.js`.
+
+## Current profile after direct search-width selection
+
+Reprofiled on 2026-10-06 with the same six positions, two-second sampling windows, two warmups and seven alternating cache-on/off timing runs. Node v24.2.0, Windows x64; the release Wasm fingerprint is `092e633183720dfa7788f4cf010f3923b5431fda10cace4d3d3dde7958bb1c40`. Every timing run preserved its reference search statistics, and cached/uncached answers matched. No engine behavior changed in this profiling step.
+
+Partitioning, sorting and bookkeeping columns are components of candidate generation and must not be added to that total. Bookkeeping is the sampled remainder outside visible partition/sort calls, not a measurement of any one loop.
+
+| Position | Cached ms | Candidate total | Bookkeeping | Partition | Sort | Make/undo | Cache |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| one-stone opening | 153.9 | 35.1% | 21.4% | 9.1% | 4.7% | 37.2% | 13.8% |
+| six-stone opening | 61.1 | 42.4% | 27.0% | 11.7% | 3.8% | 34.9% | 10.3% |
+| 20-stone middlegame | 28.8 | 49.5% | 32.5% | 13.0% | 4.0% | 30.0% | 9.6% |
+| 12-stone development | 61.0 | 49.4% | 31.3% | 14.1% | 4.0% | 29.4% | 9.8% |
+
+Visible sorting is now about 4?5% of total time, rather than the original 19?37%. Candidate generation still accounts for about 35?49%; its bookkeeping accounts for about 21?32%, and partitioning for 9?14%. Make/undo takes 29?37%, and table work 10?14%. These are approximate optimized-call-stack shares; inlined lookup work belongs to its caller. They should not be interpreted as allocation counts.
+
+The forcing-chain fixture takes about 0.062 ms, with candidate generation around 5.5%. Fixed construction, bindings and cache overhead are increasingly visible in such short searches. Root shortcuts remain bypassed by this benchmark.
+
+**Next measured target:** candidate bookkeeping. First benchmark reusing the maintained horizontal line masks as row occupancy instead of rebuilding rows by enumerating all occupied squares. This uses an existing bitboard representation rather than another cache. The profile groups source-rank scans and frontier preparation together, so it does not establish how much this particular change will save. If useful, investigate maintaining frontier/source information next, while preserving density thresholds and source-rank ties. Make/undo is a close second target; replacing the transposition table is still a lower priority.
+
+Raw call stacks and the full summary are saved locally under `.profiles/wasm-search/`; rerun `npm run wasm:profile` to refresh them.
+
+## Reusing maintained row occupancy
+
+Search and SearchState candidate generation now OR the first 15 maintained directional masks per color to get horizontal row occupancy. A row popcount supplies the stone count. This removes occupied-square enumeration, position-to-row/column conversion and row reconstruction on those paths without adding another cache or make/undo operations. Standalone generation still reconstructs rows; both paths share the frontier and ranking implementation.
+
+Against the prior search-width build, three warmups and eleven alternating runs measured:
+
+| Position | Depth | Before, ms | After, ms |
+| --- | ---: | ---: | ---: |
+| One-stone opening | 7 | 156.65 | 153.56 |
+| Six-stone opening | 6 | 59.86 | 59.04 |
+| 20-stone middlegame | 6 | 28.06 | 27.40 |
+| 12-stone development | 6 | 59.35 | 58.73 |
+| Mandatory block | 6 | 16.47 | 16.26 |
+| Forcing chain | 6 | 0.0511 | 0.0499 |
+
+These show roughly 1?2% less elapsed time: a modest Node-hosted improvement, not a large speedup claim. Scores, PVs, nodes and cache statistics remain identical on every completed iteration. Native geometry tests verify row-mask mapping and make/undo for all 225 squares and both colors; candidate/state/search parity checks also pass. Reproduce using `npm run wasm:compare -- --baseline=.profiles/row-occupancy-before/gomoku_engine.js` with the saved previous build.

@@ -101,6 +101,10 @@ pub struct LineBoards {
     pub white: [u16; 88],
 }
 impl LineBoards {
+    /// Horizontal lines occupy slots 0..15; their OR is valid row occupancy.
+    pub fn occupied_rows(&self) -> [u16; 15] {
+        std::array::from_fn(|row| self.black[row] | self.white[row])
+    }
     pub fn new(black: &Bitboard, white: &Bitboard) -> Self {
         let mut result = Self {
             black: [0; 88],
@@ -286,9 +290,17 @@ mod tests {
         for p in 0..225 {
             let mut lines = LineBoards::new(&[0; 8], &[0; 8]);
             lines.update(p, true, true);
+            let mut rows = [0; 15];
+            rows[p / 15] = 1 << (p % 15);
+            assert_eq!(lines.occupied_rows(), rows);
             assert_eq!(lines.black.iter().filter(|&&v| v != 0).count(), 4);
             lines.update(p, true, false);
             assert_eq!(lines.black, [0; 88]);
+            assert_eq!(lines.occupied_rows(), [0; 15]);
+            lines.update(p, false, true);
+            assert_eq!(lines.occupied_rows(), rows);
+            lines.update(p, false, false);
+            assert_eq!(lines.occupied_rows(), [0; 15]);
             for direction in 0..4 {
                 let m = geometry().memberships[p][direction];
                 assert_eq!(geometry().cells[m.line][m.bit.trailing_zeros() as usize], p);
