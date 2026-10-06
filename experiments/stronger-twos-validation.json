@@ -1,0 +1,5 @@
+{
+  "candidates": [
+    { "name": "stronger-twos", "file": "weights/stronger-twos.json" }
+  ]
+}

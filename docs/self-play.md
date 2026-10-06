@@ -88,6 +88,8 @@ The table reports candidate wins/draws/losses, score percentage (wins plus half 
 
 Optional `--a`/`--b` choose baseline/candidate Node engine builds. The control uses build A for both sides; experimental entries compare build B with the configured weights against default-weight build A. To isolate weight effects, use the same build for both.
 
+See [stronger-twos validation](weight-validation.md) for a recorded follow-up experiment and reproduction commands.
+
 ## Records and interpretation
 
 The first JSONL record describes the run. Each subsequent record is one finished game, containing engine colour assignments, opening, full move sequence, winner, and per-move player, position, elapsed milliseconds, completed depth, score, node count, cache hits, and principal variation. Positions are zero-based `row * 15 + column`; Black moves first. Search statistics sum all completed iterations for that move. Root shortcuts have depth zero, no search score, and zero search nodes.
