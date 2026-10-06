@@ -98,4 +98,4 @@ The runner validates move legality and independently checks the result. It also 
 
 Games are training material, not an automatic learning process. Weight tuning still needs an optimizer and independent validation openings. Use different seeds for tuning and validation, preserve tactical regression tests, and test across multiple opponents before accepting a strength claim. Paired results are correlated; a handful of wins does not establish an improvement.
 
-For future NNUE work, the move sequence reconstructs every board, while results and search scores provide possible labels. Root shortcuts have no score label, and search scores are relative to the player moving. Choosing training targets, sampling positions, and avoiding training/validation leakage are later steps.
+The [dataset exporter](datasets.md) reconstructs sampled positions with outcome and search labels, merges symmetric duplicates, and splits related games together for future NNUE work.

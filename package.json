@@ -6,6 +6,7 @@
   "scripts": {
     "selfplay": "node scripts/selfplay.js",
     "selfplay:batch": "node scripts/selfplay/batch.js",
+    "selfplay:export": "node scripts/export-dataset.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
