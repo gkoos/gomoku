@@ -80,6 +80,7 @@ pub struct Search {
     // to this position, so callers can apply their own root distance.
     vcf_cache: HashMap<(Bitboard, Bitboard, bool), Option<Vec<u16>>>,
     use_pvs: bool,
+    protect_forcing: bool,
 }
 impl Search {
     pub fn new(
@@ -138,6 +139,7 @@ impl Search {
             cutoffs: 0,
             vcf_cache: HashMap::new(),
             use_pvs: true,
+            protect_forcing: true,
         })
     }
     /// Diagnostic reference mode. A running search cannot mix cache semantics.
@@ -146,6 +148,13 @@ impl Search {
             return Err("PVS mode must be selected before search starts");
         }
         self.use_pvs = enabled;
+        Ok(())
+    }
+    pub fn set_forcing_moves(&mut self, enabled: bool) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Forcing-move mode must be selected before search starts");
+        }
+        self.protect_forcing = enabled;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -553,7 +562,15 @@ impl Search {
                 &self.state,
                 to_move,
                 &mut self.buffers[ply],
-                SearchSelection { depth, preferred },
+                SearchSelection {
+                    depth,
+                    preferred,
+                    forcing: if self.protect_forcing {
+                        crate::vcf::four_moves(&self.state.lines, to_move)
+                    } else {
+                        [0; 8]
+                    },
+                },
             );
         }
         if self.buffers[ply].len == 0 {
@@ -811,7 +828,11 @@ mod tests {
                             &search.state,
                             color,
                             &mut actual,
-                            SearchSelection { depth, preferred },
+                            SearchSelection {
+                                depth,
+                                preferred,
+                                forcing: [0; 8],
+                            },
                         );
                         assert_eq!(
                             actual.as_slice(),

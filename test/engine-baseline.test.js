@@ -28,7 +28,7 @@ for (const fixture of cases)
           color,
           opponent,
           [],
-          null,
+          { protectForcingMoves: false, usePvs: false, reportProgress() {} },
           null,
           null,
           0, // Historical fixed-horizon baseline.

@@ -104,6 +104,7 @@ pub fn generate_with_density(
 pub struct SearchSelection {
     pub depth: usize,
     pub preferred: Option<usize>,
+    pub forcing: Bitboard,
 }
 pub fn generate_for_search(
     state: &crate::incremental::Evaluator,
@@ -271,12 +272,20 @@ fn compare(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
         .then(b.priority.cmp(&a.priority))
         .then(a.rank.cmp(&b.rank))
 }
-fn sort_prefix(result: &mut Candidates, retained: usize) {
+fn compare_with_forcing(a: &Candidate, b: &Candidate, forcing: &Bitboard) -> std::cmp::Ordering {
+    let forced = |m: &Candidate| m.tactical == Some(0) && contains(forcing, m.position);
+    b.tactical
+        .cmp(&a.tactical)
+        .then_with(|| forced(b).cmp(&forced(a)))
+        .then_with(|| compare(a, b))
+}
+fn sort_prefix(result: &mut Candidates, retained: usize, forcing: &Bitboard) {
+    let order = |a: &Candidate, b: &Candidate| compare_with_forcing(a, b, forcing);
     if result.len > retained * 2 && retained > 0 {
-        result.moves[..result.len].select_nth_unstable_by(retained, compare);
-        result.moves[..retained].sort_unstable_by(compare);
+        result.moves[..result.len].select_nth_unstable_by(retained, order);
+        result.moves[..retained].sort_unstable_by(order);
     } else {
-        result.moves[..result.len].sort_unstable_by(compare);
+        result.moves[..result.len].sort_unstable_by(order);
     }
     result.len = retained;
 }
@@ -287,11 +296,17 @@ fn finish(
     win_count: usize,
     selection: Option<SearchSelection>,
 ) {
+    let forcing = selection.map_or([0; 8], |s| s.forcing);
+    let protected_count = result
+        .as_slice()
+        .iter()
+        .filter(|m| m.tactical.is_some_and(|t| t > 0) || contains(&forcing, m.position))
+        .count();
     let eligible = result
         .len
-        .min((if stone_count < 10 { 30 } else { 50 }).max(tactical_count));
+        .min((if stone_count < 10 { 30 } else { 50 }).max(protected_count));
     let Some(selection) = selection else {
-        sort_prefix(result, eligible);
+        sort_prefix(result, eligible, &forcing);
         return;
     };
     if win_count == 0 && tactical_count == 1 {
@@ -308,7 +323,7 @@ fn finish(
     let tactics = if win_count > 0 {
         win_count
     } else {
-        tactical_count
+        protected_count
     };
     let retained = eligible.min(
         20usize
@@ -327,19 +342,27 @@ fn finish(
             let rank = result
                 .as_slice()
                 .iter()
-                .filter(|m| compare(m, &candidate).is_lt())
+                .filter(|m| compare_with_forcing(m, &candidate, &forcing).is_lt())
                 .count();
             (rank < eligible).then_some((candidate, rank))
         });
     if let Some((candidate, rank)) = preferred {
         if rank >= retained {
-            // Only a quiet move can fall outside a prefix retaining all tactics.
-            sort_prefix(result, retained - 1);
+            // Remove only a quiet slot; otherwise add room for the PV.
+            sort_prefix(
+                result,
+                if retained > tactics {
+                    retained - 1
+                } else {
+                    retained
+                },
+                &forcing,
+            );
             result.moves[..=result.len].rotate_right(1);
             result.moves[0] = candidate;
             result.len += 1;
         } else {
-            sort_prefix(result, retained);
+            sort_prefix(result, retained, &forcing);
             let index = result
                 .as_slice()
                 .iter()
@@ -348,7 +371,7 @@ fn finish(
             result.moves[..=index].rotate_right(1);
         }
     } else {
-        sort_prefix(result, retained);
+        sort_prefix(result, retained, &forcing);
     }
 }
 
@@ -356,6 +379,75 @@ fn finish(
 mod tests {
     use super::*;
     use crate::lines::LineBoards;
+    #[test]
+    fn generated_four_attacks_survive_both_caps_for_both_colors() {
+        let mut own = [0; 8];
+        for row in (0..15).step_by(2) {
+            for col in [1, 2, 3, 6, 7, 8, 11, 12, 13] {
+                let p = row * 15 + col;
+                own[p >> 5] |= 1 << (p & 31);
+            }
+        }
+        for color in [true, false] {
+            let (black, white) = if color { (own, [0; 8]) } else { ([0; 8], own) };
+            let state = crate::incremental::Evaluator::new(black, white, color);
+            assert_eq!(state.winning.black.count + state.winning.white.count, 0);
+            let forcing = crate::vcf::four_moves(&state.lines, color);
+            assert!(positions(&forcing, &[0; 8], false).count() > 50);
+            let mut selected = Candidates::default();
+            generate_for_search(
+                &state,
+                color,
+                &mut selected,
+                SearchSelection {
+                    depth: 10,
+                    preferred: None,
+                    forcing,
+                },
+            );
+            for p in positions(&forcing, &[0; 8], false) {
+                assert!(selected.as_slice().iter().any(|m| m.position == p));
+            }
+        }
+    }
+    #[test]
+    fn forcing_cap_and_pv_promotion_keep_every_protected_move() {
+        for count in [12, 60] {
+            let mut candidates = Candidates::default();
+            let mut forcing = [0; 8];
+            for position in 0..80 {
+                candidates.push(Candidate {
+                    position,
+                    priority: position as i32,
+                    tactical: Some(0),
+                    rank: position as u16,
+                });
+                if position < count {
+                    forcing[position >> 5] |= 1 << (position & 31);
+                }
+            }
+            finish(
+                &mut candidates,
+                16,
+                0,
+                0,
+                Some(SearchSelection {
+                    depth: 10,
+                    preferred: Some(79),
+                    forcing,
+                }),
+            );
+            for p in 0..count {
+                assert!(candidates.as_slice().iter().any(|m| m.position == p));
+            }
+            if count == 12 {
+                assert_eq!(candidates.len, 13);
+                assert_eq!(candidates.moves[0].position, 79);
+            } else {
+                assert_eq!(candidates.len, 60);
+            }
+        }
+    }
     #[test]
     fn opening_and_full_board() {
         let mut out = Candidates::default();

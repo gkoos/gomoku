@@ -276,6 +276,11 @@ impl SearchEngine {
     pub fn set_pvs(&mut self, enabled: bool) -> Result<(), JsValue> {
         self.inner.set_pvs(enabled).map_err(JsValue::from_str)
     }
+    pub fn set_forcing_moves(&mut self, enabled: bool) -> Result<(), JsValue> {
+        self.inner
+            .set_forcing_moves(enabled)
+            .map_err(JsValue::from_str)
+    }
     pub fn fixed_depth(
         &mut self,
         depth: u32,

@@ -16,6 +16,7 @@ import {
   createLineBitboards,
   findOpenFourSquares,
   findWinningSquares,
+  findFourCreationSquares,
   updateLineBitboards,
   threatMovesFromBitboard,
 } from './line-bitboards.js';
@@ -203,12 +204,16 @@ export function minimaxAlphaBeta(
   }
 
   // Order wins and blocks for the player whose turn is being searched.
+  const lines = evaluationState?.lineBitboards || createLineBitboards(blackBitboard, whiteBitboard);
+  const forcingSquares = progressTracker?.protectForcingMoves === false ? null :
+    findFourCreationSquares(lines[toMove], lines[toMove === 'black' ? 'white' : 'black']);
   const candidates = generateCandidateMoves(
     blackBitboard,
     whiteBitboard,
     isMaximizing ? computerPlayer : humanPlayer,
-    evaluationState?.lineBitboards,
+    lines,
     evaluationState?.winningSquareBitboards,
+    forcingSquares,
   );
   if (candidates.length === 0) {
     return remember({ score: 0, move: null }, EXACT);
@@ -219,6 +224,7 @@ export function minimaxAlphaBeta(
     depth,
     moveHistory,
     progressTracker?.principalVariation,
+    forcingSquares,
   );
 
   // A winning move ends the game one ply later; no child board or quiet
@@ -410,6 +416,7 @@ export function findBestMoveDeepSearch(
     onIteration = () => {},
     useTranspositionTable = true,
     usePvs = true,
+    protectForcingMoves = true,
     transpositionTable,
     tacticalExtension = TACTICAL_EXTENSION_PLIES,
     preferredMove = null,
@@ -449,6 +456,7 @@ export function findBestMoveDeepSearch(
     const cutoffsBefore = searchContext?.stats.cutoffs || 0;
     const tracker = {
       usePvs,
+      protectForcingMoves,
       trackPV: true,
       principalVariation,
       nodes: 0,
@@ -504,18 +512,23 @@ export function selectSearchCandidates(
   depth,
   moveHistory = [],
   principalVariation = [],
+  forcingSquares = null,
 ) {
   // Winning now takes precedence over blocking. Without an immediate win,
   // a single opposing winning square is the only non-losing reply.
   const wins = candidates.filter((move) => move.tactical === 2);
   const blocks = candidates.filter((move) => move.tactical === 1);
   if (wins.length === 0 && blocks.length === 1) return blocks;
-  const eligibleCandidates = wins.length ? wins : candidates;
+  const protectedMove = move => move.tactical > 0 ||
+    !!(forcingSquares?.[move.position >>> 5] & (1 << (move.position & 31)));
+  const eligibleCandidates = wins.length ? wins : [
+    ...candidates.filter(protectedMove), ...candidates.filter(move => !protectedMove(move)),
+  ];
 
   // Limit candidates based on depth to maintain performance
   const maxCandidates = Math.max(8, Math.floor(20 - depth * 2)); // Increased base candidates
   const tacticalCount = eligibleCandidates.filter(
-    (candidate) => candidate.tactical,
+    protectedMove,
   ).length;
   const limitedCandidates = eligibleCandidates.slice(
     0,
@@ -538,7 +551,7 @@ export function selectSearchCandidates(
       if (index >= 0) limitedCandidates.splice(index, 1);
       else {
         const removable = limitedCandidates.findLastIndex(
-          (move) => !move.tactical,
+          (move) => !protectedMove(move),
         );
         if (removable >= 0) limitedCandidates.splice(removable, 1);
       }

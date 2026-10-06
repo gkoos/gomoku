@@ -32,7 +32,7 @@ Creating a blockable four is evaluated alongside alternatives rather than automa
 
 All levels share the tactical checks. Search can stop earlier after proving a terminal win or loss. Forced horizon replies can extend beyond the nominal depth.
 
-There are no deadlines or node budgets. Expert uses the same candidate policy as Hard. Extra depths can cost substantially more when many replies are plausible. Move now accepts the latest completed iteration.
+Normal alpha-beta has no deadlines or node budgets; tactical solvers have separate bounded probes. Expert uses the same candidate policy as Hard. Extra depths can cost substantially more when many replies are plausible. Move now accepts the latest completed iteration.
 
 ## Candidate generation
 
@@ -48,7 +48,9 @@ For candidate density D and center bonus C, adjacent priority is 100 + 20D + C. 
 
 Candidates sort by immediate win, mandatory block, then priority. Ties preserve the original source/offset enumeration order. Generation normally retains 30 moves before ten stones are present, and 50 afterward. All immediate wins and blocks survive the cap.
 
-Search applies a second cap for remaining depth d: max(8, floor(20 - 2d)). Immediate wins replace quiet alternatives. A single opposing winning square restricts the branch to its block. Tactical candidates survive this cap too. A matching previous principal-variation move is promoted, replacing a quiet candidate if necessary.
+Search applies a second cap for remaining depth d: max(8, floor(20 - 2d)). Immediate wins replace quiet alternatives. A single opposing winning square restricts the branch to its block. Normal search additionally retains every four-creating attack through both caps: these are empty squares in an unblocked five-cell window with exactly three friendly stones. They sort after immediate wins and blocks, before quiet candidates; their existing priorities and stable tie order decide between attacks. The cap expands when protected moves exceed it. A matching previous principal-variation move is promoted, replacing a quiet candidate if available or adding a slot when every retained move is protected.
+
+The protection applies to both players during normal search. It guarantees examination of a forcing attack, not that the attack wins or is better than a quiet move. A defender may win first, or the attack may end after one block. VCF checks and normal search evaluate those continuations. Easy scoring and standalone candidate generation keep their previous candidate policy. Broader defenses to continuous-four attacks are not classified as mandatory blocks by this change.
 
 This is selective search, not exhaustive minimax over all legal moves.
 

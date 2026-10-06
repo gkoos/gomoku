@@ -81,6 +81,22 @@ Rust search also maintains 225 neighborhood density counts, including each squar
 
 Rust's search-specific candidate generator partitions directly to the selective search width and sorts that prefix. It computes PV eligibility against the original 30/50 generation cap before promotion, preserving the same quiet-move replacement and tactical retention. The general candidate generator still returns the complete original capped list. The old two-stage selector remains only in native tests for exact comparisons across every possible PV square.
 
+Search derives a four-creation bitboard from the maintained directional line
+masks. This mask protects attacks during generation and depth-based selection,
+without changing immediate-win/block classifications or the packed candidate
+format. Rust expands the selected prefix when necessary and never evicts a
+protected attack for PV promotion. JavaScript supplies the equivalent mask to
+both selection stages. The standalone generator's default behavior is unchanged.
+Regression tests include attacks near a distant edge, all 80 color/direction
+cases of three stones in a five-cell window, more than 50 forcing candidates,
+and a quiet PV competing with an entirely protected prefix.
+
+For comparisons, JavaScript deep search accepts `protectForcingMoves: false`;
+Wasm `SearchEngine.set_forcing_moves(false)` selects the old policy before
+search starts. JavaScript cache keys include that mode. The timing benchmark
+accepts `--forcing=on` or `--forcing=off` for the same Wasm artifact. Search
+depths, VCF budgets, and evaluation weights remain unchanged in either mode.
+
 ## Hashing and transposition table
 
 [zobrist.js](../src/ai/zobrist.js) uses a deterministic key containing two 32-bit words. Each color/square pair has a random key; side to move has another. Initialization XORs occupied-square keys. Make and undo XOR the same stone and side keys, making updates reversible.

@@ -152,14 +152,15 @@ measurements compare complete moves, including changes in the searched tree.
 | Root VCF only | 7 | 0 | 93 | 19.8 ms | 14 ms | 57 ms |
 | Horizon VCF, 128 nodes | 11 | 0 | 89 | 63.6 ms | 35 ms | 243 ms |
 | Horizon VCF, 32 nodes | 12 | 0 | 88 | 48.1 ms | 31 ms | 163 ms |
-| Horizon VCF, 32 nodes + PVS (current) | 12 | 0 | 88 | 32.0 ms | 22 ms | 100 ms |
+| Horizon VCF, 32 nodes + PVS | 12 | 0 | 88 | 32.0 ms | 22 ms | 100 ms |
+| Protected four-creating attacks (current) | 11 | 0 | 89 | 10.5 ms | 7 ms | 35 ms |
 
-The current version converted eight baseline losses into wins and three wins
+The 32-node horizon/PVS version converted eight baseline losses into wins and three wins
 into losses. All 12 wins were as Black. Among the 85 games lost by both versions,
 42 lasted longer, 30 shorter and 13 unchanged; the mean difference was +1.74
 plies and the median zero. White's matched losses gained 2.52 plies on average.
 These are fixed-depth comparisons, not evidence of strength at equal thinking
-time. After PVS, the current version takes about 1.6 times the root-VCF baseline
+time. Before attack protection, PVS took about 1.6 times the root-VCF baseline
 mean move time.
 
 Reports are saved locally under `.selfplay/external-rapfi-vcf-depth6/`,
@@ -173,10 +174,10 @@ when their recorded binary and configuration hashes still match.
 PVS preserved the exact move sequences of all 100 games against the 32-node
 ordinary alpha-beta run, while reducing mean move time by 33.5%. Its reports are
 under `.selfplay/external-rapfi-pvs-depth6/`, including `length-comparison.json`
-and `pvs-comparison.json`. Reproduce the current PVS match with
+and `pvs-comparison.json`. Reproduce the PVS-only match with
 `node scripts/external-match.js --output=.selfplay/external-rapfi-pvs-depth6`.
-The older horizon32 directory records the pre-PVS binary and cannot resume with
-the current executable.
+These older directories record earlier binaries and cannot resume with the
+current executable.
 
 The same-artifact Wasm benchmark's depth-six opening fixture changed from
 27,514 to 18,450 alpha-beta nodes and from 52.8 to 38.4 ms median move time with
@@ -184,6 +185,30 @@ identical score and PV. Two short tactical fixtures had essentially unchanged
 timings; re-search can add nodes when the first move is poorly ordered. PVS
 does not guarantee a speedup on every position. The rerunnable reference/PVS
 switch is documented in the implementation guide.
+
+## Protecting four-creating attacks
+
+The next run retained four-creating attacks through both normal-search caps
+and ranked them ahead of quiet candidates. Immediate wins and unique mandatory
+blocks still take precedence. Search depths, evaluation and tactical budgets
+were unchanged. Results are saved under `.selfplay/external-rapfi-forcing-depth6/`,
+with `length-comparison.json` against the PVS-only run. Reproduce with
+`node scripts/external-match.js --output=.selfplay/external-rapfi-forcing-depth6`.
+
+The run finished at **11 wins / 89 losses**, compared with **12 / 88**: four
+previous losses became wins and five wins became losses. Ten wins were as Black
+and one as White. Among 84 games lost by both versions, 50 lasted longer, 25
+shorter and nine unchanged; mean length change was **+3.26 plies**, median **+2**.
+The Black mean was +5.54 plies and White +1.63. This sample does not demonstrate
+a win-rate improvement, and longer losses do not establish improved strength.
+
+Mean move time was **10.5 ms**, median **7 ms**, p95 **35 ms** and maximum
+**123 ms**. Games take different routes and contain different proportions of
+forced replies; these are whole-match timings, not a fixed-position speedup.
+The same-artifact opening benchmark retained the same depth-six score and PV
+with 17,593 rather than 18,450 alpha-beta nodes; median timing was 38.1 versus
+40.4 ms. The two short tactical fixtures had similar timings. The benchmark's
+`--forcing=off` and `--forcing=on` modes preserve rerunnable policy comparisons.
 
 The [implementation guide](implementation.md#hashing-and-transposition-table)
 describes the separate proof cache and rerunnable Wasm timing benchmark.

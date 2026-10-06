@@ -29,6 +29,7 @@ export function generateCandidateMoves(
   playerColor = 'black',
   lineBitboards = null,
   winningSquareBitboards = null,
+  forcingSquares = null,
 ) {
   const candidates = [];
   const occupiedRows = new Uint16Array(BOARD_SIZE);
@@ -196,7 +197,7 @@ export function generateCandidateMoves(
     const ownWin = (ownWins[slot] & bit) !== 0;
     const opponentWin = (opponentWins[slot] & bit) !== 0;
     candidate.tactical = ownWin ? 2 : opponentWin ? 1 : 0;
-    if (candidate.tactical) tacticalCount++;
+    if (candidate.tactical || (forcingSquares?.[slot] & bit)) tacticalCount++;
   }
 
   // Wins precede blocks, which precede positional moves. Keep all tactics even
@@ -204,6 +205,8 @@ export function generateCandidateMoves(
   candidates.sort(
     (a, b) =>
       b.tactical - a.tactical ||
+      Number(b.tactical === 0 && !!(forcingSquares?.[b.position >>> 5] & (1 << (b.position & 31)))) -
+        Number(a.tactical === 0 && !!(forcingSquares?.[a.position >>> 5] & (1 << (a.position & 31)))) ||
       b.priority - a.priority ||
       ranks[a.position] - ranks[b.position],
   );

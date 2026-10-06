@@ -277,6 +277,15 @@ export class SearchEngine {
     /**
      * @param {boolean} enabled
      */
+    set_forcing_moves(enabled) {
+        const ret = wasm.searchengine_set_forcing_moves(this.__wbg_ptr, enabled);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
+     * @param {boolean} enabled
+     */
     set_pvs(enabled) {
         const ret = wasm.searchengine_set_pvs(this.__wbg_ptr, enabled);
         if (ret[1]) {

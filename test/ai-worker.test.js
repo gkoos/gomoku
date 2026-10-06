@@ -385,7 +385,7 @@ test('worker protocol returns a winning move without mutating input bitboards', 
   assert.deepEqual([black, white], before);
 });
 
-test('all difficulties neutralize crossing open-four threats with the shared defense', async () => {
+test('crossing threats receive a shared defense or a forcing counterattack', async () => {
   const attack = [
     [10, 5],
     [10, 6],
@@ -416,17 +416,20 @@ test('all difficulties neutralize crossing open-four threats with the shared def
         human,
         difficulty,
       );
-      assert.equal(move.row, 10);
-      assert.equal(move.col, 8);
       const afterBlack = black.slice(),
         afterWhite = white.slice();
       const position = move.row * 15 + move.col;
       (computer === 'black' ? afterBlack : afterWhite)[position >>> 5] |=
         1 << (position % 32);
-      assert.equal(
-        ai.checkOpen4Threats(afterBlack, afterWhite, human).length,
-        0,
-      );
+      const counterattack = ai.checkImmediateThreat(afterBlack, afterWhite, computer);
+      if (counterattack.length) {
+        assert.equal(ai.checkImmediateThreat(afterBlack, afterWhite, human).length, 0,
+          'the defender must block our four and cannot win first');
+      } else {
+        assert.equal(move.row, 10);
+        assert.equal(move.col, 8);
+        assert.equal(ai.checkOpen4Threats(afterBlack, afterWhite, human).length, 0);
+      }
       assert.deepEqual(
         black,
         computer === 'black' ? bitboard(defense) : bitboard(attack),
