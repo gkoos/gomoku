@@ -11,6 +11,7 @@ struct Frame {
     scores: [i32; 36],
     winning: WinningUndo,
     density_updated: bool,
+    nnue_accumulator: Option<Vec<f32>>,
 }
 /// Owns reversible state. History frames use fixed buffers; no per-move heap allocation.
 pub struct Evaluator {
@@ -25,6 +26,7 @@ pub struct Evaluator {
     history: Vec<Frame>,
     next_token: u32,
     weights: [i32; 8],
+    nnue: Option<crate::nnue::Network>,
 }
 impl Evaluator {
     pub fn new(black: Bitboard, white: Bitboard, perspective_black: bool) -> Self {
@@ -51,6 +53,7 @@ impl Evaluator {
             history: Vec::with_capacity(BOARD_CELLS),
             next_token: 0,
             weights: crate::pattern_reference::DEFAULT_WEIGHTS,
+            nnue: None,
         };
         for position in positions(&black, &white, false) {
             for direction in 0..4 {
@@ -72,6 +75,27 @@ impl Evaluator {
             .analyze(black, position, index & 3)
             .score_with(&self.weights);
         if black { score } else { -score }
+    }
+    pub fn set_nnue(&mut self, bytes: &[u8], scale: f32) -> Result<(), &'static str> {
+        if !self.history.is_empty() {
+            return Err("NNUE cannot change during a move sequence");
+        }
+        self.nnue = Some(crate::nnue::Network::load(
+            bytes,
+            &self.black,
+            &self.white,
+            scale,
+        )?);
+        Ok(())
+    }
+    pub fn nnue_logit(&self, black_to_move: bool) -> Option<f32> {
+        self.nnue.as_ref().map(|n| n.logit(black_to_move))
+    }
+    pub fn score_for_turn(&self, black_to_move: bool) -> i32 {
+        self.nnue.as_ref().map_or_else(
+            || self.score(),
+            |n| n.score(black_to_move, self.perspective_black),
+        )
     }
     pub fn score(&self) -> i32 {
         (if self.perspective_black {
@@ -145,16 +169,22 @@ impl Evaluator {
             scores: [0; 36],
             winning,
             density_updated,
+            nnue_accumulator: self.nnue.as_ref().map(|n| n.accumulator.clone()),
         };
-        let g = geometry();
-        for (offset, &index) in g.affected[position][..g.affected_lengths[position]]
-            .iter()
-            .enumerate()
-        {
-            frame.scores[offset] = self.scores[index];
-            let next = self.contribution(index);
-            self.total += next - self.scores[index];
-            self.scores[index] = next;
+        if let Some(n) = &mut self.nnue {
+            n.place(position, black);
+        }
+        if self.nnue.is_none() {
+            let g = geometry();
+            for (offset, &index) in g.affected[position][..g.affected_lengths[position]]
+                .iter()
+                .enumerate()
+            {
+                frame.scores[offset] = self.scores[index];
+                let next = self.contribution(index);
+                self.total += next - self.scores[index];
+                self.scores[index] = next;
+            }
         }
         self.history.push(frame);
         self.next_token = token;
@@ -176,12 +206,17 @@ impl Evaluator {
         }
         self.lines.update(frame.position, frame.black, false);
         self.winning.restore(frame.winning);
-        let g = geometry();
-        for (offset, &index) in g.affected[frame.position][..g.affected_lengths[frame.position]]
-            .iter()
-            .enumerate()
-        {
-            self.scores[index] = frame.scores[offset];
+        if self.nnue.is_none() {
+            let g = geometry();
+            for (offset, &index) in g.affected[frame.position][..g.affected_lengths[frame.position]]
+                .iter()
+                .enumerate()
+            {
+                self.scores[index] = frame.scores[offset];
+            }
+        }
+        if let (Some(n), Some(accumulator)) = (&mut self.nnue, frame.nnue_accumulator) {
+            n.accumulator = accumulator;
         }
         self.total = frame.total;
         Ok(())

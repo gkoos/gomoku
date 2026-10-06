@@ -10,6 +10,7 @@ export class MoveEngine {
     constructor(black: Uint32Array, white: Uint32Array, computer_black: boolean, difficulty: number, extension: number, table_capacity: number);
     next_depth(): Float64Array;
     root_move(): number;
+    static with_nnue(black: Uint32Array, white: Uint32Array, computer_black: boolean, difficulty: number, extension: number, table_capacity: number, model: Uint8Array, scale: number): MoveEngine;
     /**
      * Factory keeps the existing constructor and browser defaults compatible.
      */
@@ -53,8 +54,11 @@ export class SearchState {
     line_masks(black: boolean): Uint16Array;
     make_move(position: number, black: boolean): number;
     constructor(black: Uint32Array, white: Uint32Array, perspective_black: boolean);
+    nnue_logit(black_to_move: boolean): number | undefined;
     occupancy(black: boolean): Uint32Array;
     score(): number;
+    score_for_turn(black_to_move: boolean): number;
+    set_nnue(model: Uint8Array, scale: number): void;
     undo_move(token: number): void;
     winning_references(black: boolean): Uint8Array;
     winning_squares(black: boolean): Uint32Array;
@@ -108,6 +112,7 @@ export interface InitOutput {
     readonly moveengine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly moveengine_next_depth: (a: number) => [number, number, number, number];
     readonly moveengine_root_move: (a: number) => number;
+    readonly moveengine_with_nnue: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number, number];
     readonly moveengine_with_weights: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number];
     readonly occupied_positions: (a: number, b: number, c: number, d: number) => [number, number, number, number];
     readonly positionhasher_black_to_move: (a: number) => number;
@@ -129,8 +134,11 @@ export interface InitOutput {
     readonly searchstate_line_masks: (a: number, b: number) => [number, number];
     readonly searchstate_make_move: (a: number, b: number, c: number) => [number, number, number];
     readonly searchstate_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
+    readonly searchstate_nnue_logit: (a: number, b: number) => number;
     readonly searchstate_occupancy: (a: number, b: number) => [number, number];
     readonly searchstate_score: (a: number) => number;
+    readonly searchstate_score_for_turn: (a: number, b: number) => number;
+    readonly searchstate_set_nnue: (a: number, b: number, c: number, d: number) => [number, number];
     readonly searchstate_undo_move: (a: number, b: number) => [number, number];
     readonly searchstate_winning_references: (a: number, b: number) => [number, number];
     readonly searchstate_winning_squares: (a: number, b: number) => [number, number];

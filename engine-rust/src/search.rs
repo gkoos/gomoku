@@ -288,7 +288,13 @@ impl Search {
             return Ok(ResultLine::prepend(block, ResultLine::single(score, win)));
         }
         if threats.count == 0 || remaining == 0 {
-            return Ok(ResultLine::quiet(self.state.score()));
+            return Ok(ResultLine::quiet(self.state.score_for_turn(
+                if maximizing {
+                    self.perspective
+                } else {
+                    !self.perspective
+                },
+            )));
         }
         let p = positions(&threats.board, &[0; 8], false)
             .next()
@@ -410,7 +416,13 @@ impl Search {
         }
         if depth == 0 {
             return if self.extension == 0 {
-                Ok(ResultLine::quiet(self.state.score()))
+                Ok(ResultLine::quiet(self.state.score_for_turn(
+                    if maximizing {
+                        self.perspective
+                    } else {
+                        !self.perspective
+                    },
+                )))
             } else {
                 self.horizon(maximizing, ply, self.extension)
             };

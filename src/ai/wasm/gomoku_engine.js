@@ -61,6 +61,30 @@ export class MoveEngine {
         return ret;
     }
     /**
+     * @param {Uint32Array} black
+     * @param {Uint32Array} white
+     * @param {boolean} computer_black
+     * @param {number} difficulty
+     * @param {number} extension
+     * @param {number} table_capacity
+     * @param {Uint8Array} model
+     * @param {number} scale
+     * @returns {MoveEngine}
+     */
+    static with_nnue(black, white, computer_black, difficulty, extension, table_capacity, model, scale) {
+        const ptr0 = passArray32ToWasm0(black, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray32ToWasm0(white, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray8ToWasm0(model, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.moveengine_with_nnue(ptr0, len0, ptr1, len1, computer_black, difficulty, extension, table_capacity, ptr2, len2, scale);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return MoveEngine.__wrap(ret[0]);
+    }
+    /**
      * Factory keeps the existing constructor and browser defaults compatible.
      * @param {Uint32Array} black
      * @param {Uint32Array} white
@@ -337,6 +361,14 @@ export class SearchState {
         return this;
     }
     /**
+     * @param {boolean} black_to_move
+     * @returns {number | undefined}
+     */
+    nnue_logit(black_to_move) {
+        const ret = wasm.searchstate_nnue_logit(this.__wbg_ptr, black_to_move);
+        return ret === Number.MAX_SAFE_INTEGER ? undefined : ret;
+    }
+    /**
      * @param {boolean} black
      * @returns {Uint32Array}
      */
@@ -352,6 +384,26 @@ export class SearchState {
     score() {
         const ret = wasm.searchstate_score(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * @param {boolean} black_to_move
+     * @returns {number}
+     */
+    score_for_turn(black_to_move) {
+        const ret = wasm.searchstate_score_for_turn(this.__wbg_ptr, black_to_move);
+        return ret;
+    }
+    /**
+     * @param {Uint8Array} model
+     * @param {number} scale
+     */
+    set_nnue(model, scale) {
+        const ptr0 = passArray8ToWasm0(model, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.searchstate_set_nnue(this.__wbg_ptr, ptr0, len0, scale);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
     }
     /**
      * @param {number} token
@@ -678,6 +730,13 @@ function getUint8ArrayMemory0() {
 function passArray32ToWasm0(arg, malloc) {
     const ptr = malloc(arg.length * 4, 4) >>> 0;
     getUint32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
+function passArray8ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 1, 1) >>> 0;
+    getUint8ArrayMemory0().set(arg, ptr / 1);
     WASM_VECTOR_LEN = arg.length;
     return ptr;
 }

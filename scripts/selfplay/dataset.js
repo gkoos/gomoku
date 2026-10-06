@@ -114,7 +114,7 @@ export function buildDataset(runs, options) {
           if (turn.score === null) missingSearchLabels++;
           else {
             const teacher = run.config[turn.player];
-            const label = { score: turn.score, depth: turn.depth, engineDigest: teacher.digest, weights: teacher.weights };
+            const label = { score: turn.score, depth: turn.depth, engineDigest: teacher.digest, weights: teacher.weights, ...(teacher.nnue ? { nnue: teacher.nnue } : {}) };
             const labelKey = JSON.stringify(label);
             const existing = sample.labels.get(labelKey);
             if (existing) existing.observations++;

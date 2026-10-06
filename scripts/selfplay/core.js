@@ -69,7 +69,9 @@ export function chooseMove(engine, board, black, depth, weights) {
   board.forEach((color, p) => { if (color) (color === 1 ? b : w)[p >>> 5] |= 1 << (p & 31); });
   const level = depth <= 6 ? 1 : depth <= 8 ? 2 : 3;
   const start = performance.now();
-  const search = typeof engine.MoveEngine.with_weights === 'function'
+  const search = engine.nnueModel
+    ? engine.MoveEngine.with_nnue(b, w, black, level, 4, 32768, engine.nnueModel, engine.nnueScale)
+    : typeof engine.MoveEngine.with_weights === 'function'
     ? engine.MoveEngine.with_weights(b, w, black, level, 4, 32768, Int32Array.from(weights))
     : new engine.MoveEngine(b, w, black, level, 4, 32768);
   try {

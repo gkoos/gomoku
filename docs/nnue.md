@@ -1,6 +1,6 @@
 # First NNUE training experiment
 
-The experimental trainer learns an efficiently updatable evaluator from the [self-play dataset](datasets.md). It trains offline on CPU, exports a portable floating-point model, and checks full versus incremental inference. Production move selection still uses the handcrafted Rust evaluator; this experiment has not yet been evaluated in engine matches.
+The experimental trainer learns an efficiently updatable evaluator from the [self-play dataset](datasets.md). It trains offline on CPU, exports a portable floating-point model, and checks full versus incremental inference. Production move selection still uses the handcrafted Rust evaluator; experimental Rust/Wasm inference is available for self-play, with its first match results below.
 
 ## Setup and commands
 
@@ -46,7 +46,7 @@ The output directory contains:
 - `model.nnue`: portable weights for future Rust inference.
 - `report.json`: parameters, runtime versions, trainer/dataset hashes, epoch history, validation metrics, symmetry diagnostics, numerical checks, and model hash.
 
-The binary format uses a 24-byte little-endian header: eight-byte magic `GOMNNUE1`, then four uint32 values (version 1, input count 452, hidden width, output count 1). The remaining values are float32: feature-major vectors, hidden bias, output weights, and output bias. Activation and sigmoid semantics are defined by version 1. The reader rejects unsupported headers, wrong lengths, and nonfinite weights. This is a floating-point prototype; quantisation and a Rust/Wasm loader remain future work.
+The binary format uses a 24-byte little-endian header: eight-byte magic `GOMNNUE1`, then four uint32 values (version 1, input count 452, hidden width, output count 1). The remaining values are float32: feature-major vectors, hidden bias, output weights, and output bias. Activation and sigmoid semantics are defined by version 1. The reader rejects unsupported headers, wrong lengths, and nonfinite weights. This is a floating-point prototype; quantisation remains future work; the Rust/Wasm loader supports this format.
 
 For every validation position, exported inference is compared with PyTorch. A separate 225-placement/undo sequence checks accumulator restoration. Tests cover sparse features, colour-preserving symmetry mappings, malformed model files, illegal updates, dataset integrity, and split leakage.
 
@@ -67,4 +67,53 @@ The repeated run's report and weights are saved locally in `.training/nnue-outco
 
 The repeatable Python reference benchmark samples 64 validation positions, alternates timings, and verifies the moved position before measuring. Median full inference was 176.1 microseconds versus 26.1 microseconds for make/predict/undo, about 6.7× faster. This compares two Python reference paths; it does not measure Rust/Wasm performance or demonstrate stronger play.
 
-Next, add experimental Rust inference and compare float-model predictions against this reference. Preserve exact terminal/tactical handling, define score conversion, measure search cost, and run fresh paired matches before considering a production evaluator change.
+## Rust/Wasm inference and first playing test
+
+The engine now supports experimental NNUE inference through
+`MoveEngine.with_nnue(black, white, computerBlack, difficulty, extension,
+tableCapacity, modelBytes, logitScale)`. The ordinary constructor still uses
+the handcrafted evaluator. The browser game continues to use that constructor.
+
+The loader validates the binary header, dimensions, exact length, finite
+coefficients, and scale. Make adds one stone feature vector to a maintained
+accumulator. Undo restores its saved accumulator exactly. Side-to-move features
+are added when evaluating the head, allowing search to pass the actual turn
+explicitly. NNUE searches skip the handcrafted contribution updates but retain
+line boards, winning-square caches, density, candidate generation, and tactical
+search. Root shortcuts remain shared with the existing engine.
+
+Search uses `round(logit * scale)` from the side-to-move perspective, converts
+it to the computer's perspective, and clamps it to ±500,000. Forced wins keep
+their existing ±1,000,000 distance scoring. The default experimental scale is
+1,000; it has not been tuned. Each search owns a fixed model, so its transposition
+table never mixes evaluators. This implementation uses float32 coefficients and
+an accumulator snapshot per move; quantization and allocation optimizations are
+future work.
+
+After building Wasm, reproduce the reference comparison and paired match with:
+
+```powershell
+npm.cmd run wasm:build
+npm.cmd run nnue:wasm-check -- --model=.training/nnue-outcome-v1-repeat/model.nnue --positions=.selfplay/nnue-dataset-v1-balanced/validation.jsonl
+npm.cmd run selfplay -- --games=100 --depth=4 --seed=32 --nnue-b=.training/nnue-outcome-v1-repeat/model.nnue --nnue-scale=1000 --output=.selfplay/nnue-first-depth4.jsonl
+```
+
+The match runner also accepts `--nnue-a`. Model SHA-256 and scale are recorded
+in run provenance and checked on resume. Custom handcrafted weights and NNUE
+are mutually exclusive for the same player. Exported teacher labels retain
+NNUE model identity and scale when present.
+
+The recorded model produced a maximum probability error of
+2.53 × 10⁻⁸ against the portable Python reference across 512 validation boards
+with both sides to move. Synthetic regression tests cover all 225 placements,
+both turn features, exact undo restoration, perspective conversion, invalid
+models, and immediate-win root selection.
+
+In the first 100-game match at depth four, NNUE won 20, drew 2, and lost 78:
+a **21% score**. Openings were paired with colors swapped. A separate 20-game
+depth-two smoke test scored 15% (3 wins, 17 losses). These are exploratory
+results from a single model and scale, using the shared search and root tactics;
+the openings have not been certified disjoint from training positions. They
+show that this outcome-trained model is not ready to replace the handcrafted
+evaluator. Better training targets, data coverage, and architecture should be
+tested before enabling NNUE in the game.

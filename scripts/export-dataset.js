@@ -59,6 +59,7 @@ for (const filename of [...files].sort()) {
   if (header?.type !== 'run' || header.version !== 1 || !config || !Number.isInteger(config.depth) || config.depth < 1 || config.depth > 10) throw new Error(`Unsupported self-play header: ${filename}`);
   for (const player of ['a', 'b']) {
     const teacher = config[player];
+    if (teacher?.nnue && (!/^[a-f0-9]{64}$/.test(teacher.nnue.digest) || !Number.isFinite(teacher.nnue.scale) || teacher.nnue.scale < 1 || teacher.nnue.scale > 100000)) throw new Error(`Invalid NNUE metadata: ${filename}`);
     if (!teacher || !/^[a-f0-9]{64}$/.test(teacher.digest) || !Array.isArray(teacher.weights) || teacher.weights.length !== 8 ||
         teacher.weights.some((w) => !Number.isInteger(w) || w < 0 || w > 100000)) throw new Error(`Invalid engine metadata: ${filename}`);
   }

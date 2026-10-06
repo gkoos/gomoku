@@ -7,11 +7,11 @@ import { parseWeights, playGame, replay } from './selfplay/core.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
-const allowed = new Set(['games', 'seed', 'depth', 'a', 'b', 'weights-a', 'weights-b', 'output']);
+const allowed = new Set(['games', 'seed', 'depth', 'a', 'b', 'weights-a', 'weights-b', 'nnue-a', 'nnue-b', 'nnue-scale', 'output']);
 const args = {};
 for (const arg of process.argv.slice(2)) {
   if (arg === '--help') {
-    console.log('npm run selfplay -- --games=20 --depth=4 --seed=1 --output=.selfplay/matches.jsonl\nOptional: --a=path/to/gomoku_engine.js --b=path/to/gomoku_engine.js --weights-a=weights.json --weights-b=weights.json\nGames are paired with colours swapped. Reuse the same output and configuration to resume or extend a run.');
+    console.log('npm run selfplay -- --games=20 --depth=4 --seed=1 --output=.selfplay/matches.jsonl\nOptional NNUE: --nnue-b=model.nnue --nnue-scale=1000\nOptional: --a=path/to/gomoku_engine.js --b=path/to/gomoku_engine.js --weights-a=weights.json --weights-b=weights.json\nGames are paired with colours swapped. Reuse the same output and configuration to resume or extend a run.');
     process.exit(0);
   }
   const match = /^--([^=]+)=(.+)$/.exec(arg);
@@ -34,10 +34,21 @@ for (const player of ['a', 'b']) {
   const digest = createHash('sha256').update(fs.readFileSync(modulePath)).update(fs.readFileSync(wasmPath)).digest('hex');
   const weights = parseWeights(args[`weights-${player}`] ? JSON.parse(fs.readFileSync(args[`weights-${player}`], 'utf8')) : {});
   config[player] = { digest, weights };
-  engines[player] = require(modulePath);
+  engines[player] = { ...require(modulePath) };
+  if (args[`nnue-${player}`]) {
+    if (args[`weights-${player}`]) throw new Error('NNUE and handcrafted weights cannot be combined');
+    const model = fs.readFileSync(path.resolve(args[`nnue-${player}`]));
+    const scale = Number(args['nnue-scale'] ?? 1000);
+    if (!Number.isFinite(scale) || scale < 1 || scale > 100000) throw new Error('Invalid --nnue-scale');
+    if (typeof engines[player].MoveEngine.with_nnue !== 'function') throw new Error('Engine needs the NNUE API; rebuild Wasm');
+    engines[player].nnueModel = model;
+    engines[player].nnueScale = scale;
+    config[player].nnue = { digest: createHash('sha256').update(model).digest('hex'), scale };
+  }
   if (typeof engines[player].MoveEngine !== 'function') throw new Error(`Engine ${player} does not expose MoveEngine; run npm run wasm:build`);
   if (typeof engines[player].MoveEngine.with_weights !== 'function' && weights.some((w, i) => w !== parseWeights()[i])) throw new Error(`Engine ${player} needs the configurable-weight API for custom weights`);
 }
+if (args['nnue-scale'] && !args['nnue-a'] && !args['nnue-b']) throw new Error('--nnue-scale requires a model');
 const output = path.resolve(args.output ?? path.join(root, '.selfplay/matches.jsonl'));
 const records = [];
 if (fs.existsSync(output)) {

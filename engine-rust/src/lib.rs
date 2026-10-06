@@ -77,6 +77,7 @@ pub fn boards_full(black: &[u32], white: &[u32]) -> Result<bool, JsValue> {
 }
 pub mod incremental;
 pub mod lines;
+pub mod nnue;
 
 /// Stateful prototype interface. Array getters return copies, not mutable internal views.
 #[wasm_bindgen]
@@ -94,6 +95,15 @@ impl SearchState {
         Ok(Self {
             inner: incremental::Evaluator::new(board(black)?, board(white)?, perspective_black),
         })
+    }
+    pub fn set_nnue(&mut self, model: &[u8], scale: f32) -> Result<(), JsValue> {
+        self.inner.set_nnue(model, scale).map_err(JsValue::from_str)
+    }
+    pub fn score_for_turn(&self, black_to_move: bool) -> i32 {
+        self.inner.score_for_turn(black_to_move)
+    }
+    pub fn nnue_logit(&self, black_to_move: bool) -> Option<f32> {
+        self.inner.nnue_logit(black_to_move)
     }
     pub fn score(&self) -> i32 {
         self.inner.score()
@@ -299,6 +309,36 @@ pub struct MoveEngine {
 }
 #[wasm_bindgen]
 impl MoveEngine {
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_nnue(
+        black: &[u32],
+        white: &[u32],
+        computer_black: bool,
+        difficulty: u32,
+        extension: u32,
+        table_capacity: u32,
+        model: &[u8],
+        scale: f32,
+    ) -> Result<Self, JsValue> {
+        // Validate even when root tactics return without constructing search.
+        crate::nnue::Network::load(model, &board(black)?, &board(white)?, scale)
+            .map_err(JsValue::from_str)?;
+        let mut engine = Self::new(
+            black,
+            white,
+            computer_black,
+            difficulty,
+            extension,
+            table_capacity,
+        )?;
+        if let Some(search) = &mut engine.search {
+            search
+                .state
+                .set_nnue(model, scale)
+                .map_err(JsValue::from_str)?;
+        }
+        Ok(engine)
+    }
     /// Factory keeps the existing constructor and browser defaults compatible.
     #[allow(clippy::too_many_arguments)]
     pub fn with_weights(

@@ -8,6 +8,7 @@
     "selfplay:batch": "node scripts/selfplay/batch.js",
     "selfplay:export": "node scripts/export-dataset.js",
     "nnue:train": "node scripts/run-nnue.js train",
+    "nnue:wasm-check": "node scripts/run-nnue.js check_wasm",
     "nnue:test": "node scripts/run-nnue.js test",
     "nnue:benchmark": "node scripts/run-nnue.js benchmark",
     "dev": "vite",
