@@ -278,12 +278,12 @@ export function minimaxAlphaBeta(
       searchContext?.hasher.toggleMove(position, computerPlayer);
       let evaluation;
       try {
-        evaluation = minimaxAlphaBeta(
+        const run = (low, high) => minimaxAlphaBeta(
           newBlackBitboard,
           newWhiteBitboard,
           depth - 1,
-          alpha,
-          beta,
+          low,
+          high,
           false,
           computerPlayer,
           humanPlayer,
@@ -293,6 +293,12 @@ export function minimaxAlphaBeta(
           searchContext,
           tacticalExtension,
         );
+        if (progressTracker?.usePvs !== false && i > 0 && depth > 1 &&
+            Number.isFinite(alpha) && beta - alpha > 1) {
+          evaluation = run(alpha, alpha + 1);
+          if (evaluation.score > alpha && evaluation.score < beta)
+            evaluation = run(alpha, beta);
+        } else evaluation = run(alpha, beta);
       } finally {
         searchContext?.hasher.toggleMove(position, computerPlayer);
         state.undoMove(undo);
@@ -345,12 +351,12 @@ export function minimaxAlphaBeta(
       searchContext?.hasher.toggleMove(position, humanPlayer);
       let evaluation;
       try {
-        evaluation = minimaxAlphaBeta(
+        const run = (low, high) => minimaxAlphaBeta(
           newBlackBitboard,
           newWhiteBitboard,
           depth - 1,
-          alpha,
-          beta,
+          low,
+          high,
           true,
           computerPlayer,
           humanPlayer,
@@ -360,6 +366,12 @@ export function minimaxAlphaBeta(
           searchContext,
           tacticalExtension,
         );
+        if (progressTracker?.usePvs !== false && i > 0 && depth > 1 &&
+            Number.isFinite(beta) && beta - alpha > 1) {
+          evaluation = run(beta - 1, beta);
+          if (evaluation.score > alpha && evaluation.score < beta)
+            evaluation = run(alpha, beta);
+        } else evaluation = run(alpha, beta);
       } finally {
         searchContext?.hasher.toggleMove(position, humanPlayer);
         state.undoMove(undo);
@@ -397,6 +409,7 @@ export function findBestMoveDeepSearch(
   {
     onIteration = () => {},
     useTranspositionTable = true,
+    usePvs = true,
     transpositionTable,
     tacticalExtension = TACTICAL_EXTENSION_PLIES,
     preferredMove = null,
@@ -435,6 +448,7 @@ export function findBestMoveDeepSearch(
     const hitsBefore = searchContext?.stats.hits || 0;
     const cutoffsBefore = searchContext?.stats.cutoffs || 0;
     const tracker = {
+      usePvs,
       trackPV: true,
       principalVariation,
       nodes: 0,

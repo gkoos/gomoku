@@ -47,6 +47,7 @@ export function transpositionKey(
     '/' +
     perspective +
     '/' +
+    (tracker?.usePvs === false ? 'ab/' : 'pvs/') +
     (tracker?.trackPV ? 'pv/' : 'score/') +
     suffix
   );

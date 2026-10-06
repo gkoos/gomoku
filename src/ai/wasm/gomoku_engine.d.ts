@@ -40,6 +40,7 @@ export class SearchEngine {
     next_depth(): Float64Array;
     occupancy(black: boolean): Uint32Array;
     prefer_root(position: number): void;
+    set_pvs(enabled: boolean): void;
 }
 
 /**
@@ -134,6 +135,7 @@ export interface InitOutput {
     readonly searchengine_next_depth: (a: number) => [number, number, number, number];
     readonly searchengine_occupancy: (a: number, b: number) => [number, number];
     readonly searchengine_prefer_root: (a: number, b: number) => [number, number];
+    readonly searchengine_set_pvs: (a: number, b: number) => [number, number];
     readonly searchstate_analyze_pattern: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly searchstate_candidates: (a: number, b: number) => [number, number];
     readonly searchstate_has_immediate_threat: (a: number, b: number) => number;

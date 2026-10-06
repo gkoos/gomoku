@@ -151,14 +151,16 @@ measurements compare complete moves, including changes in the searched tree.
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
 | Root VCF only | 7 | 0 | 93 | 19.8 ms | 14 ms | 57 ms |
 | Horizon VCF, 128 nodes | 11 | 0 | 89 | 63.6 ms | 35 ms | 243 ms |
-| Horizon VCF, 32 nodes (current) | 12 | 0 | 88 | 48.1 ms | 31 ms | 163 ms |
+| Horizon VCF, 32 nodes | 12 | 0 | 88 | 48.1 ms | 31 ms | 163 ms |
+| Horizon VCF, 32 nodes + PVS (current) | 12 | 0 | 88 | 32.0 ms | 22 ms | 100 ms |
 
 The current version converted eight baseline losses into wins and three wins
 into losses. All 12 wins were as Black. Among the 85 games lost by both versions,
 42 lasted longer, 30 shorter and 13 unchanged; the mean difference was +1.74
 plies and the median zero. White's matched losses gained 2.52 plies on average.
 These are fixed-depth comparisons, not evidence of strength at equal thinking
-time. The current version takes about 2.4 times the baseline mean move time.
+time. After PVS, the current version takes about 1.6 times the root-VCF baseline
+mean move time.
 
 Reports are saved locally under `.selfplay/external-rapfi-vcf-depth6/`,
 `.selfplay/external-rapfi-vcf-horizon-depth6/` (128 nodes), and
@@ -167,6 +169,21 @@ Reports are saved locally under `.selfplay/external-rapfi-vcf-depth6/`,
 `node scripts/external-match.js --output=.selfplay/external-rapfi-vcf-horizon32-depth6`.
 Build the native executable first; existing match directories can only resume
 when their recorded binary and configuration hashes still match.
+
+PVS preserved the exact move sequences of all 100 games against the 32-node
+ordinary alpha-beta run, while reducing mean move time by 33.5%. Its reports are
+under `.selfplay/external-rapfi-pvs-depth6/`, including `length-comparison.json`
+and `pvs-comparison.json`. Reproduce the current PVS match with
+`node scripts/external-match.js --output=.selfplay/external-rapfi-pvs-depth6`.
+The older horizon32 directory records the pre-PVS binary and cannot resume with
+the current executable.
+
+The same-artifact Wasm benchmark's depth-six opening fixture changed from
+27,514 to 18,450 alpha-beta nodes and from 52.8 to 38.4 ms median move time with
+identical score and PV. Two short tactical fixtures had essentially unchanged
+timings; re-search can add nodes when the first move is poorly ordered. PVS
+does not guarantee a speedup on every position. The rerunnable reference/PVS
+switch is documented in the implementation guide.
 
 The [implementation guide](implementation.md#hashing-and-transposition-table)
 describes the separate proof cache and rerunnable Wasm timing benchmark.

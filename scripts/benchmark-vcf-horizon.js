@@ -5,10 +5,11 @@ import { initSync, SearchEngine } from '../src/ai/wasm/gomoku_engine.js';
 
 const options = {};
 for (const arg of process.argv.slice(2)) {
-  const match = /^--(wasm|output)=(.+)$/.exec(arg);
+  const match = /^--(wasm|output|pvs)=(.+)$/.exec(arg);
   if (!match) throw new Error(`Unknown argument: ${arg}`);
   options[match[1]] = match[2];
 }
+if (options.pvs && !['on', 'off'].includes(options.pvs)) throw new Error('PVS must be on or off');
 const file = options.wasm || 'src/ai/wasm/gomoku_engine_bg.wasm';
 const bytes = readFileSync(file);
 initSync({ module: bytes });
@@ -19,6 +20,7 @@ for (const [name, depth] of [['seeded-1', 6], ['seeded-4', 5], ['seeded-8', 4]])
   const run = () => {
     const engine = new SearchEngine(Uint32Array.from(fixture.blackBitboard),
       Uint32Array.from(fixture.whiteBitboard), true, depth, 4, 32768);
+    if (options.pvs) engine.set_pvs(options.pvs === 'on');
     let last;
     try {
       for (;;) {
@@ -41,6 +43,7 @@ for (const [name, depth] of [['seeded-1', 6], ['seeded-4', 5], ['seeded-8', 4]])
   results.push({ name, depth, medianMilliseconds: times[3],
     completedDepth: result[0], score: result[1], nodes: result[2], pv: result.slice(7) });
 }
-const report = { wasm: file, sha256: createHash('sha256').update(bytes).digest('hex'), results };
+const report = { wasm: file, pvs: options.pvs || 'artifact default',
+  sha256: createHash('sha256').update(bytes).digest('hex'), results };
 if (options.output) writeFileSync(options.output, JSON.stringify(report, null, 2) + '\n');
 console.log(JSON.stringify(report, null, 2));

@@ -79,6 +79,7 @@ pub struct Search {
     // Full occupancy and attacker verify identity; proof lengths stay relative
     // to this position, so callers can apply their own root distance.
     vcf_cache: HashMap<(Bitboard, Bitboard, bool), Option<Vec<u16>>>,
+    use_pvs: bool,
 }
 impl Search {
     pub fn new(
@@ -136,7 +137,16 @@ impl Search {
             hits: 0,
             cutoffs: 0,
             vcf_cache: HashMap::new(),
+            use_pvs: true,
         })
+    }
+    /// Diagnostic reference mode. A running search cannot mix cache semantics.
+    pub fn set_pvs(&mut self, enabled: bool) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("PVS mode must be selected before search starts");
+        }
+        self.use_pvs = enabled;
+        Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
     pub fn prefer_root(&mut self, position: usize) -> Result<(), &'static str> {
@@ -582,7 +592,27 @@ impl Search {
             };
             self.hasher.toggle(candidate.position, to_move);
             self.path[ply] = candidate.position as u16;
-            let child = self.minimax(depth - 1, alpha, beta, !maximizing, ply + 1);
+            // The first move establishes the bound. Scout later alternatives;
+            // only an improvement inside the original window needs re-search.
+            // At depth one the horizon result is window-independent.
+            let child =
+                if self.use_pvs && i > 0 && depth > 1 && i64::from(beta) - i64::from(alpha) > 1 {
+                    let (low, high) = if maximizing {
+                        (alpha, alpha + 1)
+                    } else {
+                        (beta - 1, beta)
+                    };
+                    self.minimax(depth - 1, low, high, !maximizing, ply + 1)
+                        .and_then(|probe| {
+                            if probe.score > alpha && probe.score < beta {
+                                self.minimax(depth - 1, alpha, beta, !maximizing, ply + 1)
+                            } else {
+                                Ok(probe)
+                            }
+                        })
+                } else {
+                    self.minimax(depth - 1, alpha, beta, !maximizing, ply + 1)
+                };
             self.hasher.toggle(candidate.position, to_move);
             self.state.undo_move(token)?;
             let child = child?;
@@ -618,6 +648,31 @@ mod tests {
             b[p >> 5] |= 1 << (p & 31);
         }
         b
+    }
+    #[test]
+    fn pvs_matches_alpha_beta_and_restores_state_with_extreme_windows() {
+        let b = bits(&[112, 128]);
+        let w = bits(&[113, 97]);
+        for perspective in [true, false] {
+            for maximizing in [true, false] {
+                for capacity in [0, 2, 32768] {
+                    let mut reference = Search::new(b, w, perspective, 4, 4, capacity).unwrap();
+                    reference.set_pvs(false).unwrap();
+                    let mut pvs = Search::new(b, w, perspective, 4, 4, capacity).unwrap();
+                    let expected = reference.fixed(4, maximizing, i32::MIN, i32::MAX).unwrap();
+                    let actual = pvs.fixed(4, maximizing, i32::MIN, i32::MAX).unwrap();
+                    assert_eq!(actual.result.score, expected.result.score);
+                    assert_eq!(
+                        &actual.result.pv[..actual.result.length],
+                        &expected.result.pv[..expected.result.length]
+                    );
+                    assert_eq!(pvs.state.black, b);
+                    assert_eq!(pvs.state.white, w);
+                    assert_eq!(pvs.state.history_length(), 0);
+                    assert!(pvs.set_pvs(false).is_err());
+                }
+            }
+        }
     }
     #[test]
     fn horizon_vcf_turn_distance_cache_and_restoration() {

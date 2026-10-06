@@ -274,6 +274,15 @@ export class SearchEngine {
             throw takeFromExternrefTable0(ret[0]);
         }
     }
+    /**
+     * @param {boolean} enabled
+     */
+    set_pvs(enabled) {
+        const ret = wasm.searchengine_set_pvs(this.__wbg_ptr, enabled);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
 }
 if (Symbol.dispose) SearchEngine.prototype[Symbol.dispose] = SearchEngine.prototype.free;
 

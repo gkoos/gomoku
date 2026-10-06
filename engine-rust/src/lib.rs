@@ -273,6 +273,9 @@ impl SearchEngine {
             .prefer_root(position as usize)
             .map_err(JsValue::from_str)
     }
+    pub fn set_pvs(&mut self, enabled: bool) -> Result<(), JsValue> {
+        self.inner.set_pvs(enabled).map_err(JsValue::from_str)
+    }
     pub fn fixed_depth(
         &mut self,
         depth: u32,

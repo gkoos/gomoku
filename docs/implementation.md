@@ -40,7 +40,7 @@ The opponent is derived from toMove. The result contains row and col, with possi
 
 ## Occupancy bitboards
 
-Each color has eight numeric 32-bit words. Position is row × 15 + col; word is position >>> 5, bit is position & 31. Seven words cover positions 0–223. Only bit zero of the eighth word represents a square: position 224.
+Each color has eight numeric 32-bit words. Position is row Ã— 15 + col; word is position >>> 5, bit is position & 31. Seven words cover positions 0â€“223. Only bit zero of the eighth word represents a square: position 224.
 
 JavaScript bitwise operations use signed 32-bit integers. Negative words can contain valid stones. Unsigned conversions are used where needed for hashing and comparisons. Enumeration and word-level rules mask padding bits in the final word.
 
@@ -92,6 +92,21 @@ Keys include the position hash, exact remaining depth, perspective, tactical-ext
 Quiet tactical leaves use a separate VCF cache containing relative winning continuations or unknown results. Full black/white occupancy and the attacker identify a position, so this cache does not depend on Zobrist collision assumptions, evaluation weights, or the root perspective. Scores are constructed at the call site using the current root distance. Each search retains at most 2,048 entries and clears the cache when inserting beyond that bound. Unknown results are reusable only under the fixed seven-ply/32-node horizon limits. A line-mask eligibility check skips probes when no unblocked five-cell window contains three friendly stones. VCF operates on maintained line boards and winning caches in Rust and restores them before returning. Its internal nodes are bounded separately and are not included in the existing alpha-beta node counter.
 
 The rerunnable timing check is `node scripts/benchmark-vcf-horizon.js`. It accepts `--wasm=PATH` to benchmark a saved older Wasm artifact and `--output=PATH` to preserve results with the artifact SHA-256. It warms each fixture twice, then reports the median of seven runs along with completed depth, score, alpha-beta nodes and PV. Winning fixtures may finish at a shallower iteration, so these timings compare complete move calculations rather than identical searched trees. Run comparisons without concurrent CPU-heavy work.
+
+PVS is enabled by default in Rust and JavaScript. For comparisons, JavaScript
+deep search accepts `usePvs: false`, and Wasm `SearchEngine.set_pvs(false)` selects
+ordinary alpha-beta before any search starts. Changing the Rust mode after
+search starts is rejected. JavaScript transposition keys include the mode to
+keep shared diagnostic tables isolated. Scout probes and re-searches use the
+same ordering and maintained position; undo runs after either result or an
+error. Scores from scout windows remain bounds in the normal transposition
+table. No extra depth reductions or candidate pruning are introduced.
+
+Run `node scripts/benchmark-vcf-horizon.js --pvs=off --output=.selfplay/pvs-off.json`
+and then the same command with `--pvs=on --output=.selfplay/pvs-on.json` to compare
+both modes of the same artifact. The PVS regression tests compare completed
+scores, moves and PVs against the reference, including both colors, minimizing
+roots, disabled/tiny caches, narrow windows and extreme integer bounds.
 
 Entries contain exact scores, lower bounds, or upper bounds. Bounds are reused only when they justify a cutoff. Full unsigned occupancy snapshots and side to move are checked on hits to guard against hash collisions. Mate scores are normalized on storage and adjusted for current root distance on retrieval. Horizon evaluation bypasses the table.
 
