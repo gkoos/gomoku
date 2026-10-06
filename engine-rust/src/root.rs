@@ -255,6 +255,19 @@ pub fn prepare(black: Bitboard, white: Bitboard, computer: bool, easy: bool) -> 
         result.choice = p as i32;
         return result;
     }
+    if !easy {
+        let outcome = crate::vcf::solve(
+            &mut result.lines,
+            &mut result.winning,
+            computer,
+            crate::vcf::MAX_PLIES,
+            crate::vcf::NODE_BUDGET,
+        );
+        if let Some(line) = outcome.line {
+            result.choice = line[0] as i32;
+            return result;
+        }
+    }
     let enemy_open = open_lines(&result.lines, !computer);
     if enemy_open.iter().any(|&mask| mask != 0) {
         let preferred = defense(&mut result, computer, enemy_open);
@@ -304,8 +317,8 @@ mod tests {
         let w = bits(&[109, 53, 155, 156, 157, 0]);
         for easy in [true, false] {
             let p = prepare(b, w, true, easy);
-            assert_eq!(p.choice, if easy { 113 } else { -2 });
-            assert_eq!(p.preferred, if easy { None } else { Some(113) });
+            assert_eq!(p.choice, 113);
+            assert_eq!(p.preferred, None);
             assert_eq!(p.lines, LineBoards::new(&b, &w));
             assert_eq!(p.winning, WinningCache::new(&p.lines));
         }

@@ -627,6 +627,29 @@ export function select_root(black, white, computer_black, easy) {
     }
     return ret[0];
 }
+
+/**
+ * status (1 = proven win, 0 = unknown), nodes, budget exhausted, PV length, PV.
+ * @param {Uint32Array} black
+ * @param {Uint32Array} white
+ * @param {boolean} attacker_black
+ * @param {number} max_plies
+ * @param {number} node_budget
+ * @returns {Float64Array}
+ */
+export function solve_vcf(black, white, attacker_black, max_plies, node_budget) {
+    const ptr0 = passArray32ToWasm0(black, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray32ToWasm0(white, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.solve_vcf(ptr0, len0, ptr1, len1, attacker_black, max_plies, node_budget);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayF64FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 8, 8);
+    return v3;
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,

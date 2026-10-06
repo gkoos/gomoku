@@ -135,6 +135,20 @@ export function findWinningSquares(own, opponent) {
   return collectSquares(own, opponent, winningLineSquares);
 }
 
+export function findFourCreationSquares(own, opponent) {
+  return collectSquares(own, opponent, (stones, blockers, length) => {
+    let result = 0;
+    for (let start = 0; start <= length - 5; start++) {
+      const friendly = (stones >>> start) & 31;
+      if ((blockers >>> start) & 31) continue;
+      let mask = friendly, count = 0;
+      while (mask) { count++; mask &= mask - 1; }
+      if (count === 3) result |= (~friendly & 31) << start;
+    }
+    return result;
+  });
+}
+
 export function createWinningSquareCache(lines) {
   function colorState() {
     return {

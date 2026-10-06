@@ -95,6 +95,11 @@ export function score_root_move(black: Uint32Array, white: Uint32Array, position
  */
 export function select_root(black: Uint32Array, white: Uint32Array, computer_black: boolean, easy: boolean): number;
 
+/**
+ * status (1 = proven win, 0 = unknown), nodes, budget exhausted, PV length, PV.
+ */
+export function solve_vcf(black: Uint32Array, white: Uint32Array, attacker_black: boolean, max_plies: number, node_budget: number): Float64Array;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
@@ -145,6 +150,7 @@ export interface InitOutput {
     readonly searchstate_winning_references: (a: number, b: number) => [number, number];
     readonly searchstate_winning_squares: (a: number, b: number) => [number, number];
     readonly select_root: (a: number, b: number, c: number, d: number, e: number, f: number) => [number, number, number];
+    readonly solve_vcf: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number, number];
     readonly __wbindgen_externrefs: WebAssembly.Table;
     readonly __wbindgen_malloc: (a: number, b: number) => number;
     readonly __externref_table_dealloc: (a: number) => void;

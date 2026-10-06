@@ -305,6 +305,45 @@ impl SearchEngine {
     }
 }
 pub mod root;
+pub mod vcf;
+
+/// status (1 = proven win, 0 = unknown), nodes, budget exhausted, PV length, PV.
+#[wasm_bindgen]
+pub fn solve_vcf(
+    black: &[u32],
+    white: &[u32],
+    attacker_black: bool,
+    max_plies: u32,
+    node_budget: u32,
+) -> Result<Vec<f64>, JsValue> {
+    if max_plies > 31 || node_budget > 1_000_000 {
+        return Err(JsValue::from_str(
+            "VCF limits: at most 31 plies and 1000000 nodes",
+        ));
+    }
+    let (b, w) = (board(black)?, board(white)?);
+    if rules::result(&b, &w).is_some() {
+        return Ok(vec![0.0; 4]);
+    }
+    let mut lines = lines::LineBoards::new(&b, &w);
+    let mut winning = lines::WinningCache::new(&lines);
+    let outcome = vcf::solve(
+        &mut lines,
+        &mut winning,
+        attacker_black,
+        max_plies as usize,
+        node_budget as usize,
+    );
+    let proof = outcome.line.unwrap_or_default();
+    let mut packed = vec![
+        (!proof.is_empty()) as u8 as f64,
+        outcome.nodes as f64,
+        outcome.exhausted as u8 as f64,
+        proof.len() as f64,
+    ];
+    packed.extend(proof.into_iter().map(|p| p as f64));
+    Ok(packed)
+}
 
 /// Complete root selection followed, when necessary, by iterative search.
 #[wasm_bindgen]

@@ -8,7 +8,7 @@ import {
 import { chooseMove } from '../src/ai/engine.js';
 import { createWorkerHandler } from '../src/ai/worker-handler.js';
 import { board2Bitboards } from '../src/core/bitboards.js';
-import { findSimple4Threats, checkImmediateThreat } from '../src/ai/threats.js';
+import { checkImmediateThreat } from '../src/ai/threats.js';
 
 test('iterative search publishes completed depths and a legal principal variation', () => {
   const board = Array.from({ length: 15 }, () => Array(15).fill(null));
@@ -88,13 +88,13 @@ function forkPosition(color = 'black') {
     board[r][c] = other;
   return { ...board2Bitboards(board), toMove: color };
 }
-test('a winning double four beats the first blockable three extension for every difficulty and color', async () => {
+test('a winning double four is selected for every difficulty and color', async () => {
   for (const color of ['black', 'white']) {
     const p = forkPosition(color);
-    assert.deepEqual(
-      findSimple4Threats(p.blackBitboard, p.whiteBitboard, color)[0],
-      { row: 0, col: 4 },
-    );
+    // Keep this fixture focused on the immediate double four. The top-row
+    // three also has a longer VCF win, which searched levels may now prove first.
+    const own = color === 'black' ? p.blackBitboard : p.whiteBitboard;
+    own[0] &= ~((1 << 1) | (1 << 2) | (1 << 3));
     for (const difficulty of ['easy', 'medium', 'hard']) {
       const iterations = [];
       const move = await chooseMove(p, {
@@ -103,8 +103,7 @@ test('a winning double four beats the first blockable three extension for every 
       });
       assert.deepEqual([move.row, move.col], [7, 8]);
       if (difficulty !== 'easy') {
-        assert.equal(iterations.at(-1).depth, 1);
-        assert.equal(iterations.at(-1).score, 999997);
+        assert.equal(iterations.length, 0, 'a proven root win needs no search iteration');
       }
     }
   }
@@ -141,6 +140,9 @@ test('worker publishes completed depths with the original request ID before its 
   const messages = [];
   const handle = createWorkerHandler({
     postMessage: (m) => messages.push(m),
+    // Exercise actual iterative search without the root VCF shortcut.
+    chooseMove: (b, w, color, opponent, _difficulty, progress, options) =>
+      findBestMoveDeepSearch(b, w, color, opponent, progress, 3, options),
     reportError: (...args) => assert.fail(String(args)),
   });
   await handle({

@@ -12,6 +12,7 @@ import {
   evaluateStrategicPosition,
 } from './evaluation.js';
 import { findBestMoveDeepSearch } from './search.js';
+import { solveVcf } from './vcf.js';
 
 export function findBestMoveAdaptive(
   blackBitboard,
@@ -201,6 +202,15 @@ export async function findBestMove(
       const threat = aiOpen4Threats[0];
       progressCallback(100);
       return { row: threat.row, col: threat.col };
+    }
+
+    if (['medium', 'hard', 'expert'].includes(difficulty)) {
+      const proof = solveVcf(blackBitboard, whiteBitboard, computerPlayer);
+      if (proof.proven) {
+        const position = proof.line[0];
+        progressCallback(100);
+        return { row: Math.floor(position / 15), col: position % 15 };
+      }
     }
 
     // PRIORITY 4: Prefer a winning counterattack, otherwise prevent an open four.
