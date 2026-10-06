@@ -6,6 +6,9 @@
   "scripts": {
     "native:build": "node scripts/build-native.js",
     "native:check": "node scripts/build-native.js && node scripts/check-native-engine.js",
+    "external:match": "node scripts/external-match.js",
+    "external:analyze": "node scripts/external-match/analyze.js",
+    "external:compare": "node scripts/external-match/compare.js",
     "selfplay": "node scripts/selfplay.js",
     "selfplay:batch": "node scripts/selfplay/batch.js",
     "nnue:match-report": "node scripts/nnue-match-report.js",

@@ -71,6 +71,9 @@ be corrected by another `INFO`.
 
 ## Match-manager setup and limitations
 
+For the downloaded Rapfi and manager, see the [external-match runner](external-matches.md)
+for paired openings, resumable runs, result validation, and timing reports.
+
 This version supports **15×15 freestyle**, including overline wins. Other board
 sizes, exact-five, Renju, Caro, blocked-square fields, Swap2, and continuous-game
 commands are unsupported. This is compatibility for 15×15 freestyle matches,

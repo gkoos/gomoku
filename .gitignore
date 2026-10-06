@@ -28,4 +28,5 @@ dist-ssr
 /.selfplay/
 /.venv-nnue/
 /.training/
+/download/
 __pycache__/
