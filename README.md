@@ -37,6 +37,7 @@ npm run dev
 - [Search performance](docs/performance.md): repeatable Wasm CPU profiling, measurements, and optimization priorities.
 - [Self-play](docs/self-play.md): paired engine matches and configurable evaluation weights.
 - [Training datasets](docs/datasets.md): reproducible position exports and training/validation splits for learned evaluation.
+- [NNUE experiment](docs/nnue.md): offline training, portable models, and incremental inference checks.
 
 ## License
 

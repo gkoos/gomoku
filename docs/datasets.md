@@ -63,3 +63,5 @@ The initial dataset exported from the stronger-twos validation contains 2,600 ga
 | Connected groups with samples | 514 |
 
 These mostly shallow-search games are suitable for testing a training pipeline. Demonstrating a stronger NNUE evaluator will require training, fresh match evaluation, and likely more diverse games or stronger search labels. The exporter processes its inputs and position graph in memory; very large corpora will need a streaming or database-backed implementation.
+
+The [first NNUE experiment](nnue.md) trains a small additive evaluator on this dataset and exports weights with a checked incremental reference implementation.
