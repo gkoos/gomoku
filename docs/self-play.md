@@ -56,6 +56,38 @@ These names refer to the evaluator's existing pattern classifications. The singl
 
 The Wasm API is `MoveEngine.with_weights(black, white, computerBlack, difficulty, extension, tableCapacity, Int32Array)`, with the eight values in the table's order. The existing constructor and browser defaults remain compatible. JavaScript fallback evaluation still uses its original defaults; configurable evaluation currently applies to the Rust/Wasm engine.
 
+## Batch weight experiments
+
+Compare several weight files against default evaluation with one command:
+
+```bash
+npm run selfplay:batch -- --games=100 --depth=4 --seeds=1,2,3
+```
+
+The default plan is `experiments/weights.json`. It includes stronger threes, a lower closed-four score, and stronger twos. These are deliberately different experimental settings, not recommended improvements. A default-versus-default control is included automatically. Each seed supplies the same opening pairs to every candidate, with colours swapped. This command plays 100 games per seed per entry: 1,200 games including the control and three candidates. Matches run sequentially.
+
+In Windows PowerShell, use `npm.cmd` instead of `npm` when passing options after `--`; the PowerShell npm wrapper can consume those arguments. Alternatively call `node scripts/selfplay/batch.js --games=100 --depth=4 --seeds=1,2,3` directly.
+
+Create your own plan with unique names and paths relative to the plan file:
+
+```json
+{
+  "candidates": [
+    { "name": "my-variant", "file": "weights/my-variant.json" }
+  ]
+}
+```
+
+```bash
+npm run selfplay:batch -- --config=my-experiment.json --games=100 --depth=4 --seeds=11,12,13 --output=.selfplay/my-experiment
+```
+
+The output directory holds a batch manifest, individual resumable JSONL matches, and `results.md`/`results.json`. Reports update after each completed match file. Re-running resumes the games; increasing `--games` extends them. Depth, seeds, candidate names/values, and engine hashes must match the manifest. Do not run simultaneous writers in the same directory. As with single matches, a partial final JSONL record needs repair after a crash.
+
+The table reports candidate wins/draws/losses, score percentage (wins plus half of draws), candidate nodes per move, and mean thinking time per move for both engines. A score above 50% is an observed advantage over the baseline, not a statistical strength claim. Paired games are correlated, and selecting the best of multiple experiments introduces selection bias. Validate promising settings with a separate seed set and a greater depth in a new output directory.
+
+Optional `--a`/`--b` choose baseline/candidate Node engine builds. The control uses build A for both sides; experimental entries compare build B with the configured weights against default-weight build A. To isolate weight effects, use the same build for both.
+
 ## Records and interpretation
 
 The first JSONL record describes the run. Each subsequent record is one finished game, containing engine colour assignments, opening, full move sequence, winner, and per-move player, position, elapsed milliseconds, completed depth, score, node count, cache hits, and principal variation. Positions are zero-based `row * 15 + column`; Black moves first. Search statistics sum all completed iterations for that move. Root shortcuts have depth zero, no search score, and zero search nodes.

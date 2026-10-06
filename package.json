@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "selfplay": "node scripts/selfplay.js",
+    "selfplay:batch": "node scripts/selfplay/batch.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

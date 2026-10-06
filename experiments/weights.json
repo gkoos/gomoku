@@ -1,0 +1,7 @@
+{
+  "candidates": [
+    { "name": "stronger-threes", "file": "weights/stronger-threes.json" },
+    { "name": "lower-closed-four", "file": "weights/lower-closed-four.json" },
+    { "name": "stronger-twos", "file": "weights/stronger-twos.json" }
+  ]
+}
