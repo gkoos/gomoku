@@ -93,6 +93,42 @@ pub fn generate_with_density(
     density: &[u8; 225],
     result: &mut Candidates,
 ) {
+    generate_ranked(black, white, player_black, winning, density, result, None);
+}
+
+#[derive(Clone, Copy)]
+pub struct SearchSelection {
+    pub depth: usize,
+    pub preferred: Option<usize>,
+}
+pub fn generate_for_search(
+    black: &Bitboard,
+    white: &Bitboard,
+    player_black: bool,
+    winning: &WinningCache,
+    density: &[u8; 225],
+    result: &mut Candidates,
+    selection: SearchSelection,
+) {
+    generate_ranked(
+        black,
+        white,
+        player_black,
+        winning,
+        density,
+        result,
+        Some(selection),
+    );
+}
+fn generate_ranked(
+    black: &Bitboard,
+    white: &Bitboard,
+    player_black: bool,
+    winning: &WinningCache,
+    density: &[u8; 225],
+    result: &mut Candidates,
+    selection: Option<SearchSelection>,
+) {
     result.len = 0;
     let mut occupied = [0u16; 15];
     let mut stone_count = 0;
@@ -121,8 +157,7 @@ pub fn generate_with_density(
                 rank: result.len as u16,
             });
         }
-        result.moves[..result.len]
-            .sort_unstable_by(|a, b| b.priority.cmp(&a.priority).then(a.rank.cmp(&b.rank)));
+        finish(result, 0, 0, 0, selection);
         return;
     }
     let mut adjacent_expansion = [0u16; 15];
@@ -149,6 +184,7 @@ pub fn generate_with_density(
         (&winning.white.board, &winning.black.board)
     };
     let mut tactical_count = 0;
+    let mut win_count = 0;
     for row in 0usize..15 {
         let adjacent = adjacent_expansion[row.saturating_sub(1)..=(row + 1).min(14)]
             .iter()
@@ -206,6 +242,9 @@ pub fn generate_with_density(
             } else {
                 0
             };
+            if tactical == 2 {
+                win_count += 1;
+            }
             if tactical != 0 {
                 tactical_count += 1;
             }
@@ -218,25 +257,93 @@ pub fn generate_with_density(
             frontier &= frontier - 1;
         }
     }
-    let compare = |a: &Candidate, b: &Candidate| {
-        b.tactical
-            .cmp(&a.tactical)
-            .then(b.priority.cmp(&a.priority))
-            .then(a.rank.cmp(&b.rank))
-    };
-    let retained = result
-        .len
-        .min((if stone_count < 10 { 30 } else { 50 }).max(tactical_count));
-    // The total comparator preserves the exact prefix of a full sort, including
-    // source-rank ties. Tactical moves sort first and all fit in the retained set.
-    // Partitioning a small frontier can cost more than sorting it directly.
-    if result.len > retained * 2 {
+    finish(result, stone_count, tactical_count, win_count, selection);
+}
+fn compare(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
+    b.tactical
+        .cmp(&a.tactical)
+        .then(b.priority.cmp(&a.priority))
+        .then(a.rank.cmp(&b.rank))
+}
+fn sort_prefix(result: &mut Candidates, retained: usize) {
+    if result.len > retained * 2 && retained > 0 {
         result.moves[..result.len].select_nth_unstable_by(retained, compare);
         result.moves[..retained].sort_unstable_by(compare);
     } else {
         result.moves[..result.len].sort_unstable_by(compare);
     }
     result.len = retained;
+}
+fn finish(
+    result: &mut Candidates,
+    stone_count: usize,
+    tactical_count: usize,
+    win_count: usize,
+    selection: Option<SearchSelection>,
+) {
+    let eligible = result
+        .len
+        .min((if stone_count < 10 { 30 } else { 50 }).max(tactical_count));
+    let Some(selection) = selection else {
+        sort_prefix(result, eligible);
+        return;
+    };
+    if win_count == 0 && tactical_count == 1 {
+        let block = *result
+            .as_slice()
+            .iter()
+            .find(|m| m.tactical == Some(1))
+            .expect("single block");
+        result.moves[0] = block;
+        result.len = 1;
+        return;
+    }
+    let eligible = if win_count > 0 { win_count } else { eligible };
+    let tactics = if win_count > 0 {
+        win_count
+    } else {
+        tactical_count
+    };
+    let retained = eligible.min(
+        20usize
+            .saturating_sub(selection.depth * 2)
+            .max(8)
+            .max(tactics),
+    );
+    let preferred = selection
+        .preferred
+        .and_then(|p| result.as_slice().iter().find(|m| m.position == p).copied())
+        .and_then(|candidate| {
+            if win_count > 0 && candidate.tactical != Some(2) {
+                return None;
+            }
+            // Preserve eligibility under the old 30/50 cap before PV promotion.
+            let rank = result
+                .as_slice()
+                .iter()
+                .filter(|m| compare(m, &candidate).is_lt())
+                .count();
+            (rank < eligible).then_some((candidate, rank))
+        });
+    if let Some((candidate, rank)) = preferred {
+        if rank >= retained {
+            // Only a quiet move can fall outside a prefix retaining all tactics.
+            sort_prefix(result, retained - 1);
+            result.moves[..=result.len].rotate_right(1);
+            result.moves[0] = candidate;
+            result.len += 1;
+        } else {
+            sort_prefix(result, retained);
+            let index = result
+                .as_slice()
+                .iter()
+                .position(|m| m.position == candidate.position)
+                .expect("retained PV");
+            result.moves[..=index].rotate_right(1);
+        }
+    } else {
+        sort_prefix(result, retained);
+    }
 }
 
 #[cfg(test)]

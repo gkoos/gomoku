@@ -1,6 +1,6 @@
 use crate::bitboards::{Bitboard, positions};
 use crate::incremental::Evaluator;
-use crate::moves::{Candidate, Candidates, generate_with_density};
+use crate::moves::{Candidate, Candidates, SearchSelection, generate_for_search};
 use crate::rules::{self, BoardResult};
 use crate::transposition::{Bound, CacheKey, Entry, Table, from_table, to_table};
 use crate::zobrist::Hasher;
@@ -301,6 +301,7 @@ impl Search {
         self.state.undo_move(token)?;
         Ok(ResultLine::prepend(p, child?))
     }
+    #[cfg(test)]
     fn select(&mut self, depth: usize, ply: usize) {
         let follows = self.follows_pv(ply);
         let preferred = if follows && ply < self.previous.length {
@@ -450,13 +451,19 @@ impl Search {
             self.buffers[ply].moves[0] = Candidate::mandatory_block(position);
             self.buffers[ply].len = 1;
         } else {
-            generate_with_density(
+            let preferred = if self.follows_pv(ply) && ply < self.previous.length {
+                Some(self.previous.pv[ply] as usize)
+            } else {
+                None
+            };
+            generate_for_search(
                 &self.state.black,
                 &self.state.white,
                 to_move,
                 &self.state.winning,
                 &self.state.density.0,
                 &mut self.buffers[ply],
+                SearchSelection { depth, preferred },
             );
         }
         if self.buffers[ply].len == 0 {
@@ -468,9 +475,6 @@ impl Search {
                 true,
                 to_move,
             ));
-        }
-        if !mandatory_block {
-            self.select(depth, ply);
         }
         let first = self.buffers[ply].moves[0];
         if first.tactical == Some(2) {
@@ -591,6 +595,65 @@ mod tests {
                 let result = search.fixed(3, true, -INFINITY, INFINITY).unwrap();
                 assert_eq!(result.result.pv[0], if perspective { 4 } else { 112 });
                 assert_eq!(result.result.score, WIN_SCORE - 1);
+            }
+        }
+    }
+    #[test]
+    fn direct_search_selection_matches_legacy_for_all_pv_squares() {
+        let mut boards = vec![
+            ([0; 8], [0; 8]),
+            (bits(&[107]), bits(&[108, 109, 110, 111])),
+            (bits(&[0, 1, 2, 3, 107]), bits(&[108, 109, 110, 111])),
+        ];
+        let mut seed = 0x7182ac51u32;
+        for count in [8, 24, 64, 120] {
+            let mut b = [0; 8];
+            let mut w = [0; 8];
+            for i in 0..count {
+                seed ^= seed << 13;
+                seed ^= seed >> 17;
+                seed ^= seed << 5;
+                let p = (i * 73 + 31) % 225;
+                (if seed & 1 == 0 { &mut b } else { &mut w })[p >> 5] |= 1 << (p & 31);
+            }
+            boards.push((b, w));
+        }
+        for (b, w) in boards {
+            for color in [true, false] {
+                let mut search = Search::new(b, w, color, 10, 4, 0).unwrap();
+                let mut original = Candidates::default();
+                crate::moves::generate_with_density(
+                    &b,
+                    &w,
+                    color,
+                    &search.state.winning,
+                    &search.state.density.0,
+                    &mut original,
+                );
+                for depth in [1, 4, 6, 10] {
+                    for preferred in std::iter::once(None).chain((0..225).map(Some)) {
+                        search.buffers[0].moves = original.moves;
+                        search.buffers[0].len = original.len;
+                        search.previous = preferred
+                            .map_or_else(|| ResultLine::quiet(0), |p| ResultLine::single(0, p));
+                        search.select(depth, 0);
+                        let mut actual = Candidates::default();
+                        generate_for_search(
+                            &b,
+                            &w,
+                            color,
+                            &search.state.winning,
+                            &search.state.density.0,
+                            &mut actual,
+                            SearchSelection { depth, preferred },
+                        );
+                        assert_eq!(
+                            actual.as_slice(),
+                            search.buffers[0].as_slice(),
+                            "depth {depth}, PV {preferred:?}, color {color}"
+                        );
+                    }
+                }
             }
         }
     }

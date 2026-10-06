@@ -77,6 +77,8 @@ Candidate classification reads cached winning boards. Horizon search retrieves t
 
 Rust search also maintains 225 neighborhood density counts, including each square's radius-two center. Standard make/undo changes at most 25 counts and candidate generation reuses them. Leaf and tactical-horizon branches skip density updates because they read only evaluation/winning caches; their undo frames record this choice, and search restores the parent before generating candidates again. The JavaScript reference continues to reconstruct counts.
 
+Rust's search-specific candidate generator partitions directly to the selective search width and sorts that prefix. It computes PV eligibility against the original 30/50 generation cap before promotion, preserving the same quiet-move replacement and tactical retention. The general candidate generator still returns the complete original capped list. The old two-stage selector remains only in native tests for exact comparisons across every possible PV square.
+
 ## Hashing and transposition table
 
 [zobrist.js](../src/ai/zobrist.js) uses a deterministic key containing two 32-bit words. Each color/square pair has a random key; side to move has another. Initialization XORs occupied-square keys. Make and undo XOR the same stone and side keys, making updates reversible.

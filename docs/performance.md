@@ -131,3 +131,22 @@ Every completed iteration matches the prior build, including score, PV, nodes an
 The production Wasm asset grows from 125.11 KB to 164.83 KB, or 46.10 KB to 48.67 KB under Vite's gzip estimate: about 2.6 KB more compressed data. This does not measure cold download, compilation or initialization time. The larger asset is the tradeoff for reduced search time.
 
 Saved-build comparison: `npm run wasm:compare -- --baseline=.profiles/pattern-before/gomoku_engine.js`. Source freshness checks include build.rs as well as the reference classifier so changes cannot silently use an outdated browser table.
+
+## Direct search-width candidate selection
+
+Search now selects its final 8?18-move quiet width directly from the frontier, retaining all tactical moves, then sorts only the selected prefix. Easy and diagnostic candidate generation continue to return the original 30/50 capped list. Small frontiers retain the full-sort path when partitioning is unlikely to help.
+
+Previous-PV promotion still tests eligibility against the old generation cap. A PV move outside the narrow prefix but inside that cap replaces the same last quiet move; a move outside the old cap remains excluded. Winning-only selection and single mandatory blocks preserve their previous behavior. The legacy two-stage selector is compiled only for tests; 12,656 direct comparisons cover all PV squares (and no PV), depths 1/4/6/10, both colors, opening/dense boards, wins and blocks.
+
+Against the previous compact-pattern-table build, three warmups and eleven alternating timed runs measured:
+
+| Position | Depth | Before, ms | After, ms | Elapsed-time reduction |
+| --- | ---: | ---: | ---: | ---: |
+| One-stone opening | 7 | 170.5 | 154.7 | 9% |
+| Six-stone opening | 6 | 71.9 | 60.3 | 16% |
+| 20-stone middlegame | 6 | 33.3 | 28.4 | 14% |
+| 12-stone development | 6 | 73.7 | 60.1 | 19% |
+| Mandatory block, then quiet search | 6 | 18.77 | 16.55 | 12% |
+| Forcing chain | 6 | 0.052 | 0.052 | Approximately unchanged |
+
+Every iteration matches the saved build exactly: scores, PVs, nodes, cache hits, cutoffs and table size. These are Node-hosted measurements. Reproduce against a saved baseline with `npm run wasm:compare -- --baseline=.profiles/search-width-before/gomoku_engine.js`.

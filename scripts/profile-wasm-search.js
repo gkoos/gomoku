@@ -89,7 +89,11 @@ const answer = (r) => ({ depth: r.depth, score: r.score, pv: r.pv });
 const median = (xs) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 function category(stack) {
   const has = (re) => stack.some((frame) => re.test(frame.functionName));
-  if (has(/moves::generate_(?:into|with_density)/))
+  if (
+    has(
+      /moves::(?:generate_(?:into|with_density|for_search|ranked)|finish|sort_prefix)/,
+    )
+  )
     return 'candidate generation';
   if (has(/incremental::Evaluator.*(?:make_move|undo_move|place)/))
     return 'make/undo evaluation';
