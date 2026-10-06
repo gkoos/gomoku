@@ -78,6 +78,35 @@ Use the SGFs and saved moves to inspect losses before drawing conclusions about
 which search or evaluation changes would help. A small score difference requires
 more games and independent opening seeds before claiming an improvement.
 
+## Game length comparisons
+
+New match reports include `lengths`: mean, median, minimum, and maximum total
+plies, played plies excluding the opening, and Gomoku moves. Wins, draws, and
+losses are separate; losses also split by our color. A ply is one stone placement,
+so two plies are approximately one turn for each player.
+
+Compare saved runs without rerunning games or modifying their original reports:
+
+```powershell
+npm.cmd run external:lengths
+```
+
+Defaults compare the original baseline with the searched-defense rematch.
+Override `--baseline=PATH`, `--current=PATH`, and `--output=PATH` for future runs.
+The tool checks settings, opponent/manager hashes, game legality, matching
+openings, and colors. It records input and analyzer checksums. Matched loss-length
+deltas include only games lost in both runs; converted wins are reported
+separately. This avoids mistaking a change in the set of losses for longer survival.
+
+In the defensive-fix rematch, the 94 matched losses became longer in 23 cases,
+shorter in 17, and stayed the same in 54. Mean change was **+0.26 plies** and
+median change **zero**. Black's mean change was -0.23 plies; White's was +0.68.
+There is little evidence of a substantial survival change in these games.
+
+Length is a secondary diagnostic beside results and tactical fixtures. Delaying
+an inevitable loss can lengthen a game without improving the chance of winning;
+a stronger engine can also win faster. Avoid optimizing weights solely for length.
+
 ## Initial baseline, 2026-10-06
 
 The default run completed all 100 games in approximately 87 seconds on this

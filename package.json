@@ -9,6 +9,7 @@
     "external:match": "node scripts/external-match.js",
     "external:analyze": "node scripts/external-match/analyze.js",
     "external:compare": "node scripts/external-match/compare.js",
+    "external:lengths": "node scripts/external-match/length-report.js",
     "selfplay": "node scripts/selfplay.js",
     "selfplay:batch": "node scripts/selfplay/batch.js",
     "nnue:match-report": "node scripts/nnue-match-report.js",

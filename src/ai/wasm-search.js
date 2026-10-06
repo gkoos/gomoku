@@ -35,6 +35,14 @@ export function createWasmDeepSearch(SearchEngine) {
       options.tacticalExtension ?? TACTICAL_EXTENSION_PLIES,
       options.useTranspositionTable === false ? 0 : TRANSPOSITION_TABLE_SIZE,
     );
+    try {
+      if (options.preferredMove) {
+        search.prefer_root(options.preferredMove.row * 15 + options.preferredMove.col);
+      }
+    } catch (error) {
+      search.free();
+      throw error;
+    }
     return runIterations(search, onProgress, depth, options);
   };
 }

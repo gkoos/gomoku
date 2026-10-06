@@ -87,6 +87,8 @@ The native `generate_into` function accepts a caller-owned `Candidates` buffer c
 
 Root preparation constructs line masks and winning caches once. Defense temporarily updates four line masks and refreshes winning entries only when testing a forcing counterattack. Remaining opponent open-four threats are checked against updated masks rather than reconstructed boards. Search takes ownership of prepared masks/caches and initializes contributions once.
 
+For Medium/Hard/Expert, the heuristic defense is an ordering preference rather than a returned move. `SearchEngine.prefer_root(position)` seeds first-iteration ordering; a completed PV replaces it. Native and production Wasm search use the same preference. Root comparisons also verify an opponent's immediate open-four reply when neither side has a winning square, so quiet candidate pruning cannot hide that three-ply win. Easy retains its heuristic defense.
+
 `select_root` and `score_root_move` are diagnostic bindings used to verify root choices and exact heuristic scores. `wasm:check` includes 9,280 root selections and 20,030 move scores across fixtures, random densities, both colors, all open-four orientations and board edges. `wasm:benchmark` also measures root defense, counterattack and Easy scoring separately from deep search.
 
 ## Search API and caching

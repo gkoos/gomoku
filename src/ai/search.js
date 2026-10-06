@@ -12,6 +12,13 @@ import { evaluateTacticalHorizon } from './tactical-search.js';
 import { checkWinCondition, getBitboardResult } from '../core/rules.js';
 import { generateCandidateMoves } from './moves.js';
 import { createIncrementalEvaluator } from './incremental-evaluation.js';
+import {
+  createLineBitboards,
+  findOpenFourSquares,
+  findWinningSquares,
+  updateLineBitboards,
+  threatMovesFromBitboard,
+} from './line-bitboards.js';
 
 export function minimaxAlphaBeta(
   blackBitboard,
@@ -62,6 +69,42 @@ export function minimaxAlphaBeta(
         return { score: WIN_SCORE - moveHistory.length, move: null }; // Prefer faster wins
       } else {
         return { score: -WIN_SCORE + moveHistory.length, move: null }; // Delay losses
+      }
+    }
+  }
+
+  // Check the opponent's immediate fork while comparing root defenses.
+  if (moveHistory.length === 1 && (depth > 0 || tacticalExtension >= 3)) {
+    const state = evaluationState ||
+      createIncrementalEvaluator(blackBitboard, whiteBitboard, computerPlayer);
+    const lines = state.lineBitboards || createLineBitboards(blackBitboard, whiteBitboard);
+    const hasWin = color => state.hasImmediateThreat?.(color) ??
+      findWinningSquares(lines[color], lines[color === computerPlayer ? humanPlayer : computerPlayer])
+        .some(mask => mask !== 0);
+    if (
+      !hasWin(computerPlayer) && !hasWin(humanPlayer)
+    ) {
+      const color = isMaximizing ? computerPlayer : humanPlayer;
+      const other = isMaximizing ? humanPlayer : computerPlayer;
+      const fork = threatMovesFromBitboard(
+        findOpenFourSquares(lines[color], lines[other]), 0,
+      )[0];
+      if (fork) {
+        updateLineBitboards(lines, fork.position, color, true);
+        let ends;
+        try {
+          ends = threatMovesFromBitboard(
+            findWinningSquares(lines[color], lines[other]), 0,
+          );
+        } finally {
+          updateLineBitboards(lines, fork.position, color, false);
+        }
+        return {
+          score: isMaximizing ? WIN_SCORE - 4 : -WIN_SCORE + 4,
+          move: fork,
+          ...(progressTracker?.trackPV
+            ? { principalVariation: [fork, ends[0], ends[1]] } : {}),
+        };
       }
     }
   }
@@ -356,6 +399,7 @@ export function findBestMoveDeepSearch(
     useTranspositionTable = true,
     transpositionTable,
     tacticalExtension = TACTICAL_EXTENSION_PLIES,
+    preferredMove = null,
   } = {},
 ) {
   if (
@@ -368,7 +412,12 @@ export function findBestMoveDeepSearch(
     );
   if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
   let bestMove = null;
-  let principalVariation = [];
+  let principalVariation = preferredMove
+    ? [{
+        ...preferredMove,
+        position: preferredMove.row * BOARD_SIZE + preferredMove.col,
+      }]
+    : [];
   const state = createIncrementalEvaluator(
     blackBitboard,
     whiteBitboard,

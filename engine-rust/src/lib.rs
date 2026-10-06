@@ -268,6 +268,11 @@ impl SearchEngine {
             .map_err(JsValue::from_str)?
             .map_or_else(Vec::new, |i| i.packed()))
     }
+    pub fn prefer_root(&mut self, position: u32) -> Result<(), JsValue> {
+        self.inner
+            .prefer_root(position as usize)
+            .map_err(JsValue::from_str)
+    }
     pub fn fixed_depth(
         &mut self,
         depth: u32,
@@ -401,16 +406,18 @@ impl MoveEngine {
                 prepared.lines,
                 prepared.winning,
             );
-            Some(
-                search::Search::with_state(
-                    state,
-                    computer_black,
-                    [0, 6, 8, 10][difficulty as usize],
-                    extension as usize,
-                    table_capacity as usize,
-                )
-                .map_err(JsValue::from_str)?,
+            let mut search = search::Search::with_state(
+                state,
+                computer_black,
+                [0, 6, 8, 10][difficulty as usize],
+                extension as usize,
+                table_capacity as usize,
             )
+            .map_err(JsValue::from_str)?;
+            if let Some(preferred) = prepared.preferred {
+                search.prefer_root(preferred).map_err(JsValue::from_str)?;
+            }
+            Some(search)
         } else {
             None
         };

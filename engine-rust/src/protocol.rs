@@ -139,6 +139,9 @@ impl Protocol {
                 self.options.extension,
                 self.options.capacity,
             )?;
+            if let Some(preferred) = prepared.preferred {
+                search.prefer_root(preferred)?;
+            }
             let mut position = None;
             while let Some(iteration) = search.next_iteration()? {
                 if iteration.result.length > 0 {

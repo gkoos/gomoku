@@ -37,7 +37,7 @@ const assets = readdirSync(rapfiDir).filter(name => /\.(toml|bin|nnue)(\.lz4)?$/
   .map(name => ({ name, sha256: digest(path.join(rapfiDir, name)) }));
 const config = { version: 1, ...opts, manager: { path: manager, sha256: digest(manager) },
   engine: { path: engine, sha256: digest(engine) }, rapfi: { path: rapfi, sha256: digest(rapfi), assets },
-  runnerSha256: hash(['scripts/external-match.js', 'scripts/external-match/core.js', 'scripts/selfplay/core.js'].map(p => readFileSync(path.join(root, p), 'utf8').replaceAll('\r\n', '\n')).join('\n')),
+  runnerSha256: hash(['scripts/external-match.js', 'scripts/external-match/core.js', 'scripts/external-match/lengths.js', 'scripts/selfplay/core.js'].map(p => readFileSync(path.join(root, p), 'utf8').replaceAll('\r\n', '\n')).join('\n')),
   boardSize: 15, rule: 0, threads: 1, extension: 4, tableCapacity: 32768 };
 mkdirSync(out, { recursive: true });
 const configPath = path.join(out, 'config.json');

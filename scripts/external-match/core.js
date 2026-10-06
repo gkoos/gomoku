@@ -1,4 +1,5 @@
 import { opening, replay } from '../selfplay/core.js';
+import { lengthStats } from './lengths.js';
 
 export function openingText(seed, pair) {
   return opening(seed, pair).map(p => `${p % 15 - 7},${Math.floor(p / 15) - 7}`).join(', ') + '\n';
@@ -81,5 +82,5 @@ export function report(games) {
       draws: subset.filter(g => !g.winningEngine).length, losses: subset.filter(g => g.winningEngine === 'Rapfi').length }];
   }));
   return { games: games.length, wins, draws, losses, score: games.length ? (wins + draws / 2) / games.length : null,
-    byColor, timing, lossesForReview: games.filter(g => g.winningEngine === 'Rapfi').map(g => ({ pair: g.pair, color: g.black === 'Gomoku' ? 'black' : 'white', plies: g.moves.length })) };
+    byColor, timing, lengths: lengthStats(games), lossesForReview: games.filter(g => g.winningEngine === 'Rapfi').map(g => ({ pair: g.pair, color: g.black === 'Gomoku' ? 'black' : 'white', plies: g.moves.length })) };
 }

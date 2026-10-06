@@ -39,6 +39,7 @@ export class SearchEngine {
     constructor(black: Uint32Array, white: Uint32Array, perspective_black: boolean, max_depth: number, extension: number, table_capacity: number);
     next_depth(): Float64Array;
     occupancy(black: boolean): Uint32Array;
+    prefer_root(position: number): void;
 }
 
 /**
@@ -127,6 +128,7 @@ export interface InitOutput {
     readonly searchengine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly searchengine_next_depth: (a: number) => [number, number, number, number];
     readonly searchengine_occupancy: (a: number, b: number) => [number, number];
+    readonly searchengine_prefer_root: (a: number, b: number) => [number, number];
     readonly searchstate_analyze_pattern: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly searchstate_candidates: (a: number, b: number) => [number, number];
     readonly searchstate_has_immediate_threat: (a: number, b: number) => number;

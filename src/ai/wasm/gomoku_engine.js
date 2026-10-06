@@ -265,6 +265,15 @@ export class SearchEngine {
         wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
         return v1;
     }
+    /**
+     * @param {number} position
+     */
+    prefer_root(position) {
+        const ret = wasm.searchengine_prefer_root(this.__wbg_ptr, position);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
 }
 if (Symbol.dispose) SearchEngine.prototype[Symbol.dispose] = SearchEngine.prototype.free;
 

@@ -15,7 +15,7 @@ A ply is one player's move. A winning square is an empty square on which a playe
 3. Take an immediate win.
 4. Block an opponent's immediate winning square. Multiple winning squares can make the loss unavoidable.
 5. Play a move that creates an open four.
-6. If the opponent can create an open four, compare defenses. Before returning a defense, accept a counterattack that wins immediately or creates two distinct winning squares while leaving the opponent no immediate win.
+6. If the opponent can create an open four, Easy compares heuristic defenses and winning counterattacks. Medium, Hard, and Expert use that heuristic choice to order the first search iteration, then compare defenses and forcing counterattacks through iterative search.
 7. Otherwise score or search candidates according to difficulty.
 8. If selection fails, return a legal fallback, or no move on a terminal board.
 
@@ -76,6 +76,8 @@ Easy uses a separate proposed-move evaluator: stronger three/two/single-stone we
 [search.js](../src/ai/search.js) completes depths 1 through the difficulty cap. The computer maximizes scores; the opponent minimizes them. Alpha-beta skips branches that cannot improve the current bound. Each completed iteration supplies a best move and principal variation for ordering the next depth. PV ordering applies only while the current path matches that line.
 
 A win scores 1,000,000 minus plies from the root. A loss scores -1,000,000 plus that distance. This prefers faster wins and delays unavoidable losses. Immediate winning branches return directly without constructing a child position.
+
+When comparing root moves, search also verifies the opponent's immediate open-four creation. If neither player currently has a winning square, that reply guarantees a win three plies later and cannot be hidden by quiet candidate pruning. The check applies at the first reply when search depth remains, or when at least three tactical extension plies are allowed. It preserves mate-distance scoring and supplies a legal fork/block/win continuation.
 
 Only completed iterations are published. A partially searched root is biased by the order of examined moves and is not used by Move now.
 

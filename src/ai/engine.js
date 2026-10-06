@@ -218,8 +218,12 @@ export async function findBestMove(
         humanPlayer,
         humanOpen4s,
       );
-      progressCallback(100);
-      return defense;
+      if (!['medium', 'hard', 'expert'].includes(difficulty)) {
+        progressCallback(100);
+        return defense;
+      }
+      // A forcing four may buy time to defend; compare it through search.
+      searchOptions = { ...searchOptions, preferredMove: defense };
     }
 
     // Blockable fours are scored/searched with other candidates, not returned blindly.

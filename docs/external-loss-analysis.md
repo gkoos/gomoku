@@ -86,7 +86,29 @@ from searched choices in 26 cases at depth six and 30 at depth eight. Different
 choices alone do not establish improvement. Child-position checks and the
 independent witness above supply stronger evidence for the specific example.
 
-**First implementation recommendation:** keep immediate wins and mandatory
+**Implemented follow-up:** searched difficulties now treat the heuristic defense
+as a first-iteration ordering hint. They also verify immediate open-four replies
+while comparing root candidates, preventing an obviously losing quiet move from
+appearing safe because its opponent reply was pruned. Easy retains its heuristic.
+The position above is covered by Rust and JavaScript/Wasm regression tests.
+
+The same 100 games were rerun after this change at depth six. The result was
+**6 wins, 0 draws, 94 losses**, versus 5/0/95 before. All wins were Black wins;
+only pair 38, game 0 changed its outcome from loss to win. This small difference
+does not establish a strength improvement. Mean observed move time was 19.9 ms
+versus 19.6 ms; median was 14 ms versus 12 ms, and the 95th percentile was 57 ms
+versus 60 ms. Timing covers different played positions and is not a per-position
+CPU benchmark. The raw rematch and checksum-linked comparison are saved under
+`.selfplay/external-rapfi-searched-defense-depth6/`.
+
+Reproduce the rematch with:
+
+```powershell
+npm.cmd run native:build
+npm.cmd run external:match -- --output=.selfplay/external-rapfi-searched-defense-depth6
+```
+
+The original recommendation was to keep immediate wins and mandatory
 blocks fast, but let searched difficulties compare forcing counterattacks and
 defenses instead of returning this heuristic defense unconditionally. Preserve
 the Easy heuristic and add the position above as an engine regression fixture.
@@ -121,7 +143,7 @@ After addressing the root shortcut, add a bounded continuous-four tactical
 solver or forcing-attack extension, with explicit counter-win checks. Retain
 forcing attacks and their defenses through candidate selection. The baseline
 provides concrete fixtures and a repeatable match to measure the change; the
-current analysis has not yet measured an improved win rate.
+rematch difference remains too small to support a strength claim.
 
 None of these findings establishes that tuning static weights cannot help.
 They identify tactical limitations worth testing before another tuning run.

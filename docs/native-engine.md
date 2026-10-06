@@ -108,8 +108,9 @@ npm.cmd run native:check
 Unit tests cover command sequencing, colors, axes, malformed input, transaction
 recovery, resets, takebacks, terminal boards, and settings. `native:check` builds
 the release binary, checks a live handshake while stdin stays open, and compares
-50 native move responses with the committed Wasm engine: both colors, reversed
+51 native move responses with the committed Wasm engine: both colors, reversed
 board-entry order, searched positions, resets, depth settings, and immediate wins.
+The boards include the forcing-tempo defensive regression from the Rapfi match.
 Test watchdogs only bound the harness. Wasm builds explicitly select `--lib`,
 so the native executable is not built for browser output.
 

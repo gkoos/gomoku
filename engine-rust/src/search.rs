@@ -1,4 +1,4 @@
-use crate::bitboards::{Bitboard, positions};
+use crate::bitboards::{Bitboard, contains, positions};
 use crate::incremental::Evaluator;
 use crate::moves::{Candidate, Candidates, SearchSelection, generate_for_search};
 use crate::rules::{self, BoardResult};
@@ -132,6 +132,18 @@ impl Search {
             hits: 0,
             cutoffs: 0,
         })
+    }
+    /// An ordering hint for the first iteration, replaced by the completed PV.
+    pub fn prefer_root(&mut self, position: usize) -> Result<(), &'static str> {
+        if self.next_depth != 1
+            || position >= 225
+            || contains(&self.state.black, position)
+            || contains(&self.state.white, position)
+        {
+            return Err("Root preference must be an empty square before search starts");
+        }
+        self.previous = ResultLine::single(0, position);
+        Ok(())
     }
     pub fn next_iteration(&mut self) -> Result<Option<Iteration>, &'static str> {
         if self.done {
@@ -412,6 +424,29 @@ impl Search {
                 } else {
                     -WIN_SCORE + ply as i32
                 }));
+            }
+        }
+        // Root defenses must account for an opponent's immediate fork even
+        // when quiet candidate pruning would otherwise hide that reply.
+        if ply == 1
+            && (depth > 0 || self.extension >= 3)
+            && self.state.winning.black.count == 0
+            && self.state.winning.white.count == 0
+        {
+            let color = if maximizing {
+                self.perspective
+            } else {
+                !self.perspective
+            };
+            if let Some(line) = crate::root::open_four_reply(&self.state.lines, color) {
+                let mut result = ResultLine::quiet(if maximizing {
+                    WIN_SCORE - 4
+                } else {
+                    -WIN_SCORE + 4
+                });
+                result.length = 3;
+                result.pv[..3].copy_from_slice(&line.map(|p| p as u16));
+                return Ok(result);
             }
         }
         if depth == 0 {

@@ -51,6 +51,7 @@ for (let i = 0; i < 24; i++) {
   boards.push(replay([...moves, next]).board);
 }
 for (const moves of [[112,0,113,2,114,4,115,6], [0,112,2,113,4,114,6,115,8]]) boards.push(replay(moves).board);
+boards.push(replay([126,140,127,143,141,156,155,113,128,129,97,112,124,125,96,115]).board);
 let input = 'START 15\nINFO max_depth 2\n', expected = ['OK'];
 for (const board of boards) {
   const black = board.reduce((sum, c) => sum + (c !== 0), 0) % 2 === 0;
