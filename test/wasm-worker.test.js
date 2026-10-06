@@ -24,6 +24,23 @@ const bits = (ps) => {
   return b;
 };
 const coords = (move) => move && [move.row, move.col];
+test('custom Wasm weights preserve defaults and change static search scores', () => {
+  const b = bits([112]), w = bits([113, 97]);
+  const normal = new MoveEngine(b, w, true, 1, 4, 32768);
+  const explicit = MoveEngine.with_weights(b, w, true, 1, 4, 32768, Int32Array.from([100000, 20000, 10000, 1000, 100, 100, 10, 1]));
+  const zero = MoveEngine.with_weights(b, w, true, 1, 4, 32768, new Int32Array(8));
+  try {
+    assert.equal(normal.root_move(), -2);
+    assert.deepEqual(explicit.next_depth(), normal.next_depth());
+    const changed = zero.next_depth();
+    assert.equal(changed[1], 0);
+    assert.equal(changed[0], 1);
+    assert.ok(changed[6] > 0);
+    assert.notEqual(normal.next_depth()[1], 0);
+  } finally { normal.free(); explicit.free(); zero.free(); }
+  assert.throws(() => MoveEngine.with_weights(b, w, true, 1, 4, 32768, new Int32Array(7)));
+  assert.throws(() => MoveEngine.with_weights(b, w, true, 1, 4, 32768, Int32Array.from([-1, 0, 0, 0, 0, 0, 0, 0])));
+});
 const nearlyFull = () => {
   const b = bits([]),
     w = bits([]);

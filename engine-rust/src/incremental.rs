@@ -24,6 +24,7 @@ pub struct Evaluator {
     perspective_black: bool,
     history: Vec<Frame>,
     next_token: u32,
+    weights: [i32; 8],
 }
 impl Evaluator {
     pub fn new(black: Bitboard, white: Bitboard, perspective_black: bool) -> Self {
@@ -49,6 +50,7 @@ impl Evaluator {
             perspective_black,
             history: Vec::with_capacity(BOARD_CELLS),
             next_token: 0,
+            weights: crate::pattern_reference::DEFAULT_WEIGHTS,
         };
         for position in positions(&black, &white, false) {
             for direction in 0..4 {
@@ -65,7 +67,10 @@ impl Evaluator {
         if !black && !contains(&self.white, position) {
             return 0;
         }
-        let score = self.lines.analyze(black, position, index & 3).score();
+        let score = self
+            .lines
+            .analyze(black, position, index & 3)
+            .score_with(&self.weights);
         if black { score } else { -score }
     }
     pub fn score(&self) -> i32 {
@@ -75,6 +80,24 @@ impl Evaluator {
             -self.total
         })
         .clamp(-MAX_STATIC_SCORE, MAX_STATIC_SCORE)
+    }
+    pub fn set_weights(&mut self, weights: [i32; 8]) -> Result<(), &'static str> {
+        if !self.history.is_empty() {
+            return Err("Weights cannot change during a move sequence");
+        }
+        if weights
+            .iter()
+            .any(|&weight| !(0..=100_000).contains(&weight))
+        {
+            return Err("Weights must be integers between 0 and 100000");
+        }
+        self.weights = weights;
+        self.total = 0;
+        for index in 0..900 {
+            self.scores[index] = self.contribution(index);
+            self.total += self.scores[index];
+        }
+        Ok(())
     }
     pub fn history_length(&self) -> usize {
         self.history.len()
@@ -168,6 +191,44 @@ impl Evaluator {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn custom_weights_follow_make_undo_and_reject_mid_sequence_changes() {
+        let weights = [50_000, 12_000, 7_000, 777, 77, 55, 5, 2];
+        let mut state = Evaluator::new([0; 8], [0; 8], true);
+        state.set_weights(weights).unwrap();
+        let mut tokens = Vec::new();
+        for (i, position) in [112, 97, 113, 98, 114, 99, 115, 100]
+            .into_iter()
+            .enumerate()
+        {
+            tokens.push(state.make_move(position, i % 2 == 0).unwrap());
+            let mut expected = 0;
+            for p in positions(&state.black, &state.white, false) {
+                let black = contains(&state.black, p);
+                for direction in 0..4 {
+                    let (own, enemy) = if black {
+                        (&state.black, &state.white)
+                    } else {
+                        (&state.white, &state.black)
+                    };
+                    let score =
+                        crate::patterns::analyze(own, enemy, p, direction).score_with(&weights);
+                    expected += if black { score } else { -score };
+                }
+            }
+            assert_eq!(
+                state.score(),
+                expected.clamp(-MAX_STATIC_SCORE, MAX_STATIC_SCORE)
+            );
+            assert!(state.set_weights(weights).is_err());
+        }
+        for token in tokens.into_iter().rev() {
+            state.undo_move(token).unwrap();
+        }
+        assert_eq!(state.score(), 0);
+        assert!(state.set_weights([100_001; 8]).is_err());
+        state.set_weights(weights).unwrap();
+    }
     #[test]
     fn make_undo_and_error_restoration() {
         let mut state = Evaluator::new([0; 8], [0; 8], true);

@@ -1,3 +1,5 @@
+pub const DEFAULT_WEIGHTS: [i32; 8] = [100_000, 20_000, 10_000, 1_000, 100, 100, 10, 1];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Pattern {
     pub stones: u32,
@@ -16,30 +18,34 @@ impl Pattern {
             | ((self.open_two as u32) << 25)
     }
     pub fn score(self) -> i32 {
+        self.score_with(&DEFAULT_WEIGHTS)
+    }
+    /// Five, open/closed four, open/closed three, open/closed two, window.
+    pub fn score_with(self, weights: &[i32; 8]) -> i32 {
         match self.stones {
-            5.. => 100_000,
+            5.. => weights[0],
             4 => {
                 if self.winning_moves >= 2 {
-                    20_000
+                    weights[1]
                 } else {
-                    10_000
+                    weights[2]
                 }
             }
             3 => {
                 if self.open_three {
-                    1_000
+                    weights[3]
                 } else {
-                    100
+                    weights[4]
                 }
             }
             2 => {
                 if self.open_two {
-                    100
+                    weights[5]
                 } else {
-                    10
+                    weights[6]
                 }
             }
-            1 => self.windows.min(2) as i32,
+            1 => self.windows.min(2) as i32 * weights[7],
             _ => 0,
         }
     }

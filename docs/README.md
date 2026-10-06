@@ -4,5 +4,6 @@
 - [Implementation guide](implementation.md): modules, bitboards, incremental state, caching, workers, and validation.
 - [Rust/Wasm engine](../engine-rust/README.md): toolchain, browser integration, parity validation, and benchmarks.
 - [Search performance](performance.md): repeatable Wasm CPU profiling, measurements, and optimization priorities.
+- [Self-play](self-play.md): reproducible paired matches, configurable evaluation weights, and saved training records.
 
 These pages describe the current implementation. See the [project README](../README.md) for installation and development commands.

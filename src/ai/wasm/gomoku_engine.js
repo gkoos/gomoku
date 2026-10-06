@@ -4,6 +4,12 @@
  * Complete root selection followed, when necessary, by iterative search.
  */
 export class MoveEngine {
+    static __wrap(ptr) {
+        const obj = Object.create(MoveEngine.prototype);
+        obj.__wbg_ptr = ptr;
+        MoveEngineFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
@@ -53,6 +59,30 @@ export class MoveEngine {
     root_move() {
         const ret = wasm.moveengine_root_move(this.__wbg_ptr);
         return ret;
+    }
+    /**
+     * Factory keeps the existing constructor and browser defaults compatible.
+     * @param {Uint32Array} black
+     * @param {Uint32Array} white
+     * @param {boolean} computer_black
+     * @param {number} difficulty
+     * @param {number} extension
+     * @param {number} table_capacity
+     * @param {Int32Array} weights
+     * @returns {MoveEngine}
+     */
+    static with_weights(black, white, computer_black, difficulty, extension, table_capacity, weights) {
+        const ptr0 = passArray32ToWasm0(black, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray32ToWasm0(white, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray32ToWasm0(weights, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.moveengine_with_weights(ptr0, len0, ptr1, len1, computer_black, difficulty, extension, table_capacity, ptr2, len2);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return MoveEngine.__wrap(ret[0]);
     }
 }
 if (Symbol.dispose) MoveEngine.prototype[Symbol.dispose] = MoveEngine.prototype.free;

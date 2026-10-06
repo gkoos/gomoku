@@ -299,6 +299,39 @@ pub struct MoveEngine {
 }
 #[wasm_bindgen]
 impl MoveEngine {
+    /// Factory keeps the existing constructor and browser defaults compatible.
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_weights(
+        black: &[u32],
+        white: &[u32],
+        computer_black: bool,
+        difficulty: u32,
+        extension: u32,
+        table_capacity: u32,
+        weights: &[i32],
+    ) -> Result<Self, JsValue> {
+        let weights: [i32; 8] = weights
+            .try_into()
+            .map_err(|_| JsValue::from_str("Evaluation requires eight weights"))?;
+        if weights.iter().any(|&w| !(0..=100_000).contains(&w)) {
+            return Err(JsValue::from_str("Weights must be between 0 and 100000"));
+        }
+        let mut engine = Self::new(
+            black,
+            white,
+            computer_black,
+            difficulty,
+            extension,
+            table_capacity,
+        )?;
+        if let Some(search) = &mut engine.search {
+            search
+                .state
+                .set_weights(weights)
+                .map_err(JsValue::from_str)?;
+        }
+        Ok(engine)
+    }
     #[wasm_bindgen(constructor)]
     pub fn new(
         black: &[u32],
