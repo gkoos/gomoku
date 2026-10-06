@@ -9,10 +9,24 @@ import torch
 
 from model import NNUE, feature_indices, symmetry_permutations
 from inference import PortableNNUE, Position, export_model
-from train import load_dataset
+from train import load_dataset, search_probability
 
 
 class NNUETest(unittest.TestCase):
+    def test_stronger_search_targets_preserve_turn_sign_mates_and_teacher_identity(self):
+        teacher = {"config": {"depth": 6, "engineDigest": "a" * 64}}
+        label = {"score": 10000, "depth": 6, "requestedDepth": 6, "engineDigest": "a" * 64,
+                 "weights": [100000, 20000, 10000, 1000, 100, 100, 10, 1], "kind": "evaluation"}
+        self.assertAlmostEqual(search_probability({"teacherSearch": label}, teacher, 10000), 0.73105857863)
+        self.assertAlmostEqual(search_probability({"teacherSearch": {**label, "score": -10000}}, teacher, 10000), 0.26894142137)
+        for score, expected in [(999997, 1), (-999997, 0)]:
+            self.assertEqual(search_probability({"teacherSearch": {**label, "score": score, "depth": 3, "kind": "mate"}}, teacher, 10000), expected)
+        for bad in [{**label, "depth": 5}, {**label, "engineDigest": "b" * 64}, {**label, "score": float("nan")}, {**label, "kind": "mate"}]:
+            with self.assertRaises(ValueError):
+                search_probability({"teacherSearch": bad}, teacher, 10000)
+        with self.assertRaises(ValueError):
+            search_probability({}, teacher, 10000)
+
     def test_export_matches_torch_and_incremental_updates(self):
         torch.manual_seed(123)
         model = NNUE(16)
@@ -75,6 +89,18 @@ class NNUETest(unittest.TestCase):
             manifest_file.write_text(json.dumps(manifest), encoding="utf8")
             splits, _ = load_dataset(directory)
             self.assertEqual(splits["train"][2].item(), 0.5)
+            label = {"score": 10000, "depth": 6, "requestedDepth": 6, "engineDigest": "a" * 64,
+                     "weights": [100000, 20000, 10000, 1000, 100, 100, 10, 1], "kind": "evaluation"}
+            for split, group in [("train", "one"), ("validation", "two")]:
+                filename = directory / f"{split}.jsonl"
+                filename.write_text(json.dumps({**row, "id": split, "group": group, "teacherSearch": label}) + "\n", encoding="utf8")
+                outputs[split]["sha256"] = hashlib.sha256(filename.read_bytes()).hexdigest()
+            manifest["provenance"]["teacher"] = {"version": 1, "config": {"depth": 6, "engineDigest": "a" * 64}}
+            manifest_file.write_text(json.dumps(manifest), encoding="utf8")
+            search_splits, _ = load_dataset(directory, "search", 10000, 0.25)
+            self.assertAlmostEqual(search_splits["train"][2].item(), .75 * .73105857863 + .25 * .5)
+            with self.assertRaises(ValueError):
+                load_dataset(directory, "search", 0)
             (directory / "validation.jsonl").write_text(json.dumps({**row, "id": "validation"}) + "\n", encoding="utf8")
             with self.assertRaisesRegex(ValueError, "hash mismatch"):
                 load_dataset(directory)

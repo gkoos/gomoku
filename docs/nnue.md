@@ -1,4 +1,4 @@
-# First NNUE training experiment
+# NNUE training and inference
 
 The experimental trainer learns an efficiently updatable evaluator from the [self-play dataset](datasets.md). It trains offline on CPU, exports a portable floating-point model, and checks full versus incremental inference. Production move selection still uses the handcrafted Rust evaluator; experimental Rust/Wasm inference is available for self-play, with its first match results below.
 
@@ -32,7 +32,7 @@ The network has 452 binary input features, one 64-unit additive layer, clipped-R
 - Features 225–449: White stones at square `feature - 225`.
 - Feature 450: Black to move; feature 451: White to move.
 
-The additive accumulator is `bias + sum(active feature vectors)`. Making a move adds its stone vector, subtracts the old side-to-move vector, and adds the new side vector. The reference implementation saves the previous accumulator for exact undo. The output is a side-to-move outcome probability, not an engine score; converting it to the engine's evaluation scale is a later integration decision.
+The additive accumulator is `bias + sum(active feature vectors)`. Making a move adds its stone vector, subtracts the old side-to-move vector, and adds the new side vector. The reference implementation saves the previous accumulator for exact undo. The output is a side-to-move outcome probability. Rust search converts its logit to a bounded score using an explicit scale, as described below.
 
 Training uses `(outcome + 1) / 2`, with binary cross-entropy and AdamW (weight decay 0.0001). Every unique position has equal weight; duplicated game observations are not expanded into repeated training examples. Raw search labels remain available in the dataset but are not used in this first outcome-only experiment. Random rotations/reflections augment each training position each epoch; colours and side to move remain unchanged. Augmentation encourages symmetry consistency but does not mathematically guarantee it.
 
@@ -117,3 +117,7 @@ the openings have not been certified disjoint from training positions. They
 show that this outcome-trained model is not ready to replace the handcrafted
 evaluator. Better training targets, data coverage, and architecture should be
 tested before enabling NNUE in the game.
+
+The [stronger-search training experiment](nnue-search-targets.md) adds resumable
+depth-six teacher labels, search-target training, and paired-match reporting
+with opening-overlap checks.

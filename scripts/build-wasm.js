@@ -28,6 +28,7 @@ function run(tool, args) {
 }
 run('cargo', [
   'build',
+  '--lib',
   '--locked',
   '--release',
   '--target',

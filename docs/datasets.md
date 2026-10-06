@@ -1,5 +1,9 @@
 # Self-play datasets for learned evaluation
 
+For consistent deeper labels on an existing dataset, see the
+[stronger-search NNUE experiment](nnue-search-targets.md). Its relabeler preserves
+the existing split and adds independently searched teacher scores.
+
 The exporter reconstructs training positions from version-1 self-play JSONL files. It requires only Node; it does not run engine searches. The dataset is a starting point for an NNUE experiment, with sparse stone locations and labels independent of any particular network architecture.
 
 ```bash

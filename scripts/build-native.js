@@ -1,0 +1,11 @@
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
+import { homedir } from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const root = fileURLToPath(new URL('../', import.meta.url));
+const cargo = path.join(homedir(), '.cargo', 'bin', process.platform === 'win32' ? 'cargo.exe' : 'cargo');
+const result = spawnSync(existsSync(cargo) ? cargo : 'cargo', ['build', '--release', '--locked', '--manifest-path', 'engine-rust/Cargo.toml', '--bin', 'pbrain-gomoku'], { cwd: root, stdio: 'inherit' });
+if (result.error) throw result.error;
+if (result.status !== 0) process.exit(result.status ?? 1);
+console.log(path.join(root, 'engine-rust', 'target', 'release', process.platform === 'win32' ? 'pbrain-gomoku.exe' : 'pbrain-gomoku'));

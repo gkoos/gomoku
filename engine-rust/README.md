@@ -4,6 +4,11 @@ This crate provides the computational engine for the browser worker. It implemen
 
 ## Layout
 
+The crate also builds a native `pbrain-gomoku` executable for 15×15 freestyle
+matches through the Gomocup/Piskvork protocol. See the
+[native engine guide](../docs/native-engine.md) for build commands, protocol
+support, fixed-depth limitations, and match-manager setup.
+
 - `src/bitboards.rs`: eight-word occupancy boards, row-major set-bit iteration, overlap and fullness checks.
 - `src/patterns.rs`: directional extraction and mask-indexed pattern lookup.
 - `src/pattern_reference.rs`: reference bitmask classifier, pattern representation and scores.

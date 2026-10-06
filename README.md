@@ -36,6 +36,7 @@ npm run dev
 - [Implementation guide](docs/implementation.md): modules, bitboards, incremental caches, worker lifecycle, and validation.
 - [Search performance](docs/performance.md): repeatable Wasm CPU profiling, measurements, and optimization priorities.
 - [Self-play](docs/self-play.md): paired engine matches and configurable evaluation weights.
+- [Native engine](docs/native-engine.md): build a Gomocup/Piskvork executable for external engine matches.
 - [Training datasets](docs/datasets.md): reproducible position exports and training/validation splits for learned evaluation.
 - [NNUE experiment](docs/nnue.md): offline training, portable models, and incremental inference checks.
 

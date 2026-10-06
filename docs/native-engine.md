@@ -1,0 +1,117 @@
+# Native Gomocup/Piskvork engine
+
+The native `pbrain-gomoku` executable uses the same root selection, incremental
+evaluation, candidate generation, and search as the browser Wasm engine. It
+communicates over stdin/stdout using the
+[Gomocup/Piskvork protocol](https://plastovicka.github.io/protocl2en.htm).
+Every reply is flushed; diagnostics go to stderr. The process retains the board
+between turns and constructs fresh search state and a transposition table for
+each move, as in the browser.
+
+## Build and run
+
+```powershell
+npm.cmd run native:build
+engine-rust/target/release/pbrain-gomoku.exe --depth=6
+```
+
+Linux/macOS use `pbrain-gomoku` without `.exe`. Only the native Rust toolchain
+is needed; Python and the Wasm target/bindgen CLI are unnecessary. The binary
+and Cargo build output are ignored by Git. Direct Cargo equivalent:
+
+```text
+cargo build --release --locked --manifest-path engine-rust/Cargo.toml --bin pbrain-gomoku
+```
+
+Options use `--name=value`:
+
+| Option | Default | Allowed values |
+| --- | ---: | --- |
+| `--depth` | 6 | 1–10 iterative plies; searched mates can end earlier |
+| `--extension` | 4 | 0–225 tactical horizon plies |
+| `--table-capacity` | 32768 | 0–1,000,000 entries; zero disables caching |
+| `--nnue` | None | Path to an experimental portable model |
+| `--nnue-scale` | 1000 | Finite value from 1 to 100,000 |
+
+`--help` prints usage to stderr and exits. Handcrafted evaluation is the default.
+Models are loaded and validated before reading protocol input. Use the scale
+recommended by the model's training report; search-target training uses 10000.
+Model paths are relative to the process working directory; absolute paths avoid
+ambiguity when a match manager changes directories.
+
+## Protocol
+
+| Command | Behavior |
+| --- | --- |
+| `START 15` | Initialize an empty board; reply `OK` |
+| `BEGIN` | Play first on an empty board; reply `x,y` |
+| `TURN x,y` | Record the opponent move, calculate and record our reply |
+| `BOARD` … `DONE` | Load a whole position and play; entries are `x,y,field` |
+| `INFO max_depth N` | Set depth to 1–10, without replying |
+| `INFO rule 0` | Select freestyle rules, without replying |
+| `INFO timeout_turn 0` | Use the existing fast/Easy root selector |
+| `RESTART` | Reset board and color; retain settings; reply `OK` |
+| `TAKEBACK x,y` | Remove an occupied square; reply `OK` |
+| `ABOUT` | Return engine name, version, and author metadata |
+| `END` | Exit without replying, including during an unfinished `BOARD` |
+
+Coordinates are zero-based: **x is column, y is row**; position is `y * 15 + x`.
+`BOARD` field 1 means our stones and field 2 means the opponent's, regardless
+of Black/White. Counts establish our absolute color and require it to be our
+turn. Board entries may arrive in any order. Successful responses immediately
+add our move to the stored board.
+
+Malformed/duplicate entries, invalid coordinates, occupied moves, terminal
+boards, and impossible turn counts return `ERROR`. Invalid board transactions
+are drained through `DONE` and preserve the previous position. A successful
+`BOARD` replaces the position and recomputes our color. Unknown commands return
+`UNKNOWN`; unknown `INFO` keys are ignored. `INFO` never replies. Unsupported
+rules or invalid depth settings are reported on the next move request and can
+be corrected by another `INFO`.
+
+## Match-manager setup and limitations
+
+This version supports **15×15 freestyle**, including overline wins. Other board
+sizes, exact-five, Renju, Caro, blocked-square fields, Swap2, and continuous-game
+commands are unsupported. This is compatibility for 15×15 freestyle matches,
+rather than full Gomocup tournament compliance.
+
+Search is synchronous and fixed-depth. Positive clock limits, node limits,
+memory hints, and asynchronous stop/ponder commands are not enforced. An `END`
+received during a search is processed after that search finishes. Use a generous
+external clock limit and explicit depth for initial matches; the manager can
+terminate an engine that exceeds its limit. Competitive clock-based benchmarking
+requires subsequent time-control work. Browser behavior is unaffected.
+
+[c-gomoku-cli](https://github.com/dhbloo/c-gomoku-cli) supports board size, rules,
+paired openings, executable arguments, and the `INFO max_depth` extension.
+With a separately installed Rapfi executable, an example is:
+
+```text
+c-gomoku-cli -each tc=0/3600 depth=4 -engine name=Gomoku cmd=./engine-rust/target/release/pbrain-gomoku.exe -engine name=Rapfi cmd=./external/rapfi/pbrain-rapfi.exe -rule 0 -boardsize 15 -games 20 -repeat -concurrency 1 -sgf matches.sgf
+```
+
+Adjust executable paths to your installation. External engines/managers are not
+downloaded by our build/check commands. Depth has different meanings in different
+engines, so equal depth gives repeatability rather than equal computational effort.
+
+## Validation
+
+```powershell
+npm.cmd run rust:test
+npm.cmd run native:check
+```
+
+Unit tests cover command sequencing, colors, axes, malformed input, transaction
+recovery, resets, takebacks, terminal boards, and settings. `native:check` builds
+the release binary, checks a live handshake while stdin stays open, and compares
+50 native move responses with the committed Wasm engine: both colors, reversed
+board-entry order, searched positions, resets, depth settings, and immediate wins.
+Test watchdogs only bound the harness. Wasm builds explicitly select `--lib`,
+so the native executable is not built for browser output.
+
+For experimental NNUE parity, add a model and scale to the check:
+
+```powershell
+npm.cmd run native:check -- --nnue=.training/nnue-search-depth6-v1/model.nnue --nnue-scale=10000
+```
