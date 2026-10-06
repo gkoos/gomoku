@@ -38,6 +38,7 @@ From the repository root:
 npm run rust:test
 npm run wasm:check
 npm run wasm:benchmark
+npm run wasm:profile
 ```
 
 `wasm:check` builds the release module and generates bindings under `engine-rust/pkg/web` and `engine-rust/pkg/nodejs`, then compares the actual Wasm module with the JavaScript reference. It checks every ternary nine-cell configuration in four directions, random boards at several densities, every board anchor, both evaluation perspectives, signed-word boundaries, padding, overlaps, and invalid binding inputs. The state parity script additionally checks line masks and winning boards against full reconstruction through 1,396 make/undo snapshots, packed windows, all-square updates, crossing reference counts, failed moves, stale undo tokens, and detached output arrays. Search parity checks compare 204 completed iterations and 400 fixed searches, including scores, principal variations, nodes, cache hits/cutoffs/size, zero/nonzero extension budgets, tiny-table eviction, narrowing/widening alpha-beta windows, terminal roots, ten-ply caps, and root hash/occupancy restoration. Candidate parity checks compare complete move lists across 4,628 board/color cases, including density thresholds, both colors, cached and standalone paths, signed words, padding, and make/undo sequences. Bindings under engine-rust/pkg and Cargo build output are ignored by Git. `npm run wasm:build` builds without running the parity script.
@@ -68,7 +69,7 @@ Each move updates exactly four directional masks, recomputes only their winning-
 
 The standalone `generate_candidates(black, white, player_black)` binding reconstructs line and winning-square state. `SearchState.candidates(player_black)` reuses the maintained cache. Both return an Int32Array of triples: square position, priority, tactical classification. Classification is 2 for an immediate win, 1 for a block, and 0 for a quiet move; -1 denotes opening candidates, where JavaScript omits the tactical property. Row and column are derived from position.
 
-The native `generate_into` function accepts a caller-owned `Candidates` buffer containing up to 225 fixed-size records. It generates radius-one and density-qualified radius-two frontiers with row-mask shifts, computes original priorities, sorts by tactics/priority/source rank, and preserves all tactical moves beyond the normal cap. The total ordering permits allocation-free unstable sorting while preserving JavaScript tie order. Only Wasm output conversion allocates a returned vector. Candidate membership, widths, and scoring are unchanged from the JavaScript algorithm.
+The native `generate_into` function accepts a caller-owned `Candidates` buffer containing up to 225 fixed-size records. It generates radius-one and density-qualified radius-two frontiers with row-mask shifts, computes original priorities, ranks by tactics/priority/source rank, and preserves all tactical moves beyond the normal cap. When the frontier exceeds twice the retained count, it partitions out the best 30/50 (or tactical count) before sorting that subset; smaller frontiers use a full sort. Both paths preserve the exact original ordered prefix. The total ordering permits allocation-free unstable sorting while preserving JavaScript tie order. Only Wasm output conversion allocates a returned vector. Candidate membership, widths, and scoring are unchanged from the JavaScript algorithm.
 
 ## Root move-selection API
 
@@ -104,3 +105,5 @@ On this Windows machine, Node 24.2.0 with release-built Rust 1.99.0 measured:
 | seeded-4 | 5 | 54.0 ms | 15.3 ms | 3.52? |
 
 These sampled timings are not a guarantee across positions or browsers. Re-run locally; browser performance should be measured separately.
+
+For repeatable CPU profiles and current optimization priorities, see [search performance](../docs/performance.md). `wasm:profile` writes ignored summary/profile artifacts under `.profiles/wasm-search/` without instrumenting the engine.

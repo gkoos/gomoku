@@ -202,15 +202,25 @@ pub fn generate_into(
             frontier &= frontier - 1;
         }
     }
-    result.moves[..result.len].sort_unstable_by(|a, b| {
+    let compare = |a: &Candidate, b: &Candidate| {
         b.tactical
             .cmp(&a.tactical)
             .then(b.priority.cmp(&a.priority))
             .then(a.rank.cmp(&b.rank))
-    });
-    result.len = result
+    };
+    let retained = result
         .len
         .min((if stone_count < 10 { 30 } else { 50 }).max(tactical_count));
+    // The total comparator preserves the exact prefix of a full sort, including
+    // source-rank ties. Tactical moves sort first and all fit in the retained set.
+    // Partitioning a small frontier can cost more than sorting it directly.
+    if result.len > retained * 2 {
+        result.moves[..result.len].select_nth_unstable_by(retained, compare);
+        result.moves[..retained].sort_unstable_by(compare);
+    } else {
+        result.moves[..result.len].sort_unstable_by(compare);
+    }
+    result.len = retained;
 }
 
 #[cfg(test)]

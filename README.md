@@ -34,6 +34,7 @@ npm run dev
 
 - [AI algorithm](docs/algorithm.md): tactical decisions, candidates, evaluation, search, and difficulty levels.
 - [Implementation guide](docs/implementation.md): modules, bitboards, incremental caches, worker lifecycle, and validation.
+- [Search performance](docs/performance.md): repeatable Wasm CPU profiling, measurements, and optimization priorities.
 
 ## License
 

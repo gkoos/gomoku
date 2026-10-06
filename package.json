@@ -13,7 +13,9 @@
     "rust:test": "cargo test --locked --manifest-path engine-rust/Cargo.toml",
     "wasm:benchmark": "npm run wasm:build && node scripts/benchmark-wasm-search.js && node scripts/benchmark-wasm-root.js",
     "predev": "node scripts/check-wasm-artifact.js",
-    "prebuild": "node scripts/check-wasm-artifact.js"
+    "prebuild": "node scripts/check-wasm-artifact.js",
+    "wasm:profile": "npm run wasm:build && node scripts/profile-wasm-search.js",
+    "wasm:compare": "npm run wasm:build && node scripts/compare-wasm-search.js"
   },
   "devDependencies": {
     "vite": "^7.0.0"

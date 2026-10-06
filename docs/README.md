@@ -1,9 +1,8 @@
-﻿# Engine documentation
+# Engine documentation
 
 - [AI algorithm](algorithm.md): move selection, candidates, evaluation, search, and difficulty levels.
 - [Implementation guide](implementation.md): modules, bitboards, incremental state, caching, workers, and validation.
+- [Rust/Wasm engine](../engine-rust/README.md): toolchain, browser integration, parity validation, and benchmarks.
+- [Search performance](performance.md): repeatable Wasm CPU profiling, measurements, and optimization priorities.
 
 These pages describe the current implementation. See the [project README](../README.md) for installation and development commands.
-
-
-- [Rust/Wasm engine](../engine-rust/README.md): toolchain, browser integration, parity validation, and benchmarks.
