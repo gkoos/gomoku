@@ -71,6 +71,8 @@ Each color's winning cache holds per-line masks, a combined winning board, a win
 
 Undo restores saved score/cache entries and reverses occupancy and directional changes. Search also reverses the Zobrist hash. Recursive branches use try/finally to restore state after errors, including thrown callbacks. Undo must follow reverse move order.
 
+Rust search bypasses candidate generation when those caches show no own immediate win and exactly one opponent winning square. It searches that mandatory block directly through the ordinary recursive path; multiple wins/blocks retain candidate ordering.
+
 Candidate classification reads cached winning boards. Horizon search retrieves their set bits directly. Quiet leaves return cached scores without rescanning stones or lines.
 
 Rust search also maintains 225 neighborhood density counts, including each square's radius-two center. Standard make/undo changes at most 25 counts and candidate generation reuses them. Leaf and tactical-horizon branches skip density updates because they read only evaluation/winning caches; their undo frames record this choice, and search restores the parent before generating candidates again. The JavaScript reference continues to reconstruct counts.

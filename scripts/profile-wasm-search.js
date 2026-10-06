@@ -89,8 +89,9 @@ const answer = (r) => ({ depth: r.depth, score: r.score, pv: r.pv });
 const median = (xs) => xs.sort((a, b) => a - b)[Math.floor(xs.length / 2)];
 function category(stack) {
   const has = (re) => stack.some((frame) => re.test(frame.functionName));
-  if (has(/moves::generate_into/)) return 'candidate generation';
-  if (has(/incremental::Evaluator.*(?:make_move|undo_move)/))
+  if (has(/moves::generate_(?:into|with_density)/))
+    return 'candidate generation';
+  if (has(/incremental::Evaluator.*(?:make_move|undo_move|place)/))
     return 'make/undo evaluation';
   if (has(/transposition::|hashbrown|hash::|sip::|Search.*::key/))
     return 'transposition cache';
@@ -133,9 +134,11 @@ function summarize(profile) {
     const has = (re) => stack.some((frame) => re.test(frame.functionName));
     let detail = group;
     if (group === 'candidate generation')
-      detail = has(/slice::sort::/)
-        ? 'candidate sorting'
-        : 'candidate generation excluding visible sorting';
+      detail = has(/select_nth_unstable_by/)
+        ? 'candidate partitioning'
+        : has(/slice::sort::/)
+          ? 'candidate sorting'
+          : 'candidate generation excluding visible sorting';
     if (group === 'make/undo evaluation')
       detail = has(/patterns::classify/)
         ? 'pattern classification during make/undo'

@@ -11,6 +11,25 @@ const baseline = resolve(
 const old = require(baseline),
   now = require('../engine-rust/pkg/nodejs/gomoku_engine.js'),
   fixtures = require('../test/fixtures/engine-baseline.json');
+const bits = (ps) => {
+  const b = new Uint32Array(8);
+  for (const p of ps) b[p >>> 5] |= 1 << (p & 31);
+  return b;
+};
+fixtures.push(
+  {
+    name: 'mandatory-block',
+    blackBitboard: bits([107]),
+    whiteBitboard: bits([108, 109, 110, 111]),
+  },
+  {
+    name: 'forcing-chain',
+    blackBitboard: bits([109, 69, 84, 99, 125, 85, 100, 115, 141]),
+    whiteBitboard: bits([
+      110, 111, 112, 113, 54, 126, 127, 128, 70, 142, 143, 144,
+    ]),
+  },
+);
 const median = (a) => a.sort((a, b) => a - b)[a.length >> 1],
   results = [];
 function search(m, b, w, d) {
@@ -32,6 +51,8 @@ for (const [name, depth] of [
   ['seeded-2', 6],
   ['seeded-4', 6],
   ['seeded-9', 6],
+  ['mandatory-block', 6],
+  ['forcing-chain', 6],
 ]) {
   const f = fixtures.find((f) => f.name === name),
     b = Uint32Array.from(f.blackBitboard),
@@ -43,6 +64,8 @@ for (const [name, depth] of [
     search(now, b, w, depth);
   }
   const times = { old: [], now: [] };
+  const batch =
+    name === 'forcing-chain' ? 100 : name === 'mandatory-block' ? 20 : 1;
   for (let n = 0; n < 11; n++)
     for (const [key, m] of n % 2
       ? [
@@ -54,13 +77,14 @@ for (const [name, depth] of [
           ['now', now],
         ]) {
       const t = performance.now();
-      const r = search(m, b, w, depth);
-      times[key].push(performance.now() - t);
+      let r;
+      for (let i = 0; i < batch; i++) r = search(m, b, w, depth);
+      times[key].push((performance.now() - t) / batch);
       assert.deepEqual(r, expected);
     }
   const a = median(times.old),
     z = median(times.now);
-  results.push({ name, depth, beforeMs: a, afterMs: z, speedup: a / z });
+  results.push({ name, depth, batch, beforeMs: a, afterMs: z, speedup: a / z });
 }
 for (const r of results) console.log(JSON.stringify(r));
 fs.mkdirSync('.profiles', { recursive: true });

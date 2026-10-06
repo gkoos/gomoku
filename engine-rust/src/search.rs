@@ -1,6 +1,6 @@
 use crate::bitboards::{Bitboard, positions};
 use crate::incremental::Evaluator;
-use crate::moves::{Candidates, generate_with_density};
+use crate::moves::{Candidate, Candidates, generate_with_density};
 use crate::rules::{self, BoardResult};
 use crate::transposition::{Bound, CacheKey, Entry, Table, from_table, to_table};
 use crate::zobrist::Hasher;
@@ -437,14 +437,28 @@ impl Search {
                 return Ok(result);
             }
         }
-        generate_with_density(
-            &self.state.black,
-            &self.state.white,
-            to_move,
-            &self.state.winning,
-            &self.state.density.0,
-            &mut self.buffers[ply],
-        );
+        let (wins, threats) = if to_move {
+            (&self.state.winning.black, &self.state.winning.white)
+        } else {
+            (&self.state.winning.white, &self.state.winning.black)
+        };
+        let mandatory_block = wins.count == 0 && threats.count == 1;
+        if mandatory_block {
+            let position = positions(&threats.board, &[0; 8], false)
+                .next()
+                .expect("cached single threat");
+            self.buffers[ply].moves[0] = Candidate::mandatory_block(position);
+            self.buffers[ply].len = 1;
+        } else {
+            generate_with_density(
+                &self.state.black,
+                &self.state.white,
+                to_move,
+                &self.state.winning,
+                &self.state.density.0,
+                &mut self.buffers[ply],
+            );
+        }
         if self.buffers[ply].len == 0 {
             return Ok(self.remember(
                 key,
@@ -455,7 +469,9 @@ impl Search {
                 to_move,
             ));
         }
-        self.select(depth, ply);
+        if !mandatory_block {
+            self.select(depth, ply);
+        }
         let first = self.buffers[ply].moves[0];
         if first.tactical == Some(2) {
             let score = if maximizing {
@@ -552,6 +568,31 @@ mod tests {
             );
         }
         assert!(reference.next_iteration().unwrap().is_none());
+    }
+    #[test]
+    fn mandatory_block_shortcut_restores_state_and_never_overrides_a_win() {
+        for capacity in [0, 2, 32768] {
+            let b = bits(&[107]);
+            let w = bits(&[108, 109, 110, 111]);
+            let mut search = Search::new(b, w, true, 3, 4, capacity).unwrap();
+            let density = search.state.density.0;
+            let hash = search.hasher;
+            let result = search.fixed(3, true, -INFINITY, INFINITY).unwrap();
+            assert_eq!(result.result.pv[0], 112);
+            assert_eq!(search.state.black, b);
+            assert_eq!(search.state.white, w);
+            assert_eq!(search.state.density.0, density);
+            assert_eq!(search.hasher, hash);
+            assert_eq!(search.state.history_length(), 0);
+            // Both players have exactly one winning square; take our win.
+            let b = bits(&[0, 1, 2, 3, 107]);
+            for perspective in [true, false] {
+                let mut search = Search::new(b, w, perspective, 3, 4, capacity).unwrap();
+                let result = search.fixed(3, true, -INFINITY, INFINITY).unwrap();
+                assert_eq!(result.result.pv[0], if perspective { 4 } else { 112 });
+                assert_eq!(result.result.score, WIN_SCORE - 1);
+            }
+        }
     }
     #[test]
     fn terminal_boards_and_invalid_configuration() {

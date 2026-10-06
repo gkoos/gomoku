@@ -10,6 +10,16 @@ pub struct Candidate {
     pub tactical: Option<u8>,
     rank: u16,
 }
+impl Candidate {
+    /// A unique mandatory reply needs no ranking metadata.
+    pub fn mandatory_block(position: usize) -> Self {
+        Self {
+            position,
+            tactical: Some(1),
+            ..Self::default()
+        }
+    }
+}
 pub struct Candidates {
     pub moves: [Candidate; BOARD_CELLS],
     pub len: usize,

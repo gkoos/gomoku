@@ -91,3 +91,22 @@ Updating density on every leaf initially made the one-stone opening about 4% slo
 | 12-stone development | 6 | 81.2 | 80.2 | Approximately unchanged |
 
 These are modest differences on this Node-hosted sample, not a substantial speedup claim. Every iteration retains identical scores, PVs, nodes and cache statistics. Tests compare density with an independent square reference across 225 placements and their undos, edges, full-board counts, failed moves, stale tokens and leaf/horizon restoration. Full Wasm candidate/state/search parity checks also pass. Compare another saved build with `npm run wasm:compare -- --baseline=.profiles/density-before/gomoku_engine.js`.
+
+## Direct mandatory-block selection
+
+Rust search now retrieves a single mandatory block from the winning-square cache before candidate generation, provided there is no own immediate win. The normal make/undo, recursive depth, cache bounds, node counting and mate-distance handling remain unchanged. Multiple winning moves still use candidate ordering.
+
+Saved-build comparisons now include a mandatory-block fixture and a forcing-chain fixture. The short forcing chain is timed in batches of 100 searches; the mandatory-block fixture uses batches of 20. All completed iteration values must match the baseline exactly. Against the density-maintenance build, three warmups and eleven alternating runs measured:
+
+| Position | Depth | Before, ms | After, ms | Result |
+| --- | ---: | ---: | ---: | --- |
+| One-stone opening | 7 | 184.1 | 185.7 | Approximately unchanged |
+| Six-stone opening | 6 | 77.4 | 77.5 | Approximately unchanged |
+| 20-stone middlegame | 6 | 37.5 | 35.8 | About 5% less elapsed time |
+| 12-stone development | 6 | 78.5 | 78.4 | Approximately unchanged |
+| Mandatory block, then quiet search | 6 | 20.48 | 20.75 | Approximately unchanged |
+| Forcing chain | 6 | 0.118 | 0.057 | About 2.1x faster |
+
+The largest relative improvement is on the forced chain, whose absolute cost was already small. One block followed by quiet search does not yield a broad speedup. These are Node-hosted results. Run `npm run wasm:compare -- --baseline=.profiles/forced-block-before/gomoku_engine.js` with a saved prior build to reproduce. Native tests additionally check state/density/hash restoration and immediate-win precedence for both colors and multiple table capacities.
+
+A follow-up one-second-per-position CPU sample of the optimized build still attributes roughly 36?54% of longer searches to candidate generation and 28?37% to make/undo. On the forcing chain, candidate generation falls to about 6%, with make/undo around 38%. These are approximate shares of a much shorter search; fixed construction and binding overhead become more visible. The profiler recognizes the new generate_with_density/place function names and reports candidate partitioning separately from sorting. Historical pre-optimization shares above remain tied to their original build.
