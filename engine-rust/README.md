@@ -9,6 +9,7 @@ This crate provides the computational engine for the browser worker. It implemen
 - `src/evaluation.rs`: full-board evaluation with JavaScript-compatible perspective and score clamping.
 - `src/lines.rs`: shared geometry, 88 line masks per color, packed extraction, and reference-counted winning squares.
 - `src/incremental.rs`: reversible score updates with fixed-size undo buffers and preallocated move history.
+- `src/neighborhood.rs`: maintained radius-two occupancy density and reversible neighborhood updates.
 - `src/moves.rs`: shift-generated candidate neighborhoods, density priorities, tactical classification, stable tie ordering, and fixed-size output buffers.
 - `src/root.rs`: root priorities, open-four defense, and Easy move scoring.
 - `src/rules.rs`: anchored wins and root terminal validation.
@@ -69,7 +70,7 @@ Each move updates exactly four directional masks, recomputes only their winning-
 
 The standalone `generate_candidates(black, white, player_black)` binding reconstructs line and winning-square state. `SearchState.candidates(player_black)` reuses the maintained cache. Both return an Int32Array of triples: square position, priority, tactical classification. Classification is 2 for an immediate win, 1 for a block, and 0 for a quiet move; -1 denotes opening candidates, where JavaScript omits the tactical property. Row and column are derived from position.
 
-The native `generate_into` function accepts a caller-owned `Candidates` buffer containing up to 225 fixed-size records. It generates radius-one and density-qualified radius-two frontiers with row-mask shifts, computes original priorities, ranks by tactics/priority/source rank, and preserves all tactical moves beyond the normal cap. When the frontier exceeds twice the retained count, it partitions out the best 30/50 (or tactical count) before sorting that subset; smaller frontiers use a full sort. Both paths preserve the exact original ordered prefix. The total ordering permits allocation-free unstable sorting while preserving JavaScript tie order. Only Wasm output conversion allocates a returned vector. Candidate membership, widths, and scoring are unchanged from the JavaScript algorithm.
+The native `generate_into` function accepts a caller-owned `Candidates` buffer containing up to 225 fixed-size records. It generates radius-one and density-qualified radius-two frontiers with row-mask shifts, computes original priorities, ranks by tactics/priority/source rank, and preserves all tactical moves beyond the normal cap. When the frontier exceeds twice the retained count, it partitions out the best 30/50 (or tactical count) before sorting that subset; smaller frontiers use a full sort. Both paths preserve the exact original ordered prefix. The total ordering permits allocation-free unstable sorting while preserving JavaScript tie order. Search and maintained-state candidate generation reuse 225 radius-two density counts. Standard make/undo updates at most 25 counts; standalone generation reconstructs them once. Search skips these updates for leaf and tactical-horizon placements, which never generate candidates, then restores the parent before generation resumes. Only Wasm output conversion allocates a returned vector. Candidate membership, widths, and scoring are unchanged from the JavaScript algorithm.
 
 ## Root move-selection API
 

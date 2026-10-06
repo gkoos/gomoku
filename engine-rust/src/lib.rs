@@ -164,6 +164,7 @@ impl SearchState {
     }
 }
 pub mod moves;
+pub mod neighborhood;
 
 /// Triples of position, priority, tactical classification (-1 for opening moves).
 #[wasm_bindgen]
@@ -185,11 +186,12 @@ pub fn generate_candidates(
 impl SearchState {
     pub fn candidates(&self, player_black: bool) -> Vec<i32> {
         let mut result = moves::Candidates::default();
-        moves::generate_into(
+        moves::generate_with_density(
             &self.inner.black,
             &self.inner.white,
             player_black,
             &self.inner.winning,
+            &self.inner.density.0,
             &mut result,
         );
         result.packed()

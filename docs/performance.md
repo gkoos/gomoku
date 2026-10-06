@@ -43,7 +43,7 @@ Samples use observed time deltas and relevant Rust call-stack ancestry, so categ
 ## Optimization priorities
 
 1. **Avoid sorting discarded candidates.** Candidate generation sorts the entire frontier before retaining 30/50 candidates (plus all tactical moves). Visible sorting consumes roughly 19?37% of total time in the longer cases. Select the retained subset first, then sort it with the existing total comparator. Preserve tactical retention, source-rank ties and the exact list used by search/PV ordering. Validate full candidate lists and search statistics against the reference.
-2. **Reduce repeated generation work.** Density is rebuilt from occupied squares at every generated node. Measure maintaining density during make/undo against recomputation. Single mandatory replies may also bypass quiet candidate generation, with careful preservation of existing tactical ordering.
+2. **Reduce repeated generation work.** Density maintenance is now implemented; see the measurements below. Single mandatory replies may also bypass quiet candidate generation, with careful preservation of existing tactical ordering.
 3. **Optimize make/undo.** It consumes roughly 23?37% in these longer cases. Investigate affected-score work and pattern classification after candidate improvements. Distinguish visible pattern/cache calls from work inlined into make/undo.
 4. **Revisit the transposition table afterward.** Cache work accounts for approximately 6?12% here. Caching makes every longer sampled search faster (about 12?27% less elapsed time), while short no-hit tactical searches pay overhead. Profile evidence does not establish allocation counts or prove that replacing the table is the largest gain. Fixed PV copies, hashing and allocation remain candidates for targeted measurements.
 
@@ -76,3 +76,18 @@ npm run wasm:compare -- --baseline=.profiles/other-baseline/gomoku_engine.js
 ```
 
 The saved directory must include the generated JS, Wasm and CommonJS package.json. Run wasm:build before taking a baseline if Node bindings are missing or stale. Comparison rebuilds the current engine, verifies every iteration against the saved baseline, and writes `.profiles/wasm-search-comparison.json`. Baseline binaries remain local and ignored by Git.
+
+## Incremental neighborhood density
+
+Rust search and SearchState now initialize radius-two density counts once and reuse them for candidate generation. Ordinary make/undo updates at most 25 counts. Leaf and tactical-horizon moves deliberately skip density updates because those branches never generate candidates. Undo records whether counts were changed and restores the parent before candidate generation resumes. Candidate thresholds, priorities and source-rank ordering are unchanged.
+
+Updating density on every leaf initially made the one-stone opening about 4% slower. Skipping those updates removed most of that cost. Against the previous partial-sorting build, three warmups and eleven alternating runs measured:
+
+| Position | Depth | Before, ms | After, ms | Result |
+| --- | ---: | ---: | ---: | --- |
+| One-stone opening | 7 | 182.6 | 183.6 | Approximately unchanged |
+| Six-stone opening | 6 | 77.9 | 77.7 | Approximately unchanged |
+| 20-stone middlegame | 6 | 39.3 | 38.2 | About 3% less elapsed time |
+| 12-stone development | 6 | 81.2 | 80.2 | Approximately unchanged |
+
+These are modest differences on this Node-hosted sample, not a substantial speedup claim. Every iteration retains identical scores, PVs, nodes and cache statistics. Tests compare density with an independent square reference across 225 placements and their undos, edges, full-board counts, failed moves, stale tokens and leaf/horizon restoration. Full Wasm candidate/state/search parity checks also pass. Compare another saved build with `npm run wasm:compare -- --baseline=.profiles/density-before/gomoku_engine.js`.

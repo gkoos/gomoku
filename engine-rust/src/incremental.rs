@@ -1,6 +1,7 @@
 use crate::bitboards::{BOARD_CELLS, Bitboard, contains, positions};
 use crate::evaluation::MAX_STATIC_SCORE;
 use crate::lines::{LineBoards, WinningCache, WinningUndo, geometry};
+use crate::neighborhood::Density;
 
 struct Frame {
     token: u32,
@@ -9,6 +10,7 @@ struct Frame {
     total: i32,
     scores: [i32; 36],
     winning: WinningUndo,
+    density_updated: bool,
 }
 /// Owns reversible state. History frames use fixed buffers; no per-move heap allocation.
 pub struct Evaluator {
@@ -16,6 +18,7 @@ pub struct Evaluator {
     pub white: Bitboard,
     pub lines: LineBoards,
     pub winning: WinningCache,
+    pub density: Density,
     scores: [i32; 900],
     total: i32,
     perspective_black: bool,
@@ -40,6 +43,7 @@ impl Evaluator {
             white,
             lines,
             winning,
+            density: Density::new(&black, &white),
             scores: [0; 900],
             total: 0,
             perspective_black,
@@ -76,6 +80,19 @@ impl Evaluator {
         self.history.len()
     }
     pub fn make_move(&mut self, position: usize, black: bool) -> Result<u32, &'static str> {
+        self.place(position, black, true)
+    }
+    /// Search-only leaf/horizon placement. Undo before generating candidates;
+    /// these branches read evaluation/winning caches but never density.
+    pub fn make_leaf_move(&mut self, position: usize, black: bool) -> Result<u32, &'static str> {
+        self.place(position, black, false)
+    }
+    fn place(
+        &mut self,
+        position: usize,
+        black: bool,
+        density_updated: bool,
+    ) -> Result<u32, &'static str> {
         if position >= BOARD_CELLS {
             return Err("Move is outside the board");
         }
@@ -92,6 +109,9 @@ impl Evaluator {
             &mut self.white
         };
         board[position >> 5] |= 1 << (position & 31);
+        if density_updated {
+            self.density.update(position, true);
+        }
         self.lines.update(position, black, true);
         let winning = self.winning.refresh(&self.lines, position);
         let mut frame = Frame {
@@ -101,6 +121,7 @@ impl Evaluator {
             total: self.total,
             scores: [0; 36],
             winning,
+            density_updated,
         };
         let g = geometry();
         for (offset, &index) in g.affected[position][..g.affected_lengths[position]]
@@ -127,6 +148,9 @@ impl Evaluator {
             &mut self.white
         };
         board[frame.position >> 5] &= !(1 << (frame.position & 31));
+        if frame.density_updated {
+            self.density.update(frame.position, false);
+        }
         self.lines.update(frame.position, frame.black, false);
         self.winning.restore(frame.winning);
         let g = geometry();

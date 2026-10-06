@@ -1,6 +1,6 @@
 use crate::bitboards::{Bitboard, positions};
 use crate::incremental::Evaluator;
-use crate::moves::{Candidates, generate_into};
+use crate::moves::{Candidates, generate_with_density};
 use crate::rules::{self, BoardResult};
 use crate::transposition::{Bound, CacheKey, Entry, Table, from_table, to_table};
 use crate::zobrist::Hasher;
@@ -293,7 +293,7 @@ impl Search {
         let p = positions(&threats.board, &[0; 8], false)
             .next()
             .expect("cached threat count");
-        let token = self.state.make_move(p, own)?;
+        let token = self.state.make_leaf_move(p, own)?;
         self.hasher.toggle(p, own);
         self.nodes += 1;
         let child = self.horizon(!maximizing, ply + 1, remaining - 1);
@@ -437,11 +437,12 @@ impl Search {
                 return Ok(result);
             }
         }
-        generate_into(
+        generate_with_density(
             &self.state.black,
             &self.state.white,
             to_move,
             &self.state.winning,
+            &self.state.density.0,
             &mut self.buffers[ply],
         );
         if self.buffers[ply].len == 0 {
@@ -474,7 +475,11 @@ impl Search {
         let mut best = ResultLine::quiet(if maximizing { -INFINITY } else { INFINITY });
         for i in 0..self.buffers[ply].len {
             let candidate = self.buffers[ply].moves[i];
-            let token = self.state.make_move(candidate.position, to_move)?;
+            let token = if depth == 1 {
+                self.state.make_leaf_move(candidate.position, to_move)?
+            } else {
+                self.state.make_move(candidate.position, to_move)?
+            };
             self.hasher.toggle(candidate.position, to_move);
             self.path[ply] = candidate.position as u16;
             let child = self.minimax(depth - 1, alpha, beta, !maximizing, ply + 1);

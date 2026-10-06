@@ -71,20 +71,26 @@ pub fn generate_into(
     winning: &WinningCache,
     result: &mut Candidates,
 ) {
+    let density = crate::neighborhood::Density::new(black, white);
+    generate_with_density(black, white, player_black, winning, &density.0, result);
+}
+
+pub fn generate_with_density(
+    black: &Bitboard,
+    white: &Bitboard,
+    player_black: bool,
+    winning: &WinningCache,
+    density: &[u8; 225],
+    result: &mut Candidates,
+) {
     result.len = 0;
     let mut occupied = [0u16; 15];
-    let mut density = [0u8; 225];
     let mut stone_count = 0;
     for p in positions(black, white, false) {
         let row = p / 15;
         let col = p % 15;
         occupied[row] |= 1 << col;
         stone_count += 1;
-        for r in row.saturating_sub(2)..=(row + 2).min(14) {
-            for c in col.saturating_sub(2)..=(col + 2).min(14) {
-                density[r * 15 + c] += 1;
-            }
-        }
     }
     if stone_count == 0 {
         for (row, col, priority) in [

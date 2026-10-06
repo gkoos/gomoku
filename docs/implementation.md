@@ -73,6 +73,8 @@ Undo restores saved score/cache entries and reverses occupancy and directional c
 
 Candidate classification reads cached winning boards. Horizon search retrieves their set bits directly. Quiet leaves return cached scores without rescanning stones or lines.
 
+Rust search also maintains 225 neighborhood density counts, including each square's radius-two center. Standard make/undo changes at most 25 counts and candidate generation reuses them. Leaf and tactical-horizon branches skip density updates because they read only evaluation/winning caches; their undo frames record this choice, and search restores the parent before generating candidates again. The JavaScript reference continues to reconstruct counts.
+
 ## Hashing and transposition table
 
 [zobrist.js](../src/ai/zobrist.js) uses a deterministic key containing two 32-bit words. Each color/square pair has a random key; side to move has another. Initialization XORs occupied-square keys. Make and undo XOR the same stone and side keys, making updates reversible.
