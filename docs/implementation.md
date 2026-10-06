@@ -52,7 +52,7 @@ The UI also holds a two-dimensional board for rendering and setup. Converting th
 
 [line-bitboards.js](../src/ai/line-bitboards.js) defines 88 lines per color: 15 rows, 15 columns, and 29 diagonals in each direction, including short diagonals. Masks are stored in Uint16Array instances. Every square belongs to exactly four lines.
 
-Precomputed memberships map squares to line IDs and bit positions. Make/undo changes four masks. Precomputed nine-square window metadata allows anchored extraction with shifts, masks, and boundary blockers. Pattern classification uses bitwise windows rather than temporary square arrays and sets.
+Precomputed memberships map squares to line IDs and bit positions. Make/undo changes four masks. Precomputed nine-square window metadata allows anchored extraction with shifts, masks, and boundary blockers. The JavaScript reference classifies bitwise windows directly. Rust converts extracted friendly/blocker masks into a ternary index using a precomputed mask map, then reads a build-generated lookup table. All 19,683 nine-cell configurations have compact two-byte entries; public pattern fields and packing remain unchanged. Directional extraction still uses maintained line bitboards.
 
 Bulk threat detection finds consecutive and broken four completions in line masks. Their squares combine into global eight-word winning boards, deduplicating crossings.
 

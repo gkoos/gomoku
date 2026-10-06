@@ -18,6 +18,7 @@ export function sourceDigest() {
   const files = [
     'engine-rust/Cargo.toml',
     'engine-rust/Cargo.lock',
+    'engine-rust/build.rs',
     'scripts/build-wasm.js',
     ...readdirSync(resolve(root, 'engine-rust/src'), { recursive: true })
       .filter((file) => file.endsWith('.rs'))

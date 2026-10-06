@@ -1,6 +1,7 @@
 //! Computational engine primitives; browser integration remains in JavaScript.
 pub mod bitboards;
 pub mod evaluation;
+pub mod pattern_reference;
 pub mod patterns;
 
 use bitboards::Bitboard;

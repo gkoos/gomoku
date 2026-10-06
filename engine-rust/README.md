@@ -5,7 +5,9 @@ This crate provides the computational engine for the browser worker. It implemen
 ## Layout
 
 - `src/bitboards.rs`: eight-word occupancy boards, row-major set-bit iteration, overlap and fullness checks.
-- `src/patterns.rs`: directional extraction, mask classification, and search pattern scores.
+- `src/patterns.rs`: directional extraction and mask-indexed pattern lookup.
+- `src/pattern_reference.rs`: reference bitmask classifier, pattern representation and scores.
+- `build.rs`: generates the compact lookup table at compile time.
 - `src/evaluation.rs`: full-board evaluation with JavaScript-compatible perspective and score clamping.
 - `src/lines.rs`: shared geometry, 88 line masks per color, packed extraction, and reference-counted winning squares.
 - `src/incremental.rs`: reversible score updates with fixed-size undo buffers and preallocated move history.
@@ -47,6 +49,8 @@ npm run wasm:profile
 `npm run wasm:build` also copies browser bindings and the binary to `src/ai/wasm/`, recording source and artifact hashes in `build.json`. Commit these assets with Rust changes. Development and production builds reject missing or stale assets, but require no Rust installation when assets are current. `npm test` exercises the committed browser module.
 
 Vite bundles the web binding module into the worker and emits Wasm as a separate asset. `wasm-runtime.js` initializes it lazily for all difficulties; `wasm-search.js` forwards completed iterations and frees search state afterward. Initialization failure is reported once and uses JavaScript search for that worker. Cloudflare builds continue to need only Node/npm.
+
+Classification looks up one of 19,683 nine-cell ternary patterns. A precomputed 512-entry mask-to-ternary map converts friendly/blocker bitmasks into a table index without reading individual squares. Each table entry is a u16: stones in bits 0?2, windows 3?5, winning count 6?9 and open-three/open-two flags 10/11. The internal table uses 39,366 bytes plus the index map; public pattern packing is unchanged. Cargo generates the table from the reference classifier at build time, so browser initialization does not construct it. Build/source freshness includes build.rs.
 
 Bindings accept eight-word unsigned arrays. Analyze accepts a square index (0–224) and direction index: horizontal, vertical, descending diagonal, ascending diagonal. Evaluation accepts black occupancy, white occupancy, and a boolean black perspective. Pattern results pack stones, windows, and winning-move counts into the low three bytes, with open-three/open-two flags in bits 24/25. This compact representation avoids allocating result objects for each analysis.
 

@@ -110,3 +110,24 @@ Saved-build comparisons now include a mandatory-block fixture and a forcing-chai
 The largest relative improvement is on the forced chain, whose absolute cost was already small. One block followed by quiet search does not yield a broad speedup. These are Node-hosted results. Run `npm run wasm:compare -- --baseline=.profiles/forced-block-before/gomoku_engine.js` with a saved prior build to reproduce. Native tests additionally check state/density/hash restoration and immediate-win precedence for both colors and multiple table capacities.
 
 A follow-up one-second-per-position CPU sample of the optimized build still attributes roughly 36?54% of longer searches to candidate generation and 28?37% to make/undo. On the forcing chain, candidate generation falls to about 6%, with make/undo around 38%. These are approximate shares of a much shorter search; fixed construction and binding overhead become more visible. The profiler recognizes the new generate_with_density/place function names and reports candidate partitioning separately from sorting. Historical pre-optimization shares above remain tied to their original build.
+
+## Precomputed pattern classification
+
+Adopted a static table after comparison with the direct bitmask classifier. Cargo generates all 19,683 ternary configurations from the reference classifier. The first prototype used four-byte entries; the final table uses two-byte entries (39,366 bytes), plus a 512-entry mask-to-ternary index map. Runtime extraction continues to use shifts and masks on maintained line bitboards. Lookup replaces classification only; there is no runtime table construction. Public packed pattern results are unchanged.
+
+Against the previous forced-block build, three warmups and eleven alternating runs measured:
+
+| Position | Depth | Before, ms | After, ms | Elapsed-time reduction |
+| --- | ---: | ---: | ---: | ---: |
+| One-stone opening | 7 | 182.8 | 168.8 | 8% |
+| Six-stone opening | 6 | 76.0 | 71.3 | 6% |
+| 20-stone middlegame | 6 | 35.2 | 33.3 | 5% |
+| 12-stone development | 6 | 77.5 | 72.9 | 6% |
+| Mandatory block | 6 | 20.06 | 18.55 | 8% |
+| Forcing chain | 6 | 0.057 | 0.051 | 10% |
+
+Every completed iteration matches the prior build, including score, PV, nodes and cache statistics. Native tests compare all 262,144 mask pairs after blocker normalization, and Wasm tests cover all ternary configurations in every direction against JavaScript. Sampled timing improvements are Node-hosted; they do not establish browser latency.
+
+The production Wasm asset grows from 125.11 KB to 164.83 KB, or 46.10 KB to 48.67 KB under Vite's gzip estimate: about 2.6 KB more compressed data. This does not measure cold download, compilation or initialization time. The larger asset is the tradeoff for reduced search time.
+
+Saved-build comparison: `npm run wasm:compare -- --baseline=.profiles/pattern-before/gomoku_engine.js`. Source freshness checks include build.rs as well as the reference classifier so changes cannot silently use an outdated browser table.
