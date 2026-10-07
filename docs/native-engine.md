@@ -66,6 +66,16 @@ policy ordering, versus the 12% and 17% references, and it is **3.5x slower**
 (mean 69 ms versus 20 ms per move). The promotion forces the entry's move into the
 retained prefix at every hit, and a stored move is often a refuted fail-low move
 rather than a good one, so the ordering only gets worse. It is not used.
+
+`--initiative=K` (from -64 to 64, default 0) adds a tempo-aware term: the side to
+move's open-three potential counts for an extra `K/16`. Positive `K` rewards the
+mover's live potential (initiative); negative `K` rewards the opponent's forcing
+shapes (defensive urgency). It is maintained incrementally per colour, and `K=0`
+leaves the linear evaluator byte-identical. Against Rapfi depth 6, `K = 16`, `-16`
+and `64` all score exactly the baseline 12% (12W/88L) while changing every game,
+so the term is inert at the weights tested. See
+[strategic loss diagnostic](strategic-diagnostic.md) for why the evaluation is
+still the leading suspect.
 `--root-width` overrides the candidate cap at the root only, leaving deeper nodes
 on the depth policy, and is still bounded by the same 30/50 generation cap.
 

@@ -161,6 +161,22 @@ Forcing the entry's move into the retained prefix at every hit both displaces th
 density ordering (many stored moves are refuted fail-low moves, not good ones) and
 searches an extra candidate per node. Rejected.
 
+## Phase 9 - Diagnosing the strategic gap, and a tempo-aware eval term (2026-10-07)
+
+With the tactical axis confirmed solved, the next step was to find *where* the
+quiet moves go wrong instead of guessing. See
+[strategic loss diagnostic](strategic-diagnostic.md).
+
+| Commit | Change | Result | Status |
+| --- | --- | --- | --- |
+| `cba5a54` | `scripts/external-match/strategic.js`: Rapfi as an oracle on our losses | we play Rapfi's own move 39% of the time; the first bad decision is positional in 57 of 95 games and arrives at ply 4-7 | kept (tool) |
+| (same run) | eval-versus-search probe on the non-mate divergences | our own static eval prefers the wrong move in **58%** of them; the 1-ply search in 32% | finding |
+| `cba5a54` | `--initiative=K`: tempo-aware eval term (the mover's open-three potential counts for K/16) | **12%** at K = 16, -16 and 64 - exactly the baseline - while changing every game | diagnostic (inert) |
+
+The diagnostic is the actionable result: the strategic gap is **led by the
+evaluation** (a plain linear sum with no initiative or tempo term), with candidate
+retention responsible for about a third of the divergences.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
@@ -178,6 +194,7 @@ searches an extra candidate per node. Rejected.
 | Dynamic ordering, history + countermove + killer | 2% |
 | TT-move-first ordering | 10% |
 | TT-move-first ordering + policy | 16% |
+| Initiative eval term (`--initiative`, ±16 and 64) | 12% |
 
 Other opponents at our default depth 6: PentaZen 0.4.18 **1%** (1 s/move) and
 **9%** (0.1 s/move); TITO 2014 **4%** (1 s), **25%** (10 ms), **66%** (3 ms).
@@ -201,7 +218,7 @@ squares board look.
 
 **Diagnostics (merged, off by default):** `--root-width`, `--candidate-width`,
 `--policy`, `--policy-plies`, `--pattern`, `--pattern-scale`, `--lmr`, `--tier`,
-`--history`, `--tt-move`.
+`--history`, `--tt-move`, `--initiative`.
 
 ## What the evidence says
 
@@ -247,14 +264,16 @@ Two structural facts bound the options:
 - Learned evaluation has transferred poorly: a pattern value net that wins 61.3%
   of self-play games still scores the baseline 12% against Rapfi.
 
-Candidate **strategic** levers, none yet tried:
+Candidate **strategic** levers. The structural-evaluation one was tried as
+`--initiative` and is inert (Phase 9); the diagnostic that preceded it is the page
+to read first.
 
 | Lever | Why it targets strategy (not tactics) |
 | --- | --- |
 | Sharpen the root policy with full-ranking / listwise targets instead of `pv[0]` only | improves the one lever that works, on quiet-move choice |
-| Structural evaluation: defensive-urgency / initiative term, non-linear aggregation | the linear eval cannot express being forced to answer a threat |
+| ~~Structural evaluation: defensive-urgency / initiative term~~ | tried: `--initiative` is inert; the eval is still the leading suspect |
 | Opening book for Black | nearly all our wins are Black; the opening decides those games |
-| Bigger learned positional model (features, capacity, data) | only worth it with an external objective, not self-play or label-fitting |
+| Bigger learned positional model (features, capacity, data), or a deeper eval probe on the flagged positions | only worth it with an external objective, not self-play or label-fitting |
 
 Remaining **search-side** ideas from the survey (these prune, they do not add
 strategic knowledge): Rapfi's futility/razoring/null-move margins and log LMR LUT
