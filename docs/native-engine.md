@@ -32,6 +32,7 @@ Options use `--name=value`:
 | `--table-capacity` | 32768 | 0–1,000,000 entries; zero disables caching |
 | `--nnue` | None | Path to an experimental portable model |
 | `--nnue-scale` | 1000 | Finite value from 1 to 100,000 |
+| `--policy` | None | Path to an experimental `GOMPOL1` candidate-ordering model |
 | `--candidate-width` | Unset | Diagnostic fixed candidate cap from 1 to 225 |
 | `--root-width` | Unset | Diagnostic root-only candidate cap from 1 to 225 |
 

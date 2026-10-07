@@ -6,6 +6,8 @@ const ROW_MASK: u16 = (1 << 15) - 1;
 pub struct Candidate {
     pub position: usize,
     pub priority: i32,
+    /// Quantized policy ordering score; zero when no policy is active.
+    pub policy: i32,
     /// None is reserved for empty-board opening candidates, matching JavaScript.
     pub tactical: Option<u8>,
     rank: u16,
@@ -52,6 +54,14 @@ impl Candidates {
         self.len += 1;
     }
 }
+/// Board context and model for scoring candidates with a policy re-ranker.
+#[derive(Clone, Copy)]
+pub struct PolicyScoring<'a> {
+    pub policy: &'a crate::policy::Policy,
+    pub black: &'a Bitboard,
+    pub white: &'a Bitboard,
+    pub scale: f32,
+}
 fn columns(col: usize, radius: usize) -> u16 {
     let start = col.saturating_sub(radius);
     let end = (col + radius).min(14);
@@ -97,7 +107,7 @@ pub fn generate_with_density(
     for p in positions(black, white, false) {
         occupied[p / 15] |= 1 << (p % 15);
     }
-    generate_ranked(occupied, player_black, winning, density, result, None);
+    generate_ranked(occupied, player_black, winning, density, result, None, None);
 }
 
 #[derive(Clone, Copy)]
@@ -112,6 +122,7 @@ pub fn generate_for_search(
     player_black: bool,
     result: &mut Candidates,
     selection: SearchSelection,
+    scoring: Option<PolicyScoring>,
 ) {
     generate_ranked(
         state.lines.occupied_rows(),
@@ -120,6 +131,7 @@ pub fn generate_for_search(
         &state.density.0,
         result,
         Some(selection),
+        scoring,
     );
 }
 pub fn generate_from_state(
@@ -134,6 +146,7 @@ pub fn generate_from_state(
         &state.density.0,
         result,
         None,
+        None,
     );
 }
 fn generate_ranked(
@@ -143,9 +156,25 @@ fn generate_ranked(
     density: &[u8; 225],
     result: &mut Candidates,
     selection: Option<SearchSelection>,
+    scoring: Option<PolicyScoring>,
 ) {
     result.len = 0;
     let stone_count: usize = occupied.iter().map(|row| row.count_ones() as usize).sum();
+    let policy_score = |position: usize, priority: i32, tactical: u8| match scoring {
+        Some(scoring) => {
+            let features = crate::policy::features(
+                scoring.black,
+                scoring.white,
+                position,
+                player_black,
+                priority,
+                tactical,
+                stone_count,
+            );
+            (scoring.policy.score(&features).unwrap_or(0.0) * scoring.scale).round() as i32
+        }
+        None => 0,
+    };
     if stone_count == 0 {
         for (row, col, priority) in [
             (7, 7, 1000),
@@ -161,6 +190,7 @@ fn generate_ranked(
             result.push(Candidate {
                 position: row * 15 + col,
                 priority,
+                policy: policy_score(row * 15 + col, priority, 0),
                 tactical: None,
                 rank: result.len as u16,
             });
@@ -259,6 +289,7 @@ fn generate_ranked(
             result.push(Candidate {
                 position: p,
                 priority,
+                policy: policy_score(p, priority, tactical),
                 tactical: Some(tactical),
                 rank: first_rank.expect("frontier has a qualifying source"),
             });
@@ -270,6 +301,7 @@ fn generate_ranked(
 fn compare(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
     b.tactical
         .cmp(&a.tactical)
+        .then(b.policy.cmp(&a.policy))
         .then(b.priority.cmp(&a.priority))
         .then(a.rank.cmp(&b.rank))
 }
@@ -400,6 +432,7 @@ mod tests {
                     preferred: None,
                     forcing: [0; 8],
                 },
+                None,
             );
             assert_eq!(reference.len, width);
             for depth in 2..=10 {
@@ -414,6 +447,7 @@ mod tests {
                         preferred: None,
                         forcing: [0; 8],
                     },
+                    None,
                 );
                 assert_eq!(actual.as_slice(), reference.as_slice());
             }
@@ -445,6 +479,7 @@ mod tests {
                     preferred: None,
                     forcing,
                 },
+                None,
             );
             for p in positions(&forcing, &[0; 8], false) {
                 assert!(selected.as_slice().iter().any(|m| m.position == p));
@@ -460,6 +495,7 @@ mod tests {
                 candidates.push(Candidate {
                     position,
                     priority: position as i32,
+                    policy: 0,
                     tactical: Some(0),
                     rank: position as u16,
                 });
@@ -527,5 +563,70 @@ mod tests {
                 .iter()
                 .any(|m| m.position == 157 && m.tactical == Some(1))
         );
+    }
+    #[test]
+    fn policy_reorders_quiet_candidates_and_zero_policy_is_neutral() {
+        let mut black = [0; 8];
+        let mut white = [0; 8];
+        black[112 >> 5] |= 1 << (112 & 31);
+        black[113 >> 5] |= 1 << (113 & 31);
+        white[97 >> 5] |= 1 << (97 & 31);
+        white[98 >> 5] |= 1 << (98 & 31);
+        let state = crate::incremental::Evaluator::new(black, white, true);
+        let selection = SearchSelection {
+            depth: 4,
+            width: Some(20),
+            preferred: None,
+            forcing: [0; 8],
+        };
+        let mut reference = Candidates::default();
+        generate_for_search(&state, true, &mut reference, selection, None);
+        assert!(reference.len >= 8);
+        let positions = |candidates: &Candidates| {
+            candidates
+                .as_slice()
+                .iter()
+                .map(|m| m.position)
+                .collect::<Vec<_>>()
+        };
+        let zero = crate::policy::from_weights(
+            vec![0.0; crate::policy::POLICY_FEATURES * 1],
+            vec![0.0],
+            vec![0.0],
+            0.0,
+        );
+        let mut neutral = Candidates::default();
+        generate_for_search(
+            &state,
+            true,
+            &mut neutral,
+            selection,
+            Some(PolicyScoring {
+                policy: &zero,
+                black: &state.black,
+                white: &state.white,
+                scale: 1000.0,
+            }),
+        );
+        assert_eq!(neutral.as_slice(), reference.as_slice());
+        // bias - (priority feature) ranks low-priority moves first, inverting the order.
+        let mut input = vec![0.0; crate::policy::POLICY_FEATURES];
+        input[0] = -1000.0;
+        let reverse = crate::policy::from_weights(input, vec![1000.0], vec![1.0], 0.0);
+        let mut reordered = Candidates::default();
+        generate_for_search(
+            &state,
+            true,
+            &mut reordered,
+            selection,
+            Some(PolicyScoring {
+                policy: &reverse,
+                black: &state.black,
+                white: &state.white,
+                scale: 1000.0,
+            }),
+        );
+        assert_eq!(reordered.len, reference.len);
+        assert_ne!(positions(&reordered), positions(&reference));
     }
 }

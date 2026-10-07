@@ -1,6 +1,6 @@
 use crate::bitboards::{Bitboard, contains, positions};
 use crate::incremental::Evaluator;
-use crate::moves::{Candidate, Candidates, SearchSelection, generate_for_search};
+use crate::moves::{Candidate, Candidates, PolicyScoring, SearchSelection, generate_for_search};
 use crate::rules::{self, BoardResult};
 use crate::transposition::{Bound, CacheKey, Entry, Table, from_table, to_table};
 use crate::zobrist::Hasher;
@@ -84,6 +84,8 @@ pub struct Search {
     protect_forcing: bool,
     candidate_width: Option<usize>,
     root_width: Option<usize>,
+    policy: Option<crate::policy::Policy>,
+    policy_scale: f32,
 }
 impl Search {
     pub fn new(
@@ -145,6 +147,8 @@ impl Search {
             protect_forcing: true,
             candidate_width: None,
             root_width: None,
+            policy: None,
+            policy_scale: 1000.0,
         })
     }
     /// Diagnostic reference mode. A running search cannot mix cache semantics.
@@ -176,6 +180,18 @@ impl Search {
             return Err("Root width must be 1..225 and selected before search starts");
         }
         self.root_width = Some(width);
+        Ok(())
+    }
+    /// Candidate-ordering policy applied at the root; loaded before the search starts.
+    pub fn set_policy(&mut self, bytes: &[u8], scale: f32) -> Result<(), &'static str> {
+        if !scale.is_finite() || !(1.0..=100_000.0).contains(&scale) {
+            return Err("Policy scale must be between 1 and 100000");
+        }
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Policy must be selected before search starts");
+        }
+        self.policy = Some(crate::policy::Policy::load(bytes)?);
+        self.policy_scale = scale;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -601,6 +617,16 @@ impl Search {
             } else {
                 None
             };
+            let scoring = if ply == 0 {
+                self.policy.as_ref().map(|policy| PolicyScoring {
+                    policy,
+                    black: &self.state.black,
+                    white: &self.state.white,
+                    scale: self.policy_scale,
+                })
+            } else {
+                None
+            };
             generate_for_search(
                 &self.state,
                 to_move,
@@ -619,6 +645,7 @@ impl Search {
                         [0; 8]
                     },
                 },
+                scoring,
             );
         }
         if self.buffers[ply].len == 0 {
@@ -891,6 +918,7 @@ mod tests {
                                 preferred,
                                 forcing: [0; 8],
                             },
+                            None,
                         );
                         assert_eq!(
                             actual.as_slice(),

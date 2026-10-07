@@ -71,6 +71,19 @@ impl Policy {
     }
 }
 
+/// Deterministic constructor for tests in other modules.
+#[cfg(test)]
+pub fn from_weights(input: Vec<f32>, bias: Vec<f32>, output: Vec<f32>, output_bias: f32) -> Policy {
+    Policy {
+        features: POLICY_FEATURES,
+        hidden: bias.len(),
+        input,
+        bias,
+        output,
+        output_bias,
+    }
+}
+
 fn cell(black: &Bitboard, white: &Bitboard, row: i32, col: i32) -> i32 {
     if !(0..15).contains(&row) || !(0..15).contains(&col) {
         return -1;

@@ -211,6 +211,37 @@ PyTorch (maximum error 3.0e-6 over 5,043 candidates).
 Nothing loads a policy yet, so the search and default engine path are
 byte-identical; wiring it in is M3.
 
+## M3 result (wired in and matched)
+
+`--policy=PATH` loads a `GOMPOL1` model and applies it to the root candidate
+ordering. It is default off; with no policy the native path and all Wasm parity
+checks are byte-identical (verified against 78,732 pattern, 1,396 incremental,
+4,628 candidate, and the search/root parity suites). Against Rapfi depth 6, 100
+games per seed with paired openings:
+
+| Seed | Baseline | Policy |
+| ---: | ---: | ---: |
+| 43 | 12% (12-0-88) | **17% (17-0-83)** |
+| 7 | 11% (11-0-89) | **17% (17-0-83)** |
+
+Combined **11.5% -> 17.0%** over 200 games at essentially no cost: mean move time
+60 ms (baseline) vs 62 ms (policy), because only the root shortlist is scored.
+This is the first change to beat the 12% baseline, and it exceeds the best
+root-width result (15%) at a fraction of the cost. The 200-game interval is still
+about +/-5 points, so a larger run is needed to tighten it; the two seeds agreeing
+is the encouraging part.
+
+Scope note: M3 wires the native/Rust search only. The browser JavaScript search
+(`src/ai/moves.js`, `src/ai/search.js`) does not yet apply a policy, so the web
+game is unaffected; mirroring it there is a follow-up.
+
+Reproduce:
+
+```powershell
+node scripts/external-match.js --output=.selfplay/base                         # baseline
+node scripts/external-match.js --policy=<absolute>\model.policy --output=.selfplay/policy
+```
+
 ## Evaluation plan
 
 - **Offline (M1):** top-1 accuracy, top-8 hit rate, and mean reciprocal rank of
