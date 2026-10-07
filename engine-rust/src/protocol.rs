@@ -17,6 +17,7 @@ pub struct Options {
     pub lmr: usize,
     pub tier: bool,
     pub history: bool,
+    pub tt_move: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -36,6 +37,7 @@ impl Default for Options {
             lmr: 0,
             tier: false,
             history: false,
+            tt_move: false,
         }
     }
 }
@@ -187,6 +189,7 @@ impl Protocol {
             search.set_lmr(self.options.lmr)?;
             search.set_tier(self.options.tier)?;
             search.set_history(self.options.history)?;
+            search.set_tt_move(self.options.tt_move)?;
             if let Some(preferred) = prepared.preferred {
                 search.prefer_root(preferred)?;
             }

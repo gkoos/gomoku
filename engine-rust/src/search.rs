@@ -96,6 +96,7 @@ pub struct Search {
     lmr_start: usize,
     use_tier: bool,
     use_history: bool,
+    use_tt_move: bool,
     /// Main-history cutoff statistics, indexed by side to move and square.
     history: [[i32; 225]; 2],
     /// Best reply found to the opponent's previous move, indexed by side and square.
@@ -169,6 +170,7 @@ impl Search {
             lmr_start: 0,
             use_tier: false,
             use_history: false,
+            use_tt_move: false,
             history: [[0; 225]; 2],
             counter: [[u16::MAX; 225]; 2],
             killers: [[u16::MAX; 2]; 225],
@@ -255,6 +257,14 @@ impl Search {
             return Err("History ordering must be selected before search starts");
         }
         self.use_history = enabled;
+        Ok(())
+    }
+    /// Try the transposition table's stored best move first at every node.
+    pub fn set_tt_move(&mut self, enabled: bool) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("TT-move ordering must be selected before search starts");
+        }
+        self.use_tt_move = enabled;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -665,10 +675,14 @@ impl Search {
         let original_alpha = alpha;
         let original_beta = beta;
         let key = self.table.as_ref().map(|_| self.key(depth, ply));
+        let mut tt_move = None;
         if let (Some(table), Some(key)) = (&self.table, &key)
             && let Some(entry) = table.get(key, &self.state.black, &self.state.white, to_move)
         {
             self.hits += 1;
+            if self.use_tt_move && entry.result.length > 0 {
+                tt_move = Some(entry.result.pv[0] as usize);
+            }
             let score = from_table(entry.result.score, ply);
             if entry.bound == Bound::Exact
                 || (entry.bound == Bound::Lower && score >= beta)
@@ -693,11 +707,13 @@ impl Search {
             self.buffers[ply].moves[0] = Candidate::mandatory_block(position);
             self.buffers[ply].len = 1;
         } else {
-            let preferred = if self.follows_pv(ply) && ply < self.previous.length {
-                Some(self.previous.pv[ply] as usize)
-            } else {
-                None
-            };
+            let preferred = tt_move.or_else(|| {
+                if self.follows_pv(ply) && ply < self.previous.length {
+                    Some(self.previous.pv[ply] as usize)
+                } else {
+                    None
+                }
+            });
             let scoring = if ply < self.policy_plies {
                 self.policy.as_ref().map(|policy| PolicyScoring {
                     policy,
@@ -966,6 +982,29 @@ mod tests {
         while plain.next_iteration().unwrap().is_some() {}
         assert!(plain.history.iter().flatten().all(|value| *value == 0));
         assert!(plain.killers.iter().flatten().all(|&k| k == u16::MAX));
+    }
+    #[test]
+    fn tt_move_ordering_is_deterministic_and_locks_after_start() {
+        let b = bits(&[112, 128, 99]);
+        let w = bits(&[113, 97, 127]);
+        let run = || {
+            let mut search = Search::new(b, w, true, 5, 4, 32768).unwrap();
+            search.set_tt_move(true).unwrap();
+            let mut last = ResultLine::quiet(0);
+            while let Some(iteration) = search.next_iteration().unwrap() {
+                last = iteration.result;
+            }
+            (last, search.nodes, search.hits)
+        };
+        let (first, first_nodes, first_hits) = run();
+        let (second, second_nodes, second_hits) = run();
+        assert_eq!(first.score, second.score);
+        assert_eq!(&first.pv[..first.length], &second.pv[..second.length]);
+        assert_eq!(first_nodes, second_nodes);
+        assert_eq!(first_hits, second_hits);
+        let mut started = Search::new(b, w, true, 5, 4, 32768).unwrap();
+        started.next_iteration().unwrap();
+        assert!(started.set_tt_move(true).is_err());
     }
     #[test]
     fn fixed_width_configuration_is_validated_and_locked() {
