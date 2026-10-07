@@ -14,6 +14,7 @@ pub struct Options {
     pub policy_plies: usize,
     pub pattern: Option<Vec<u8>>,
     pub pattern_scale: f32,
+    pub lmr: usize,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -30,6 +31,7 @@ impl Default for Options {
             policy_plies: 1,
             pattern: None,
             pattern_scale: 1000.0,
+            lmr: 0,
         }
     }
 }
@@ -51,6 +53,7 @@ impl Options {
             || self.policy_plies > 225
             || !self.pattern_scale.is_finite()
             || !(1.0..=100_000.0).contains(&self.pattern_scale)
+            || self.lmr > 225
         {
             Err(
                 "Invalid configuration: depth 1..10, candidate/root width 1..225 if set, extension 0..225, table capacity 0..1000000, NNUE/policy scale 1..100000",
@@ -177,6 +180,7 @@ impl Protocol {
                 search.set_policy(policy, self.options.policy_scale)?;
                 search.set_policy_plies(self.options.policy_plies)?;
             }
+            search.set_lmr(self.options.lmr)?;
             if let Some(preferred) = prepared.preferred {
                 search.prefer_root(preferred)?;
             }

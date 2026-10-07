@@ -87,6 +87,7 @@ pub struct Search {
     policy: Option<crate::policy::Policy>,
     policy_scale: f32,
     policy_plies: usize,
+    lmr_start: usize,
 }
 impl Search {
     pub fn new(
@@ -151,6 +152,7 @@ impl Search {
             policy: None,
             policy_scale: 1000.0,
             policy_plies: 1,
+            lmr_start: 0,
         })
     }
     /// Diagnostic reference mode. A running search cannot mix cache semantics.
@@ -205,6 +207,19 @@ impl Search {
             return Err("Policy plies must be selected before search starts");
         }
         self.policy_plies = plies;
+        Ok(())
+    }
+    /// Late-move reduction start index (0 disables). Moves at or after this
+    /// order position are first searched at reduced depth, then re-searched on
+    /// an alpha improvement.
+    pub fn set_lmr(&mut self, start: usize) -> Result<(), &'static str> {
+        if start > 225 {
+            return Err("LMR start must be 0..225");
+        }
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("LMR must be selected before search starts");
+        }
+        self.lmr_start = start;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -707,7 +722,12 @@ impl Search {
                     } else {
                         (beta - 1, beta)
                     };
-                    self.minimax(depth - 1, low, high, !maximizing, ply + 1)
+                    let reduction = if self.lmr_start > 0 && i >= self.lmr_start && depth > 2 {
+                        (1 + (i - self.lmr_start) / 4).min(depth - 2)
+                    } else {
+                        0
+                    };
+                    self.minimax(depth - 1 - reduction, low, high, !maximizing, ply + 1)
                         .and_then(|probe| {
                             if probe.score > alpha && probe.score < beta {
                                 self.minimax(depth - 1, alpha, beta, !maximizing, ply + 1)

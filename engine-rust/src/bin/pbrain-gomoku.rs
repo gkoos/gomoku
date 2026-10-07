@@ -59,6 +59,7 @@ fn run() -> Result<(), String> {
             "--pattern-scale" => {
                 options.pattern_scale = value.parse().map_err(|_| "Invalid pattern scale")?
             }
+            "--lmr" => options.lmr = value.parse().map_err(|_| "Invalid LMR start")?,
             _ => return Err(format!("Unknown argument: {arg}")),
         }
     }
