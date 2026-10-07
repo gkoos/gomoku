@@ -151,6 +151,16 @@ the promotion unsafe. Together with the interior-policy result (12-13%), the
 conclusion is that our **static density ordering is already the best retention
 function** available at interior nodes.
 
+## Phase 8 - TT-move-first ordering (2026-10-07)
+
+| Commit | Change | Result | Status |
+| --- | --- | --- | --- |
+| `6577207` | try the transposition table's stored best move first at every node | **10%** alone, **16%** with the policy (vs 12% / 17%), and **3.5x slower** (69 ms vs 20 ms mean) | diagnostic (worse) |
+
+Forcing the entry's move into the retained prefix at every hit both displaces the
+density ordering (many stored moves are refuted fail-low moves, not good ones) and
+searches an extra candidate per node. Rejected.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
@@ -166,6 +176,8 @@ function** available at interior nodes.
 | LMR (start 4) depth 6 / depth 8 | 9% / 7.4% |
 | Dynamic ordering, history only | 3% |
 | Dynamic ordering, history + countermove + killer | 2% |
+| TT-move-first ordering | 10% |
+| TT-move-first ordering + policy | 16% |
 
 Other opponents at our default depth 6: PentaZen 0.4.18 **1%** (1 s/move) and
 **9%** (0.1 s/move); TITO 2014 **4%** (1 s), **25%** (10 ms), **66%** (3 ms).
@@ -189,7 +201,7 @@ squares board look.
 
 **Diagnostics (merged, off by default):** `--root-width`, `--candidate-width`,
 `--policy`, `--policy-plies`, `--pattern`, `--pattern-scale`, `--lmr`, `--tier`,
-`--history`.
+`--history`, `--tt-move`.
 
 ## What the evidence says
 
@@ -215,13 +227,12 @@ Sources read: **Rapfi** (`dhbloo/rapfi`) `search/movepick.{h,cpp}`,
 **wind23/SlowRenju**; and the CodeCup 2020 winner write-up ("OOOOO", Tomek
 Czajka).
 
-The first candidate - dynamic ordering - was implemented as `--history` and lost
-badly (Phase 7), so it is no longer listed. The rest remain untried.
+The first two candidates - dynamic ordering and TT-move-first - were implemented
+as `--history` and `--tt-move` and both lost (Phases 7 and 8), so neither is
+listed. The rest remain untried.
 
 | Lever | Reference | Why it is different from what we tried |
 | --- | --- | --- |
-| TT-move-first ordering | Rapfi picker | we store the best move but only use it on a cutoff |
-| History-driven depth extension | Rapfi `extensionFromStatScore` | extends lines with high history stat score |
 | Pruning kit: futility / razoring / null-move + log LMR LUT | Rapfi `ab/parameter.h` | we have only aspiration and a simple LMR that hurt |
 | Policy-driven pruning/reduction | Rapfi `policyPruningScore`/`policyReduction` | pruning the low-policy tail, not just re-ordering |
 | Proof-number / threat-space search | Allis; CodeCup winner | a different search paradigm for a tactical game |
@@ -229,7 +240,7 @@ badly (Phase 7), so it is no longer listed. The rest remain untried.
 
 All of these change the search, so they belong behind a default-off flag to keep
 the JS/Wasm parity invariant, and should be measured natively against Rapfi
-depth 6, exactly like `--lmr` and `--tier` above.
+depth 6, exactly like `--lmr`, `--tier`, `--history` and `--tt-move` above.
 
 
 

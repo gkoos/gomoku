@@ -58,6 +58,14 @@ killers and countermoves and 3% with main history alone, versus the 12% baseline
 Search-derived history promotes a square that caused a cutoff in one branch to
 the front of every other branch, displacing the density-ranked quiet moves the
 narrow candidate cap depends on, so it is not used.
+
+`--tt-move=1` makes every node try the transposition table's stored best move
+first (the root keeps its existing PV promotion). It is a diagnostic and off by
+default: over 100 games against Rapfi depth 6 it scored 10% alone and 16% with the
+policy ordering, versus the 12% and 17% references, and it is **3.5x slower**
+(mean 69 ms versus 20 ms per move). The promotion forces the entry's move into the
+retained prefix at every hit, and a stored move is often a refuted fail-low move
+rather than a good one, so the ordering only gets worse. It is not used.
 `--root-width` overrides the candidate cap at the root only, leaving deeper nodes
 on the depth policy, and is still bounded by the same 30/50 generation cap.
 
