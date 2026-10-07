@@ -90,6 +90,16 @@ export function generate_candidates(black: Uint32Array, white: Uint32Array, play
 
 export function occupied_positions(black: Uint32Array, white: Uint32Array): Uint32Array;
 
+/**
+ * Per-candidate features for the candidate-ordering policy (see src/ai/policy.js).
+ */
+export function policy_features(black: Uint32Array, white: Uint32Array, position: number, black_to_move: boolean, priority: number, tactical: number, ply: number): Float32Array;
+
+/**
+ * Forward pass of a portable GOMPOL1 model over one feature vector.
+ */
+export function policy_score(model: Uint8Array, features: Float32Array): number;
+
 export function score_root_move(black: Uint32Array, white: Uint32Array, position: number, computer_black: boolean, priority: number): number;
 
 /**
@@ -123,6 +133,8 @@ export interface InitOutput {
     readonly moveengine_with_nnue: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number, number];
     readonly moveengine_with_weights: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number];
     readonly occupied_positions: (a: number, b: number, c: number, d: number) => [number, number, number, number];
+    readonly policy_features: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => [number, number, number, number];
+    readonly policy_score: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly positionhasher_black_to_move: (a: number) => number;
     readonly positionhasher_new: (a: number, b: number, c: number, d: number, e: number) => [number, number, number];
     readonly positionhasher_toggle_move: (a: number, b: number, c: number) => [number, number];

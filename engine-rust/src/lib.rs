@@ -78,6 +78,7 @@ pub fn boards_full(black: &[u32], white: &[u32]) -> Result<bool, JsValue> {
 pub mod incremental;
 pub mod lines;
 pub mod nnue;
+pub mod policy;
 
 /// Stateful prototype interface. Array getters return copies, not mutable internal views.
 #[wasm_bindgen]
@@ -519,4 +520,37 @@ pub fn score_root_move(
         computer_black,
         priority,
     ))
+}
+
+/// Per-candidate features for the candidate-ordering policy (see src/ai/policy.js).
+#[wasm_bindgen]
+pub fn policy_features(
+    black: &[u32],
+    white: &[u32],
+    position: u32,
+    black_to_move: bool,
+    priority: i32,
+    tactical: u32,
+    ply: u32,
+) -> Result<Vec<f32>, JsValue> {
+    if position >= 225 || tactical > 2 || ply > 224 {
+        return Err(JsValue::from_str("Invalid policy feature request"));
+    }
+    Ok(policy::features(
+        &board(black)?,
+        &board(white)?,
+        position as usize,
+        black_to_move,
+        priority,
+        tactical as u8,
+        ply as usize,
+    )
+    .to_vec())
+}
+
+/// Forward pass of a portable GOMPOL1 model over one feature vector.
+#[wasm_bindgen]
+pub fn policy_score(model: &[u8], features: &[f32]) -> Result<f64, JsValue> {
+    let policy = policy::Policy::load(model).map_err(JsValue::from_str)?;
+    Ok(policy.score(features).map_err(JsValue::from_str)? as f64)
 }

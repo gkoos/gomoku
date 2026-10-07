@@ -8,7 +8,7 @@ import {
   neighborhoodDensity,
   candidateFeatures,
   POLICY_FEATURES,
-} from './selfplay/policy-features.js';
+} from '../src/ai/policy.js';
 
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const args = {};
@@ -120,7 +120,7 @@ const manifest = {
   exporterDigest: hash(
     Buffer.concat([
       fs.readFileSync(fileURLToPath(import.meta.url)),
-      fs.readFileSync(new URL('./selfplay/policy-features.js', import.meta.url)),
+      fs.readFileSync(new URL('../src/ai/policy.js', import.meta.url)),
       fs.readFileSync(new URL('../src/ai/moves.js', import.meta.url)),
     ]),
   ),

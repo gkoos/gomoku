@@ -22,6 +22,7 @@
     "nnue:benchmark": "node scripts/run-nnue.js benchmark",
     "policy:export": "node scripts/export-policy-dataset.js",
     "policy:train": "node scripts/run-nnue.js policy_train",
+    "policy:parity": "node scripts/check-policy-parity.js",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",

@@ -6,6 +6,7 @@ from pathlib import Path
 import torch
 
 from policy_model import Policy, POLICY_FEATURES
+from policy_inference import export_policy_model, PortablePolicy
 from policy_train import batches, load_split, rank_of, scores_for, summarize
 
 
@@ -44,6 +45,27 @@ class PolicyTest(unittest.TestCase):
             (directory / "train.jsonl").write_text(json.dumps({**row, "target": 5}) + "\n", encoding="utf8")
             with self.assertRaises(ValueError):
                 load_split(directory, "train")
+
+    def test_portable_model_reproduces_the_cross_language_fixture(self):
+        fixture = json.loads(Path("test/fixtures/policy-forward.json").read_text(encoding="utf8"))
+        model = Policy(fixture["hidden"])
+        with torch.no_grad():
+            model.input.weight.copy_(torch.tensor(fixture["input"], dtype=torch.float32)
+                                     .reshape(fixture["hidden"], fixture["features"]))
+            model.input.bias.copy_(torch.tensor(fixture["bias"], dtype=torch.float32))
+            model.output.weight.copy_(torch.tensor(fixture["output"], dtype=torch.float32)
+                                      .reshape(1, fixture["hidden"]))
+            model.output.bias.copy_(torch.tensor([fixture["outputBias"]], dtype=torch.float32))
+        with tempfile.TemporaryDirectory() as directory:
+            filename = Path(directory) / "model.policy"
+            export_policy_model(model, filename)
+            portable = PortablePolicy(filename)
+            self.assertEqual((portable.features, portable.hidden), (fixture["features"], fixture["hidden"]))
+            for case in fixture["cases"]:
+                self.assertAlmostEqual(portable.score(case["features"]), case["score"], places=6)
+            filename.write_bytes(filename.read_bytes()[:-1])
+            with self.assertRaises(ValueError):
+                PortablePolicy(filename)
 
 
 if __name__ == "__main__":

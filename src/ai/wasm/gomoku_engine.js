@@ -607,6 +607,49 @@ export function occupied_positions(black, white) {
 }
 
 /**
+ * Per-candidate features for the candidate-ordering policy (see src/ai/policy.js).
+ * @param {Uint32Array} black
+ * @param {Uint32Array} white
+ * @param {number} position
+ * @param {boolean} black_to_move
+ * @param {number} priority
+ * @param {number} tactical
+ * @param {number} ply
+ * @returns {Float32Array}
+ */
+export function policy_features(black, white, position, black_to_move, priority, tactical, ply) {
+    const ptr0 = passArray32ToWasm0(black, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArray32ToWasm0(white, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.policy_features(ptr0, len0, ptr1, len1, position, black_to_move, priority, tactical, ply);
+    if (ret[3]) {
+        throw takeFromExternrefTable0(ret[2]);
+    }
+    var v3 = getArrayF32FromWasm0(ret[0], ret[1]).slice();
+    wasm.__wbindgen_free(ret[0], ret[1] * 4, 4);
+    return v3;
+}
+
+/**
+ * Forward pass of a portable GOMPOL1 model over one feature vector.
+ * @param {Uint8Array} model
+ * @param {Float32Array} features
+ * @returns {number}
+ */
+export function policy_score(model, features) {
+    const ptr0 = passArray8ToWasm0(model, wasm.__wbindgen_malloc);
+    const len0 = WASM_VECTOR_LEN;
+    const ptr1 = passArrayF32ToWasm0(features, wasm.__wbindgen_malloc);
+    const len1 = WASM_VECTOR_LEN;
+    const ret = wasm.policy_score(ptr0, len0, ptr1, len1);
+    if (ret[2]) {
+        throw takeFromExternrefTable0(ret[1]);
+    }
+    return ret[0];
+}
+
+/**
  * @param {Uint32Array} black
  * @param {Uint32Array} white
  * @param {number} position
@@ -708,6 +751,11 @@ const SearchStateFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_searchstate_free(ptr, 1));
 
+function getArrayF32FromWasm0(ptr, len) {
+    ptr = ptr >>> 0;
+    return getFloat32ArrayMemory0().subarray(ptr / 4, ptr / 4 + len);
+}
+
 function getArrayF64FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getFloat64ArrayMemory0().subarray(ptr / 8, ptr / 8 + len);
@@ -731,6 +779,14 @@ function getArrayU32FromWasm0(ptr, len) {
 function getArrayU8FromWasm0(ptr, len) {
     ptr = ptr >>> 0;
     return getUint8ArrayMemory0().subarray(ptr / 1, ptr / 1 + len);
+}
+
+let cachedFloat32ArrayMemory0 = null;
+function getFloat32ArrayMemory0() {
+    if (cachedFloat32ArrayMemory0 === null || cachedFloat32ArrayMemory0.byteLength === 0) {
+        cachedFloat32ArrayMemory0 = new Float32Array(wasm.memory.buffer);
+    }
+    return cachedFloat32ArrayMemory0;
 }
 
 let cachedFloat64ArrayMemory0 = null;
@@ -791,6 +847,13 @@ function passArray8ToWasm0(arg, malloc) {
     return ptr;
 }
 
+function passArrayF32ToWasm0(arg, malloc) {
+    const ptr = malloc(arg.length * 4, 4) >>> 0;
+    getFloat32ArrayMemory0().set(arg, ptr / 4);
+    WASM_VECTOR_LEN = arg.length;
+    return ptr;
+}
+
 function takeFromExternrefTable0(idx) {
     const value = wasm.__wbindgen_externrefs.get(idx);
     wasm.__externref_table_dealloc(idx);
@@ -818,6 +881,7 @@ function __wbg_finalize_init(instance, module) {
     wasmInstance = instance;
     wasm = instance.exports;
     wasmModule = module;
+    cachedFloat32ArrayMemory0 = null;
     cachedFloat64ArrayMemory0 = null;
     cachedInt32ArrayMemory0 = null;
     cachedUint16ArrayMemory0 = null;

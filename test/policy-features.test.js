@@ -6,7 +6,7 @@ import {
   neighborhoodDensity,
   candidateFeatures,
   POLICY_FEATURES,
-} from '../scripts/selfplay/policy-features.js';
+} from '../src/ai/policy.js';
 
 const put = (board, ...positions) => {
   for (const p of positions) board[p >>> 5] |= 1 << (p & 31);

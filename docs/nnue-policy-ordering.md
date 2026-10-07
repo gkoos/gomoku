@@ -185,6 +185,32 @@ node scripts/export-policy-dataset.js --input=.selfplay/nnue-teacher-depth6-v1 -
 node scripts/run-nnue.js policy_train --dataset=.selfplay/policy-dataset-v1 --output=.training/nnue-policy-v1 --epochs=40 --seed=42 --threads=2
 ```
 
+## M2 result (portable GOMPOL1 and parity)
+
+The trained re-ranker now exports a portable `GOMPOL1` model that every engine
+can read:
+
+- `engine-rust/src/policy.rs` - loader, forward pass, and the mirrored
+  per-candidate feature extractor.
+- `src/ai/policy.js` - the same extractor plus a loader and builder, used by the
+  exporter, the parity check, and the browser.
+- `training/nnue/policy_inference.py` - `export_policy_model` / `PortablePolicy`.
+
+Format: an 8-byte `GOMPOL1\0` magic, then u32 version / features (25) / hidden /
+outputs (1), then float32 coefficients in hidden-major order (input, bias,
+output, output bias). The loader validates the magic, dimensions, exact length,
+and finiteness.
+
+Parity: `npm run policy:parity` checks Rust/Wasm against JavaScript on **129,600**
+feature/score cases (empty, single-stone, random, and structured boards, both
+colors), and a committed exact-dyadic fixture (`test/fixtures/policy-forward.json`)
+is reproduced by Rust (parity check), JavaScript (`test/policy.test.js`), and
+Python (`test_policy.py`). The trainer also verifies the portable file against
+PyTorch (maximum error 3.0e-6 over 5,043 candidates).
+
+Nothing loads a policy yet, so the search and default engine path are
+byte-identical; wiring it in is M3.
+
 ## Evaluation plan
 
 - **Offline (M1):** top-1 accuracy, top-8 hit rate, and mean reciprocal rank of
@@ -215,21 +241,26 @@ node scripts/run-nnue.js policy_train --dataset=.selfplay/policy-dataset-v1 --ou
 
 ## Files
 
-New:
+New (M1, done):
 
 - `docs/nnue-policy-ordering.md` (this file)
-- `training/nnue/policy_model.py`, `training/nnue/policy_train.py`
-- `engine-rust/src/policy.rs`, `src/ai/policy.js`
-- parity/unit tests for the policy loader and per-move score
+- `src/ai/policy.js` - features, `GOMPOL1` loader, and builder
+- `engine-rust/src/policy.rs` - features, loader, forward pass (M2)
+- `training/nnue/policy_model.py`, `policy_train.py`, `policy_inference.py`
+- `training/nnue/make_policy_fixture.py`, `test/fixtures/policy-forward.json`
+- `scripts/export-policy-dataset.js`, `scripts/check-policy-parity.js`
+- `test/policy-features.test.js`, `test/policy.test.js`, `training/nnue/test_policy.py`
 
-Modified (mirrored in Rust and JS):
+Modified (M1/M2, done): `scripts/run-nnue.js`, `package.json`,
+`engine-rust/src/lib.rs` (Wasm bindings).
+
+Planned (M3+):
 
 - ordering: `engine-rust/src/moves.rs`, `src/ai/moves.js`
 - search wiring: `engine-rust/src/search.rs`, `src/ai/search.js`
 - CLI: `engine-rust/src/protocol.rs`, `engine-rust/src/bin/pbrain-gomoku.rs`
-- module exports: `engine-rust/src/lib.rs`, `src/ai/engine.js`, `src/ai/config.js`
-- pipeline: `scripts/export-dataset.js` / `scripts/selfplay/teacher.js` (M4),
-  `package.json` scripts
+- module exports: `src/ai/engine.js`, `src/ai/config.js`
+- pipeline: `scripts/export-dataset.js` / `scripts/selfplay/teacher.js` (M4)
 
 ## Commands (mirroring the existing NNUE workflow)
 

@@ -11,6 +11,7 @@ import torch
 from torch.nn import functional as F
 
 from policy_model import Policy, POLICY_FEATURES, FEATURE_LAYOUT
+from policy_inference import export_policy_model, PortablePolicy
 
 
 def digest(filename):
@@ -142,6 +143,20 @@ def main():
         elif epoch - best_epoch >= args.patience:
             break
     model.load_state_dict(best_state)
+    export_policy_model(model, args.output / "model.policy")
+    portable = PortablePolicy(args.output / "model.policy")
+    maximum_error, checked = 0.0, 0
+    model.eval()
+    with torch.no_grad():
+        for values, _, _ in validation:
+            scored = model(values.unsqueeze(0)).squeeze(0)
+            for i in range(values.shape[0]):
+                maximum_error = max(maximum_error, abs(scored[i].item() - portable.score(values[i].tolist())))
+                checked += 1
+            if checked >= 5000:
+                break
+    if maximum_error > 1e-5:
+        raise RuntimeError("Portable policy disagrees with PyTorch")
 
     policy_ranks = ranks_for(model, validation)
     baseline_ranks = [target for _, target, _ in validation]
@@ -155,10 +170,14 @@ def main():
         "environment": {"python": platform.python_version(), "torch": str(torch.__version__),
                         "numpy": version("numpy"), "platform": platform.platform()},
         "trainerSha256": hashlib.sha256(b"".join(Path(__file__).with_name(name).read_bytes()
-                                                 for name in ("policy_train.py", "policy_model.py"))).hexdigest(),
+                                                 for name in ("policy_train.py", "policy_model.py",
+                                                              "policy_inference.py"))).hexdigest(),
         "datasetManifestSha256": digest(args.dataset / "manifest.json"),
         "trainPositions": len(train), "validationPositions": len(validation),
         "bestEpoch": best_epoch, "validationCrossEntropy": best,
+        "portableMaximumError": maximum_error, "portableCheckedCandidates": checked,
+        "modelSha256": digest(args.output / "model.policy"),
+        "modelBytes": (args.output / "model.policy").stat().st_size,
         "baseline": summarize(baseline_ranks), "policy": summarize(policy_ranks),
         "baselineQuiet": summarize([baseline_ranks[i] for i in quiet]),
         "policyQuiet": summarize([policy_ranks[i] for i in quiet]),
