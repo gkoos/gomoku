@@ -114,7 +114,7 @@ export function createWasmChooseMove({
       }
     }
     try {
-      if (options.usePolicy && loadPolicy) {
+      if (loadPolicy) {
         const model = await loadPolicy();
         if (model) search.set_policy(model, POLICY_SCALE, POLICY_PLIES);
       }

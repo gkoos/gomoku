@@ -46,7 +46,6 @@ export function createWorkerHandler({
         {
           onIteration: ({ depth, move }) =>
             postMessage({ type: 'SEARCH_ITERATION', requestId, depth, move }),
-          usePolicy: Boolean(data.usePolicy),
         },
       );
       postMessage({ type: 'BEST_MOVE_FOUND', requestId, move });

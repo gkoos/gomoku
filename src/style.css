@@ -159,8 +159,8 @@ h1 {
   display: grid;
   grid-template-columns: repeat(15, 1fr);
   grid-template-rows: repeat(15, 1fr);
-  gap: 0;
-  background: #DEB887;
+  gap: 2px;
+  background: #8B4513;
   padding: 8px;
   border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
@@ -237,7 +237,8 @@ h1 {
 
 .cell {
   background: #DEB887;
-  border: 1px solid #8B4513;
+  border: none;
+  border-radius: 3px;
   cursor: pointer;
   position: relative;
   transition: background-color 0.2s ease;
@@ -245,7 +246,6 @@ h1 {
   align-items: center;
   justify-content: center;
   aspect-ratio: 1;
-  margin: -1px 0 0 -1px;
 }
 
 

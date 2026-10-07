@@ -232,9 +232,9 @@ about +/-5 points, so a larger run is needed to tighten it; the two seeds agreei
 is the encouraging part.
 
 Scope note: the native engine applies the policy behind `--policy`, and the
-browser game exposes it as an opt-in **"Stronger (learned ordering)"** toggle
-(default off) that loads `public/models/policy-depth6.policy` and passes it to
-the Wasm `MoveEngine`. The pure-JavaScript fallback search (`src/ai/moves.js`,
+browser game applies it automatically through the Wasm `MoveEngine` (it loads
+`public/models/policy-depth6.policy` and sets the root ordering; there is no
+toggle). The pure-JavaScript fallback search (`src/ai/moves.js`,
 `src/ai/search.js`) still does not apply a policy.
 
 Reproduce:
