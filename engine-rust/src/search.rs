@@ -88,6 +88,7 @@ pub struct Search {
     policy_scale: f32,
     policy_plies: usize,
     lmr_start: usize,
+    use_tier: bool,
 }
 impl Search {
     pub fn new(
@@ -153,6 +154,7 @@ impl Search {
             policy_scale: 1000.0,
             policy_plies: 1,
             lmr_start: 0,
+            use_tier: false,
         })
     }
     /// Diagnostic reference mode. A running search cannot mix cache semantics.
@@ -220,6 +222,14 @@ impl Search {
             return Err("LMR must be selected before search starts");
         }
         self.lmr_start = start;
+        Ok(())
+    }
+    /// Promote open-three-creating moves in the candidate ordering.
+    pub fn set_tier(&mut self, enabled: bool) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Tier ordering must be selected before search starts");
+        }
+        self.use_tier = enabled;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -655,6 +665,11 @@ impl Search {
             } else {
                 None
             };
+            let three = if self.use_tier {
+                crate::vct::three_moves(&self.state.lines, to_move)
+            } else {
+                [0; 8]
+            };
             generate_for_search(
                 &self.state,
                 to_move,
@@ -674,6 +689,7 @@ impl Search {
                     },
                 },
                 scoring,
+                three,
             );
         }
         if self.buffers[ply].len == 0 {
@@ -979,6 +995,7 @@ mod tests {
                                 forcing: [0; 8],
                             },
                             None,
+                            [0; 8],
                         );
                         assert_eq!(
                             actual.as_slice(),

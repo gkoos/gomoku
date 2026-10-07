@@ -43,6 +43,13 @@ node. Immediate wins, mandatory blocks, four-creating attacks and retained PV
 moves keep their existing protection, so a node can exceed the requested cap.
 The independent 30/50 generation cap remains in place. Omitting this option
 preserves the production policy; browser difficulty settings are unaffected.
+
+`--tier=1` enables an experimental ordering that promotes open-three-creating
+moves (from the existing VCT threat scan) ahead of density-ranked quiet moves,
+below immediate wins, mandatory blocks and four-creating attacks. It is a
+diagnostic and off by default: over 100 games against Rapfi depth 6 it scored
+12% on its own and 15% alongside the policy ordering, versus 17% for the policy
+alone, so the threat tier does not beat the policy.
 `--root-width` overrides the candidate cap at the root only, leaving deeper nodes
 on the depth policy, and is still bounded by the same 30/50 generation cap.
 

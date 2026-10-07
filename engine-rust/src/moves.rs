@@ -8,6 +8,8 @@ pub struct Candidate {
     pub priority: i32,
     /// Quantized policy ordering score; zero when no policy is active.
     pub policy: i32,
+    /// Threat tier: 1 for a move creating an open three, else 0.
+    pub tier: u8,
     /// None is reserved for empty-board opening candidates, matching JavaScript.
     pub tactical: Option<u8>,
     rank: u16,
@@ -107,7 +109,7 @@ pub fn generate_with_density(
     for p in positions(black, white, false) {
         occupied[p / 15] |= 1 << (p % 15);
     }
-    generate_ranked(occupied, player_black, winning, density, result, None, None);
+    generate_ranked(occupied, player_black, winning, density, result, None, None, [0; 8]);
 }
 
 #[derive(Clone, Copy)]
@@ -123,6 +125,7 @@ pub fn generate_for_search(
     result: &mut Candidates,
     selection: SearchSelection,
     scoring: Option<PolicyScoring>,
+    three: Bitboard,
 ) {
     generate_ranked(
         state.lines.occupied_rows(),
@@ -132,6 +135,7 @@ pub fn generate_for_search(
         result,
         Some(selection),
         scoring,
+        three,
     );
 }
 pub fn generate_from_state(
@@ -147,6 +151,7 @@ pub fn generate_from_state(
         result,
         None,
         None,
+        [0; 8],
     );
 }
 fn generate_ranked(
@@ -157,6 +162,7 @@ fn generate_ranked(
     result: &mut Candidates,
     selection: Option<SearchSelection>,
     scoring: Option<PolicyScoring>,
+    three: Bitboard,
 ) {
     result.len = 0;
     let stone_count: usize = occupied.iter().map(|row| row.count_ones() as usize).sum();
@@ -191,6 +197,7 @@ fn generate_ranked(
                 position: row * 15 + col,
                 priority,
                 policy: policy_score(row * 15 + col, priority, 0),
+                tier: 0,
                 tactical: None,
                 rank: result.len as u16,
             });
@@ -290,6 +297,7 @@ fn generate_ranked(
                 position: p,
                 priority,
                 policy: policy_score(p, priority, tactical),
+                tier: u8::from(tactical == 0 && contains(&three, p)),
                 tactical: Some(tactical),
                 rank: first_rank.expect("frontier has a qualifying source"),
             });
@@ -301,6 +309,7 @@ fn generate_ranked(
 fn compare(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
     b.tactical
         .cmp(&a.tactical)
+        .then(b.tier.cmp(&a.tier))
         .then(b.policy.cmp(&a.policy))
         .then(b.priority.cmp(&a.priority))
         .then(a.rank.cmp(&b.rank))
@@ -433,6 +442,7 @@ mod tests {
                     forcing: [0; 8],
                 },
                 None,
+                [0; 8],
             );
             assert_eq!(reference.len, width);
             for depth in 2..=10 {
@@ -448,6 +458,7 @@ mod tests {
                         forcing: [0; 8],
                     },
                     None,
+                    [0; 8],
                 );
                 assert_eq!(actual.as_slice(), reference.as_slice());
             }
@@ -480,6 +491,7 @@ mod tests {
                     forcing,
                 },
                 None,
+                [0; 8],
             );
             for p in positions(&forcing, &[0; 8], false) {
                 assert!(selected.as_slice().iter().any(|m| m.position == p));
@@ -496,6 +508,7 @@ mod tests {
                     position,
                     priority: position as i32,
                     policy: 0,
+                    tier: 0,
                     tactical: Some(0),
                     rank: position as u16,
                 });
@@ -580,7 +593,7 @@ mod tests {
             forcing: [0; 8],
         };
         let mut reference = Candidates::default();
-        generate_for_search(&state, true, &mut reference, selection, None);
+        generate_for_search(&state, true, &mut reference, selection, None, [0; 8]);
         assert!(reference.len >= 8);
         let positions = |candidates: &Candidates| {
             candidates
@@ -607,6 +620,7 @@ mod tests {
                 white: &state.white,
                 scale: 1000.0,
             }),
+            [0; 8],
         );
         assert_eq!(neutral.as_slice(), reference.as_slice());
         // bias - (priority feature) ranks low-priority moves first, inverting the order.
@@ -625,8 +639,42 @@ mod tests {
                 white: &state.white,
                 scale: 1000.0,
             }),
+            [0; 8],
         );
         assert_eq!(reordered.len, reference.len);
         assert_ne!(positions(&reordered), positions(&reference));
+    }
+
+    #[test]
+    fn three_tier_promotes_open_three_moves_ahead_of_quiet_moves() {
+        let mut black = [0; 8];
+        black[112 >> 5] |= 1 << (112 & 31);
+        black[48 >> 5] |= 1 << (48 & 31);
+        let mut white = [0; 8];
+        white[160 >> 5] |= 1 << (160 & 31);
+        let state = crate::incremental::Evaluator::new(black, white, true);
+        let selection = SearchSelection {
+            depth: 4,
+            width: Some(8),
+            preferred: None,
+            forcing: [0; 8],
+        };
+        let mut plain = Candidates::default();
+        generate_for_search(&state, true, &mut plain, selection, None, [0; 8]);
+        assert!(plain.as_slice().iter().all(|m| m.tactical == Some(0)));
+        let target = plain
+            .as_slice()
+            .last()
+            .expect("frontier is non-empty")
+            .position;
+        let mut three = [0; 8];
+        three[target >> 5] |= 1 << (target & 31);
+        let mut tiered = Candidates::default();
+        generate_for_search(&state, true, &mut tiered, selection, None, three);
+        assert_eq!(
+            tiered.as_slice().first().expect("frontier is non-empty").position,
+            target
+        );
+        assert_eq!(tiered.as_slice().len(), plain.as_slice().len());
     }
 }
