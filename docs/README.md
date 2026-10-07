@@ -1,5 +1,6 @@
 # Engine documentation
 
+- [Development timeline](timeline.md): the full Rust/Wasm history - what we tried, what it was worth, and what we kept.
 - [AI algorithm](algorithm.md): move selection, candidates, evaluation, search, and difficulty levels.
 - [Implementation guide](implementation.md): modules, bitboards, incremental state, caching, workers, and validation.
 - [Rust/Wasm engine](../engine-rust/README.md): toolchain, browser integration, parity validation, and benchmarks.
