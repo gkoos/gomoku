@@ -16,7 +16,7 @@ fn run() -> Result<(), String> {
     for arg in std::env::args().skip(1) {
         if arg == "--help" {
             eprintln!(
-                "pbrain-gomoku [--depth=6] [--extension=4] [--table-capacity=32768] [--candidate-width=8] [--root-width=8] [--nnue=model.nnue] [--nnue-scale=1000] [--policy=model.policy] [--policy-scale=1000] [--policy-plies=1] [--pattern=model.pattern] [--pattern-scale=1000] [--lmr=0] [--tier=0|1]\n15x15 freestyle, Gomocup/Piskvork stdin/stdout protocol. Candidate/root width are optional diagnostic overrides. Fixed depth; clock and node limits are not enforced."
+                "pbrain-gomoku [--depth=6] [--extension=4] [--table-capacity=32768] [--candidate-width=8] [--root-width=8] [--nnue=model.nnue] [--nnue-scale=1000] [--policy=model.policy] [--policy-scale=1000] [--policy-plies=1] [--pattern=model.pattern] [--pattern-scale=1000] [--lmr=0] [--tier=0|1] [--history=0|1]\n15x15 freestyle, Gomocup/Piskvork stdin/stdout protocol. Candidate/root width are optional diagnostic overrides. Fixed depth; clock and node limits are not enforced."
             );
             return Ok(());
         }
@@ -65,6 +65,13 @@ fn run() -> Result<(), String> {
                     "1" | "true" => true,
                     "0" | "false" => false,
                     _ => return Err("Invalid tier flag, expected 0 or 1".to_string()),
+                }
+            }
+            "--history" => {
+                options.history = match value {
+                    "1" | "true" => true,
+                    "0" | "false" => false,
+                    _ => return Err("Invalid history flag, expected 0 or 1".to_string()),
                 }
             }
             _ => return Err(format!("Unknown argument: {arg}")),

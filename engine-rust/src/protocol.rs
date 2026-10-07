@@ -16,6 +16,7 @@ pub struct Options {
     pub pattern_scale: f32,
     pub lmr: usize,
     pub tier: bool,
+    pub history: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -34,6 +35,7 @@ impl Default for Options {
             pattern_scale: 1000.0,
             lmr: 0,
             tier: false,
+            history: false,
         }
     }
 }
@@ -184,6 +186,7 @@ impl Protocol {
             }
             search.set_lmr(self.options.lmr)?;
             search.set_tier(self.options.tier)?;
+            search.set_history(self.options.history)?;
             if let Some(preferred) = prepared.preferred {
                 search.prefer_root(preferred)?;
             }

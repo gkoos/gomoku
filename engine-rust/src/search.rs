@@ -1,6 +1,6 @@
 use crate::bitboards::{Bitboard, contains, positions};
 use crate::incremental::Evaluator;
-use crate::moves::{Candidate, Candidates, PolicyScoring, SearchSelection, generate_for_search};
+use crate::moves::{Candidate, Candidates, MoveOrdering, PolicyScoring, SearchSelection, generate_for_search};
 use crate::rules::{self, BoardResult};
 use crate::transposition::{Bound, CacheKey, Entry, Table, from_table, to_table};
 use crate::zobrist::Hasher;
@@ -9,6 +9,12 @@ use std::collections::HashMap;
 pub const WIN_SCORE: i32 = 1_000_000;
 const INFINITY: i32 = 2_000_000;
 const ASPIRATION_DELTA: i32 = 1024;
+/// Clamp for main-history entries and the cap on the per-move depth bonus.
+const HISTORY_CLAMP: i32 = 8192;
+const HISTORY_BONUS_CAP: i32 = 2048;
+fn history_bonus(depth: usize) -> i32 {
+    (depth * depth * 8).min(HISTORY_BONUS_CAP as usize) as i32
+}
 #[derive(Clone, Copy, Debug)]
 pub struct ResultLine {
     pub score: i32,
@@ -89,6 +95,13 @@ pub struct Search {
     policy_plies: usize,
     lmr_start: usize,
     use_tier: bool,
+    use_history: bool,
+    /// Main-history cutoff statistics, indexed by side to move and square.
+    history: [[i32; 225]; 2],
+    /// Best reply found to the opponent's previous move, indexed by side and square.
+    counter: [[u16; 225]; 2],
+    /// Killer moves per ply; `u16::MAX` when unset.
+    killers: [[u16; 2]; 225],
 }
 impl Search {
     pub fn new(
@@ -155,6 +168,10 @@ impl Search {
             policy_plies: 1,
             lmr_start: 0,
             use_tier: false,
+            use_history: false,
+            history: [[0; 225]; 2],
+            counter: [[u16::MAX; 225]; 2],
+            killers: [[u16::MAX; 2]; 225],
         })
     }
     /// Diagnostic reference mode. A running search cannot mix cache semantics.
@@ -230,6 +247,14 @@ impl Search {
             return Err("Tier ordering must be selected before search starts");
         }
         self.use_tier = enabled;
+        Ok(())
+    }
+    /// Enable dynamic interior ordering from main history, countermoves and killers.
+    pub fn set_history(&mut self, enabled: bool) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("History ordering must be selected before search starts");
+        }
+        self.use_history = enabled;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -534,6 +559,24 @@ impl Search {
             }
         }
     }
+    /// Update main history, countermove and killers after searching a quiet move.
+    fn record_move(&mut self, color: bool, position: usize, ply: usize, depth: usize, cutoff: bool) {
+        let bonus = history_bonus(depth);
+        let entry = &mut self.history[usize::from(color)][position];
+        *entry = if cutoff {
+            (*entry + bonus).min(HISTORY_CLAMP)
+        } else {
+            (*entry - bonus).max(-HISTORY_CLAMP)
+        };
+        if cutoff {
+            let previous = self.path[ply - 1] as usize;
+            self.counter[usize::from(!color)][previous] = position as u16;
+            if self.killers[ply][0] != position as u16 {
+                self.killers[ply][1] = self.killers[ply][0];
+                self.killers[ply][0] = position as u16;
+            }
+        }
+    }
     fn minimax(
         &mut self,
         depth: usize,
@@ -670,6 +713,16 @@ impl Search {
             } else {
                 [0; 8]
             };
+            let ordering = if self.use_history && ply >= 1 {
+                Some(MoveOrdering {
+                    history: &self.history[usize::from(to_move)],
+                    counter: &self.counter[usize::from(!to_move)],
+                    killers: self.killers[ply],
+                    previous: self.path[ply - 1],
+                })
+            } else {
+                None
+            };
             generate_for_search(
                 &self.state,
                 to_move,
@@ -690,6 +743,7 @@ impl Search {
                 },
                 scoring,
                 three,
+                ordering,
             );
         }
         if self.buffers[ply].len == 0 {
@@ -766,7 +820,11 @@ impl Search {
             } else {
                 beta = beta.min(child.score);
             }
-            if beta <= alpha {
+            let cutoff = beta <= alpha;
+            if self.use_history && ply >= 1 && candidate.tactical == Some(0) {
+                self.record_move(to_move, candidate.position, ply, depth, cutoff);
+            }
+            if cutoff {
                 break;
             }
         }
@@ -884,6 +942,32 @@ mod tests {
         assert!(reference.next_iteration().unwrap().is_none());
     }
     #[test]
+    fn history_ordering_is_deterministic_and_populates_tables() {
+        let b = bits(&[112, 128, 99]);
+        let w = bits(&[113, 97, 127]);
+        let run = || {
+            let mut search = Search::new(b, w, true, 5, 4, 32768).unwrap();
+            search.set_history(true).unwrap();
+            let mut last = ResultLine::quiet(0);
+            while let Some(iteration) = search.next_iteration().unwrap() {
+                last = iteration.result;
+            }
+            (last, search.history, search.killers)
+        };
+        let (first, first_history, first_killers) = run();
+        let (second, second_history, second_killers) = run();
+        assert_eq!(first.score, second.score);
+        assert_eq!(&first.pv[..first.length], &second.pv[..second.length]);
+        assert_eq!(first_history, second_history);
+        assert_eq!(first_killers, second_killers);
+        assert!(first_history.iter().flatten().any(|value| *value != 0));
+        // The default search never touches the dynamic-ordering tables.
+        let mut plain = Search::new(b, w, true, 5, 4, 32768).unwrap();
+        while plain.next_iteration().unwrap().is_some() {}
+        assert!(plain.history.iter().flatten().all(|value| *value == 0));
+        assert!(plain.killers.iter().flatten().all(|&k| k == u16::MAX));
+    }
+    #[test]
     fn fixed_width_configuration_is_validated_and_locked() {
         let mut search = Search::new(bits(&[112]), bits(&[113]), true, 2, 4, 32768).unwrap();
         assert!(search.set_candidate_width(0).is_err());
@@ -996,6 +1080,7 @@ mod tests {
                             },
                             None,
                             [0; 8],
+                            None,
                         );
                         assert_eq!(
                             actual.as_slice(),
