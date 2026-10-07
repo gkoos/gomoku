@@ -219,28 +219,48 @@ squares board look.
   `max(8, 20 - 2 * remainingDepth)`, ordering is static, and no evaluation-driven
   pruning/singular-extension exists.
 
-## Remaining untried levers (external source survey, 2026-10)
+## Where the remaining headroom is: strategy, not tactics
 
-Sources read: **Rapfi** (`dhbloo/rapfi`) `search/movepick.{h,cpp}`,
-`game/movegen.{h,cpp}`, `search/history.h`, `search/ab/search.cpp`,
-`search/ab/parameter.h`; **keonwoo98/Gomoku** (Rust, PVS + Lazy SMP + VCF);
-**wind23/SlowRenju**; and the CodeCup 2020 winner write-up ("OOOOO", Tomek
-Czajka).
+Threat-space search is already implemented: `vcf.rs` (continuous fours) and
+`vct.rs` (continuous threes and double threats, with a double-three/forbidden
+check) run at the root (15 ply / 2048 nodes) and at the tactical horizon (7 ply /
+32 nodes) with cached proofs. The loss analysis confirms the engine is
+**tactically clean** - no missed immediate wins and no missed mandatory blocks in
+any loss. Every loss is quiet, positional and tempo related and ends in an
+unanswerable fork.
 
-The first two candidates - dynamic ordering and TT-move-first - were implemented
-as `--history` and `--tt-move` and both lost (Phases 7 and 8), so neither is
-listed. The rest remain untried.
+So the tactical axis is covered. Proof-number search, deeper VCF/VCT, more threat
+tiers (Phase 6) and threat-driven ordering all act on a part of the game we
+already solve.
 
-| Lever | Reference | Why it is different from what we tried |
-| --- | --- | --- |
-| Pruning kit: futility / razoring / null-move + log LMR LUT | Rapfi `ab/parameter.h` | we have only aspiration and a simple LMR that hurt |
-| Policy-driven pruning/reduction | Rapfi `policyPruningScore`/`policyReduction` | pruning the low-policy tail, not just re-ordering |
-| Proof-number / threat-space search | Allis; CodeCup winner | a different search paradigm for a tactical game |
-| Opening book for Black | CodeCup winner | nearly all our wins are Black; the opening decides those games |
+The gap is **strategic**: choosing the right quiet move several plies before the
+fork. On that axis only one thing has ever worked - re-ranking the root's quiet
+candidates with the learned policy (12% to 17%). Every other intervention
+(evaluation variants, interior ordering, reductions, breadth) is neutral or worse.
 
-All of these change the search, so they belong behind a default-off flag to keep
-the JS/Wasm parity invariant, and should be measured natively against Rapfi
-depth 6, exactly like `--lmr`, `--tier`, `--history` and `--tt-move` above.
+Two structural facts bound the options:
+
+- The evaluation is a plain linear sum of per-stone pattern contributions for one
+  side minus the same for the other (`evaluation.rs`). It has no defensive
+  urgency, initiative or tempo term, so "the opponent has an open three we must
+  answer" scores exactly the same as "we have one".
+- Learned evaluation has transferred poorly: a pattern value net that wins 61.3%
+  of self-play games still scores the baseline 12% against Rapfi.
+
+Candidate **strategic** levers, none yet tried:
+
+| Lever | Why it targets strategy (not tactics) |
+| --- | --- |
+| Sharpen the root policy with full-ranking / listwise targets instead of `pv[0]` only | improves the one lever that works, on quiet-move choice |
+| Structural evaluation: defensive-urgency / initiative term, non-linear aggregation | the linear eval cannot express being forced to answer a threat |
+| Opening book for Black | nearly all our wins are Black; the opening decides those games |
+| Bigger learned positional model (features, capacity, data) | only worth it with an external objective, not self-play or label-fitting |
+
+Remaining **search-side** ideas from the survey (these prune, they do not add
+strategic knowledge): Rapfi's futility/razoring/null-move margins and log LMR LUT
+(`search/ab/parameter.h`), and `policyPruningScore`/`policyReduction`. They belong
+behind a default-off flag and are measured against Rapfi depth 6, exactly like
+`--lmr`, `--tier`, `--history` and `--tt-move` above.
 
 
 
