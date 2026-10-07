@@ -15,7 +15,7 @@ fn run() -> Result<(), String> {
     for arg in std::env::args().skip(1) {
         if arg == "--help" {
             eprintln!(
-                "pbrain-gomoku [--depth=6] [--extension=4] [--table-capacity=32768] [--candidate-width=8] [--root-width=8] [--nnue=model.nnue] [--nnue-scale=1000] [--policy=model.policy] [--policy-scale=1000]\n15x15 freestyle, Gomocup/Piskvork stdin/stdout protocol. Candidate/root width are optional diagnostic overrides. Fixed depth; clock and node limits are not enforced."
+                "pbrain-gomoku [--depth=6] [--extension=4] [--table-capacity=32768] [--candidate-width=8] [--root-width=8] [--nnue=model.nnue] [--nnue-scale=1000] [--policy=model.policy] [--policy-scale=1000] [--policy-plies=1]\n15x15 freestyle, Gomocup/Piskvork stdin/stdout protocol. Candidate/root width are optional diagnostic overrides. Fixed depth; clock and node limits are not enforced."
             );
             return Ok(());
         }
@@ -46,6 +46,9 @@ fn run() -> Result<(), String> {
             }
             "--policy-scale" => {
                 options.policy_scale = value.parse().map_err(|_| "Invalid policy scale")?
+            }
+            "--policy-plies" => {
+                options.policy_plies = value.parse().map_err(|_| "Invalid policy plies")?
             }
             _ => return Err(format!("Unknown argument: {arg}")),
         }

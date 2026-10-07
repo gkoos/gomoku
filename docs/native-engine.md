@@ -33,6 +33,8 @@ Options use `--name=value`:
 | `--nnue` | None | Path to an experimental portable model |
 | `--nnue-scale` | 1000 | Finite value from 1 to 100,000 |
 | `--policy` | None | Path to an experimental `GOMPOL1` candidate-ordering model |
+| `--policy-scale` | 1000 | Finite value from 1 to 100,000 |
+| `--policy-plies` | 1 | Topmost plies that use the policy (1 = root only) |
 | `--candidate-width` | Unset | Diagnostic fixed candidate cap from 1 to 225 |
 | `--root-width` | Unset | Diagnostic root-only candidate cap from 1 to 225 |
 

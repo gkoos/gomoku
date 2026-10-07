@@ -69,6 +69,27 @@ impl Policy {
         }
         Ok(total)
     }
+
+    /// Serialize to GOMPOL1 bytes for tests.
+    #[cfg(test)]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(&MAGIC);
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        bytes.extend_from_slice(&(self.features as u32).to_le_bytes());
+        bytes.extend_from_slice(&(self.hidden as u32).to_le_bytes());
+        bytes.extend_from_slice(&1u32.to_le_bytes());
+        for value in self
+            .input
+            .iter()
+            .chain(self.bias.iter())
+            .chain(self.output.iter())
+            .chain(std::iter::once(&self.output_bias))
+        {
+            bytes.extend_from_slice(&value.to_le_bytes());
+        }
+        bytes
+    }
 }
 
 /// Deterministic constructor for tests in other modules.

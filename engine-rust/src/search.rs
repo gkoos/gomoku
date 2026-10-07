@@ -86,6 +86,7 @@ pub struct Search {
     root_width: Option<usize>,
     policy: Option<crate::policy::Policy>,
     policy_scale: f32,
+    policy_plies: usize,
 }
 impl Search {
     pub fn new(
@@ -149,6 +150,7 @@ impl Search {
             root_width: None,
             policy: None,
             policy_scale: 1000.0,
+            policy_plies: 1,
         })
     }
     /// Diagnostic reference mode. A running search cannot mix cache semantics.
@@ -192,6 +194,17 @@ impl Search {
         }
         self.policy = Some(crate::policy::Policy::load(bytes)?);
         self.policy_scale = scale;
+        Ok(())
+    }
+    /// Number of topmost plies that use the policy ordering (1 = root only).
+    pub fn set_policy_plies(&mut self, plies: usize) -> Result<(), &'static str> {
+        if plies > 225 {
+            return Err("Policy plies must be 0..225");
+        }
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Policy plies must be selected before search starts");
+        }
+        self.policy_plies = plies;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -617,7 +630,7 @@ impl Search {
             } else {
                 None
             };
-            let scoring = if ply == 0 {
+            let scoring = if ply < self.policy_plies {
                 self.policy.as_ref().map(|policy| PolicyScoring {
                     policy,
                     black: &self.state.black,
@@ -842,6 +855,33 @@ mod tests {
         search.set_candidate_width(8).unwrap();
         search.next_iteration().unwrap();
         assert!(search.set_candidate_width(12).is_err());
+    }
+    #[test]
+    fn policy_plies_are_validated_locked_and_neutral_when_zero() {
+        let mut search = Search::new(bits(&[112]), bits(&[113]), true, 4, 4, 32768).unwrap();
+        assert!(search.set_policy_plies(226).is_err());
+        search.set_policy_plies(3).unwrap();
+        assert_eq!(search.policy_plies, 3);
+        search.next_iteration().unwrap();
+        assert!(search.set_policy_plies(2).is_err());
+        let zero = crate::policy::from_weights(
+            vec![0.0; crate::policy::POLICY_FEATURES],
+            vec![0.0],
+            vec![0.0],
+            0.0,
+        )
+        .to_bytes();
+        let black = bits(&[112, 113]);
+        let white = bits(&[97, 98]);
+        let mut plain = Search::new(black, white, true, 4, 4, 32768).unwrap();
+        let mut scored = Search::new(black, white, true, 4, 4, 32768).unwrap();
+        scored.set_policy(&zero, 1000.0).unwrap();
+        scored.set_policy_plies(6).unwrap();
+        while let Some(reference) = plain.next_iteration().unwrap() {
+            let actual = scored.next_iteration().unwrap().unwrap();
+            assert_eq!(reference.result.score, actual.result.score);
+            assert_eq!(reference.result.pv[..reference.result.length], actual.result.pv[..actual.result.length]);
+        }
     }
     #[test]
     fn mandatory_block_shortcut_restores_state_and_never_overrides_a_win() {

@@ -242,6 +242,37 @@ node scripts/external-match.js --output=.selfplay/base                         #
 node scripts/external-match.js --policy=<absolute>\model.policy --output=.selfplay/policy
 ```
 
+## M4 result (interior ordering and width: negative)
+
+Two follow-ups were tested on top of the root-only policy (seed 43, Rapfi depth
+6, 100 games each). Neither helps; the M3 configuration wins.
+
+| Configuration | Score | Mean move time |
+| --- | ---: | ---: |
+| Policy, default root width 8 (M3) | **17%** | 62 ms |
+| Policy + `--policy-plies=2` | 12% | 61 ms |
+| Policy + `--policy-plies=3` | 13% | 66 ms |
+| Policy + `--root-width=16` | 11% | 74 ms |
+| Policy + `--root-width=30` | 14.5% | 122 ms |
+| Baseline, no policy | 12% | 60 ms |
+
+**Interior ordering hurts.** Applying the re-ranker below the root drops the
+score to 12-13%. The policy is trained to rank the *root* shortlist; deeper, the
+handcrafted priority is better aligned with the selective search, and the shallow
+policy features cannot see the deeper tactics that decide interior nodes. This
+matches the earlier root-width finding that already-narrow deep nodes need
+breadth, not reordering.
+
+**Widening the root hurts too.** With the policy already choosing good moves at
+width 8, the extra root candidates (ranks 8-30, which the policy ranks least
+reliably) only inject moves the weak handcrafted evaluation can misjudge
+(11-14.5%).
+
+Conclusion: keep the M3 configuration - the policy at the root only, default
+width, `--policy-plies=1`. The `--policy-plies` option is retained as a
+diagnostic. The remaining M4 idea - training on the full root ranking instead of
+just `pv[0]` to sharpen the policy itself - is the more promising follow-up.
+
 ## Evaluation plan
 
 - **Offline (M1):** top-1 accuracy, top-8 hit rate, and mean reciprocal rank of
