@@ -4,3 +4,5 @@ export const MAX_STATIC_SCORE = WIN_SCORE / 2;
 export const TRANSPOSITION_TABLE_SIZE = 32768;
 
 export const TACTICAL_EXTENSION_PLIES = 4;
+
+export const ASPIRATION_DELTA = 1024;

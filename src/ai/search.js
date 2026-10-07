@@ -7,7 +7,7 @@ import {
   scoreFromTable,
 } from './transposition-table.js';
 import { BOARD_SIZE } from '../core/constants.js';
-import { WIN_SCORE, TACTICAL_EXTENSION_PLIES } from './config.js';
+import { WIN_SCORE, TACTICAL_EXTENSION_PLIES, ASPIRATION_DELTA } from './config.js';
 import { evaluateTacticalHorizon } from './tactical-search.js';
 import { checkWinCondition, getBitboardResult } from '../core/rules.js';
 import { generateCandidateMoves } from './moves.js';
@@ -432,6 +432,7 @@ export function findBestMoveDeepSearch(
     );
   if (getBitboardResult(blackBitboard, whiteBitboard)) return null;
   let bestMove = null;
+  let previousScore = 0;
   let principalVariation = preferredMove
     ? [{
         ...preferredMove,
@@ -471,24 +472,29 @@ export function findBestMoveDeepSearch(
         }
       },
     };
-    const result = minimaxAlphaBeta(
-      blackBitboard,
-      whiteBitboard,
-      depth,
-      -Infinity,
-      Infinity,
-      true,
-      computerPlayer,
-      humanPlayer,
-      [],
-      tracker,
-      state,
-      searchContext,
-      tacticalExtension,
-    );
+    let result;
+    if (depth <= 1) {
+      result = minimaxAlphaBeta(
+        blackBitboard, whiteBitboard, depth, -Infinity, Infinity, true,
+        computerPlayer, humanPlayer, [], tracker, state, searchContext, tacticalExtension,
+      );
+    } else {
+      let alpha = previousScore - ASPIRATION_DELTA;
+      let beta = previousScore + ASPIRATION_DELTA;
+      while (true) {
+        result = minimaxAlphaBeta(
+          blackBitboard, whiteBitboard, depth, alpha, beta, true,
+          computerPlayer, humanPlayer, [], tracker, state, searchContext, tacticalExtension,
+        );
+        if (result.score <= alpha) alpha = -Infinity;
+        else if (result.score >= beta) beta = Infinity;
+        else break;
+      }
+    }
     if (!result.move) break;
     bestMove = result.move;
     principalVariation = result.principalVariation || [];
+    previousScore = result.score;
     // Publish only fully completed depths; partial root searches are biased.
     onIteration({
       depth,

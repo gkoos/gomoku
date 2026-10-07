@@ -8,6 +8,7 @@ use std::collections::HashMap;
 
 pub const WIN_SCORE: i32 = 1_000_000;
 const INFINITY: i32 = 2_000_000;
+const ASPIRATION_DELTA: i32 = 1024;
 #[derive(Clone, Copy, Debug)]
 pub struct ResultLine {
     pub score: i32,
@@ -179,6 +180,27 @@ impl Search {
         self.previous = ResultLine::single(0, position);
         Ok(())
     }
+    /// Search the root with an aspiration window seeded by the previous depth's
+    /// score. A fail-low or fail-high opens the offending bound and repeats; the
+    /// completed result equals the full-window search.
+    fn aspiration(&mut self, depth: usize) -> Result<ResultLine, &'static str> {
+        if depth <= 1 {
+            return self.minimax(depth, -INFINITY, INFINITY, true, 0);
+        }
+        let mut alpha = self.previous.score - ASPIRATION_DELTA;
+        let mut beta = self.previous.score + ASPIRATION_DELTA;
+        loop {
+            let result = self.minimax(depth, alpha, beta, true, 0)?;
+            if result.score <= alpha {
+                alpha = -INFINITY;
+            } else if result.score >= beta {
+                beta = INFINITY;
+            } else {
+                return Ok(result);
+            }
+        }
+    }
+
     pub fn next_iteration(&mut self) -> Result<Option<Iteration>, &'static str> {
         if self.done {
             return Ok(None);
@@ -189,7 +211,7 @@ impl Search {
         let hits = self.hits;
         let cutoffs = self.cutoffs;
         self.nodes = 0;
-        let result = self.minimax(depth, -INFINITY, INFINITY, true, 0)?;
+        let result = self.aspiration(depth)?;
         if result.length == 0 {
             self.done = true;
             return Ok(None);
