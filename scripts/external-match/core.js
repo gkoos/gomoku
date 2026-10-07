@@ -1,6 +1,9 @@
 import { opening, replay } from '../selfplay/core.js';
 import { lengthStats } from './lengths.js';
 
+// Our engine is always named "Gomoku"; the opponent is any other single token the manager wrote.
+export const OUR_NAME = 'Gomoku';
+
 export function openingText(seed, pair) {
   return opening(seed, pair).map(p => `${p % 15 - 7},${Math.floor(p / 15) - 7}`).join(', ') + '\n';
 }
@@ -33,8 +36,8 @@ export function parseGames(text, initial) {
 function decodeGame(nodes, initial) {
   const get = (node, key) => node[key]?.[0];
   const head = nodes[0], black = get(head, 'PB'), white = get(head, 'PW');
-  if (get(head, 'SZ') !== '15' || get(head, 'RU') !== '0' ||
-      !['Gomoku', 'Rapfi'].includes(black) || !['Gomoku', 'Rapfi'].includes(white) || black === white) {
+  const opponent = black === OUR_NAME ? white : white === OUR_NAME ? black : null;
+  if (get(head, 'SZ') !== '15' || get(head, 'RU') !== '0' || !opponent || black === white) {
     throw new Error('Unexpected board, rule, or players');
   }
   const turns = [], moves = [];
@@ -63,12 +66,19 @@ export function validatePair(games) {
   if (games.length !== 2 || games[0].black === games[1].black) throw new Error('Expected two games with swapped colors');
 }
 
+// The opponent is whichever name appears opposite our engine in the paired games.
+function opponentName(games) {
+  for (const game of games) if (game.black !== OUR_NAME) return game.black;
+  return 'Rapfi';
+}
+
 export function report(games) {
-  const wins = games.filter(g => g.winningEngine === 'Gomoku').length;
-  const losses = games.filter(g => g.winningEngine === 'Rapfi').length;
+  const opponent = opponentName(games);
+  const wins = games.filter(g => g.winningEngine === OUR_NAME).length;
+  const losses = games.filter(g => g.winningEngine && g.winningEngine !== OUR_NAME).length;
   const draws = games.length - wins - losses;
   const timing = {};
-  for (const player of ['Gomoku', 'Rapfi']) {
+  for (const player of [OUR_NAME, opponent]) {
     const times = games.flatMap(g => g.turns.filter(t => t.player === player).map(t => t.milliseconds)).sort((a, b) => a - b);
     const sum = times.reduce((a, b) => a + b, 0);
     timing[player] = { moves: times.length, totalMilliseconds: sum, meanMilliseconds: times.length ? sum / times.length : null,
@@ -78,9 +88,9 @@ export function report(games) {
   }
   const byColor = Object.fromEntries(['black', 'white'].map(color => {
     const subset = games.filter(g => g[color] === 'Gomoku');
-    return [color, { games: subset.length, wins: subset.filter(g => g.winningEngine === 'Gomoku').length,
-      draws: subset.filter(g => !g.winningEngine).length, losses: subset.filter(g => g.winningEngine === 'Rapfi').length }];
+    return [color, { games: subset.length, wins: subset.filter(g => g.winningEngine === OUR_NAME).length,
+      draws: subset.filter(g => !g.winningEngine).length, losses: subset.filter(g => g.winningEngine && g.winningEngine !== OUR_NAME).length }];
   }));
   return { games: games.length, wins, draws, losses, score: games.length ? (wins + draws / 2) / games.length : null,
-    byColor, timing, lengths: lengthStats(games), lossesForReview: games.filter(g => g.winningEngine === 'Rapfi').map(g => ({ pair: g.pair, color: g.black === 'Gomoku' ? 'black' : 'white', plies: g.moves.length })) };
+    byColor, timing, lengths: lengthStats(games), lossesForReview: games.filter(g => g.winningEngine && g.winningEngine !== OUR_NAME).map(g => ({ pair: g.pair, color: g.black === OUR_NAME ? 'black' : 'white', plies: g.moves.length })) };
 }

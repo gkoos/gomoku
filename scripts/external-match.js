@@ -8,21 +8,26 @@ import { openingText, parseGames, validatePair, report } from './external-match/
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const defaults = { games: 100, seed: 43, depth: 6, 'candidate-width': 0, 'rapfi-depth': 6, 'turn-seconds': 3600,
+  'opponent-name': 'Rapfi',
   output: '.selfplay/external-rapfi-depth6', manager: 'download/c-gomoku-cli.exe',
   engine: 'engine-rust/target/release/pbrain-gomoku.exe', rapfi: 'download/rapfi/pbrain-rapfi-windows-sse.exe' };
 const opts = { ...defaults };
 for (const arg of process.argv.slice(2)) {
   if (arg === '--help') {
-    console.log('node scripts/external-match.js [--games=100] [--seed=43] [--depth=6] [--rapfi-depth=6]\n  [--candidate-width=0] [--turn-seconds=3600] [--output=DIR] [--manager=PATH] [--engine=PATH] [--rapfi=PATH]\nWidth 0 uses the default depth-dependent policy; positive widths are diagnostic fixed caps.\nResume with identical arguments. Engines must already be built/downloaded.');
+    console.log('node scripts/external-match.js [--games=100] [--seed=43] [--depth=6] [--rapfi-depth=6]\n  [--candidate-width=0] [--turn-seconds=3600] [--opponent-name=NAME] [--output=DIR] [--manager=PATH] [--engine=PATH] [--rapfi=PATH]\nWidth 0 uses the default depth-dependent policy; positive widths are diagnostic fixed caps.\nThe opponent (--rapfi=PATH) is labelled --opponent-name in SGF and reports; --rapfi-depth only\naffects engines that enforce the manager\'s max_depth extension.\nResume with identical arguments. Engines must already be built/downloaded.');
     process.exit(0);
   }
   const match = /^--([^=]+)=(.+)$/.exec(arg);
   if (!match || !Object.hasOwn(defaults, match[1])) throw new Error(`Unknown option: ${arg}`);
   opts[match[1]] = typeof defaults[match[1]] === 'number' ? Number(match[2]) : match[2];
 }
-for (const [key, min, max] of [['games', 2, 10000], ['seed', 0, 0xffffffff], ['depth', 1, 10], ['candidate-width', 0, 225], ['rapfi-depth', 1, 100], ['turn-seconds', 1, 86400]]) {
+for (const [key, min, max] of [['games', 2, 10000], ['seed', 0, 0xffffffff], ['depth', 1, 10], ['candidate-width', 0, 225], ['rapfi-depth', 1, 100]]) {
   if (!Number.isInteger(opts[key]) || opts[key] < min || opts[key] > max) throw new Error(`Invalid ${key}`);
 }
+// Seconds per move may be fractional so an opponent's clock can be tuned below one second.
+if (!Number.isFinite(opts['turn-seconds']) || opts['turn-seconds'] <= 0 || opts['turn-seconds'] > 86400) throw new Error('Invalid turn-seconds');
+// The manager writes the opponent name into SGF PB/PW, so keep it a single safe token.
+if (!/^[A-Za-z0-9_.-]+$/.test(opts['opponent-name'])) throw new Error('Invalid opponent-name');
 if (opts.games % 2) throw new Error('Games must be even');
 const hash = data => createHash('sha256').update(data).digest('hex');
 const digest = file => hash(readFileSync(file));
@@ -64,7 +69,7 @@ for (let pair = 0; pair < opts.games / 2; pair++) {
     for (const name of ['games.sgf', 'messages.txt', 'manager.log']) writeFileSync(path.join(dir, name), '');
     const args = ['-each', `tc=0/${opts['turn-seconds']}`, 'thread=1',
       '-engine', 'name=Gomoku', `cmd=${slash(engine)}${opts['candidate-width'] ? ` --candidate-width=${opts['candidate-width']}` : ''}`, `depth=${opts.depth}`,
-      '-engine', 'name=Rapfi', `cmd=${slash(rapfi)}`, `depth=${opts['rapfi-depth']}`,
+      '-engine', `name=${opts['opponent-name']}`, `cmd=${slash(rapfi)}`, `depth=${opts['rapfi-depth']}`,
       '-rule', '0', '-boardsize', '15', '-games', '2', '-repeat', '-concurrency', '1',
       '-openings', 'file=opening.txt', 'order=sequential', '-sgf', 'games.sgf', '-msg', 'messages.txt', '-fatalerror'];
     writeFileSync(path.join(dir, 'command.json'), JSON.stringify({ executable: manager, args, cwd: dir }, null, 2) + '\n');

@@ -1,3 +1,6 @@
+const OUR_NAME = 'Gomoku';
+const isLoss = g => g.winningEngine && g.winningEngine !== OUR_NAME;
+
 export function distribution(values) {
   const sorted = [...values].sort((a, b) => a - b);
   const n = sorted.length;
@@ -14,10 +17,10 @@ function summarize(games) {
 }
 
 export function lengthStats(games) {
-  const losses = games.filter(g => g.winningEngine === 'Rapfi');
-  return { all: summarize(games), wins: summarize(games.filter(g => g.winningEngine === 'Gomoku')),
+  const losses = games.filter(isLoss);
+  return { all: summarize(games), wins: summarize(games.filter(g => g.winningEngine === OUR_NAME)),
     draws: summarize(games.filter(g => !g.winningEngine)), losses: summarize(losses),
-    lossesByColor: Object.fromEntries(['black', 'white'].map(color => [color, summarize(losses.filter(g => g[color] === 'Gomoku'))])) };
+    lossesByColor: Object.fromEntries(['black', 'white'].map(color => [color, summarize(losses.filter(g => g[color] === OUR_NAME))])) };
 }
 
 export function compareLengths(baseline, current) {
@@ -39,7 +42,7 @@ export function compareLengths(baseline, current) {
     if (!b || a.black !== b.black || a.white !== b.white || openingPly !== b.moves.length - b.turns.length ||
         JSON.stringify(a.moves.slice(0, openingPly)) !== JSON.stringify(b.moves.slice(0, openingPly))) throw new Error(`Opening/color mismatch: ${id}`);
     if (a.winningEngine !== b.winningEngine) changedResults.push({ pair: a.pair, game: a.index, before: a.winningEngine, after: b.winningEngine });
-    if (a.winningEngine === 'Rapfi' && b.winningEngine === 'Rapfi') {
+    if (isLoss(a) && isLoss(b)) {
       matchedLosses.push({ pair: a.pair, game: a.index, color: a.black === 'Gomoku' ? 'black' : 'white',
         beforePlayedPlies: a.turns.length, afterPlayedPlies: b.turns.length, deltaPlayedPlies: b.turns.length - a.turns.length });
     }

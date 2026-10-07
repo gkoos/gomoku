@@ -46,8 +46,16 @@ npm.cmd run external:match -- --depth=8 --rapfi-depth=6 --output=.selfplay/exter
 ```
 
 Use `--seed=N`, `--games=N` (positive and even), `--turn-seconds=N`,
-`--manager=PATH`, `--engine=PATH`, and `--rapfi=PATH` to override defaults.
-`--help` lists all options. Paths resolve relative to the repository root.
+`--opponent-name=NAME`, `--manager=PATH`, `--engine=PATH`, and `--rapfi=PATH`
+to override defaults. `--help` lists all options. Paths resolve relative to the
+repository root.
+
+`--rapfi=PATH` selects the **opponent** executable and is not limited to Rapfi;
+`--opponent-name=NAME` is the label written to the SGF and reports (default
+`Rapfi`), and our engine is always named `Gomoku`. Non-integer `--turn-seconds`
+values are allowed so an opponent's clock can be tuned below one second.
+`--rapfi-depth` only reaches engines that implement the manager's `max_depth`
+extension; engines that honor only the clock play to `--turn-seconds`.
 
 ## Resume and artifacts
 
@@ -296,3 +304,64 @@ depth cannot recover a move discarded at a node. The existing depth-seven
 experiment used a different pruning policy, so these runs cannot isolate
 odd/even effects. A fixed-width odd-depth run or analysis of the changed games
 would be required to investigate that hypothesis further.
+
+## Secondary reference engines (PentaZen, TITO)
+
+Rapfi alone cannot say whether a low score reflects our engine or an unusually
+strong opponent, so two classic 15×15 freestyle engines were added as secondary
+references. Our engine keeps its default depth six, four tactical extension
+plies and 32768 table entries. Depth six is the browser's **Medium** difficulty
+(`src/ai/engine.js` maps Medium 6, Hard 8, Expert 10); Hard and Expert are not
+covered here.
+
+Rapfi and our engine implement the manager's `max_depth` extension, so they were
+compared at **equal depth**. PentaZen 0.4.18 and TITO 2014 do **not** implement
+it; they play to the manager's per-move clock instead, so their rows are
+depth-versus-clock comparisons with an explicit `--turn-seconds` budget. The
+download page ships PentaZen in two builds: 2021.15 (15×15) and 2021.20 (20×20,
+which rejects board size 15). Only the 15×15 build is usable against our
+15×15-only engine.
+
+```powershell
+node scripts/external-match.js --rapfi=download/pentazen/extracted15/pbrain-PentaZen21_15.exe \
+  --opponent-name=PentaZen --turn-seconds=1 --output=.selfplay/external-pentazen15-depth6
+node scripts/external-match.js --rapfi=download/tito/extracted/pbrain-Tito2014.exe \
+  --opponent-name=Tito --turn-seconds=1 --output=.selfplay/external-tito14-depth6
+```
+
+All runs use the same 50 paired-color openings (seed 43), one thread, and 100
+games. Every game was independently replayed; wins were board wins, not forfeits
+or crashes. Our mean move time was ~48–51 ms throughout.
+
+| Opponent | Opponent setting | Wins | Draws | Losses | Score | Opponent mean move time |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| Rapfi | depth 6 | 12 | 0 | 88 | 12% | 24 ms |
+| PentaZen 21.15 | 1 s/move | 1 | 0 | 99 | 1% | 279 ms |
+| PentaZen 21.15 | 0.1 s/move | 9 | 0 | 91 | 9% | 18 ms |
+| PentaZen 21.15 | 0.02 s/move | 9 | 0 | 91 | 9% | 18 ms |
+| TITO 2014 | 1 s/move | 4 | 0 | 96 | 4% | 115 ms |
+| TITO 2014 | 0.01 s/move | 25 | 0 | 75 | 25% | 6 ms |
+| TITO 2014 | 0.003 s/move | 66 | 0 | 34 | 66% | 5 ms |
+
+At a 0.1 s and 0.02 s budget PentaZen still finishes in under 53 ms, so the
+budget does not bind and both runs score the same; a similar floor appears for
+TITO between 10 ms and 3 ms, so its tiny-budget rows are highly sensitive.
+
+Two patterns are consistent across every opponent. First, our wins are almost
+all as **Black**: freestyle's first-player advantage, not a balanced result.
+Versus PentaZen we never won a White game. Second, a board scan of the 91
+PentaZen losses (1,365 decisions) found **no missed immediate wins and no missed
+single mandatory blocks** (as in the Rapfi loss analysis); all 91 losses ended in
+an unanswerable double threat. The engine is tactically clean and loses on quiet,
+positional and tempo play.
+
+The engine's level sits near **"TITO 2014 given a ~5 ms search"**: we beat that
+TITO 66% but lose to TITO at 10 ms (25%) and to TITO at 1 s (4%). Even a
+PentaZen limited to ~18 ms/move beats our depth-six search ~91%. These are single
+machine, single-seed measurements at unequal settings, so they bound the gap
+rather than fix an absolute rating.
+
+The match runner now labels the opponent from `--opponent-name` instead of
+hardcoding Rapfi. `scripts/external-match/core.js`, `lengths.js`, `analyze.js`,
+`check-vcf.js`, and `length-report.js` treat "our engine" as `Gomoku` and derive
+the opponent name from the games, with `Rapfi` retained as the default.

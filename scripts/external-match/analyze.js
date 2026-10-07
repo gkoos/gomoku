@@ -50,7 +50,7 @@ for (const game of match.gamesDetail) {
   const state = replay(game.moves);
   const expected = state.winner === 1 ? game.black : state.winner === 2 ? game.white : null;
   if (expected !== game.winningEngine || !state.terminal) throw new Error('Invalid saved game');
-  if (game.winningEngine !== 'Rapfi') continue;
+  if (!game.winningEngine || game.winningEngine === 'Gomoku') continue;
   const board = new Uint8Array(225), own = game.black === 'Gomoku' ? 1 : 2;
   const rows = [];
   game.moves.forEach((move, ply) => {

@@ -39,7 +39,7 @@ for (const game of games) {
 times.sort((a, b) => a - b);
 const summary = { positions: times.length, proofs: proofs.length,
   longerThanOneMove: proofs.filter(p => p.line.length > 1).length,
-  missedWinningPositionsInLosses: proofs.filter(p => p.winningEngine === 'Rapfi' && p.line[0] !== p.played).length,
+  missedWinningPositionsInLosses: proofs.filter(p => p.winningEngine && p.winningEngine !== 'Gomoku' && p.line[0] !== p.played).length,
   exhausted: exhausted.length, nodes,
   meanMilliseconds: times.reduce((a, b) => a + b, 0) / times.length,
   p95Milliseconds: times[Math.ceil(times.length * 0.95) - 1], maxMilliseconds: times.at(-1) };

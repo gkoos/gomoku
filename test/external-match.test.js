@@ -18,6 +18,15 @@ test('external SGF pairs preserve axes, opening, colors, timings and results', (
   assert.equal(stats.timing.Gomoku.moves, 5); assert.equal(stats.timing.Gomoku.totalMilliseconds, 150);
   assert.equal(stats.byColor.black.wins, 1); assert.equal(stats.byColor.white.losses, 1);
 });
+test('external SGF accepts any named opponent beside our engine', () => {
+  const games = parseGames(game('Gomoku', 'PentaZen') + game('PentaZen', 'Gomoku'), initial);
+  validatePair(games);
+  const stats = report(games);
+  assert.equal(stats.wins, 1); assert.equal(stats.losses, 1); assert.equal(stats.score, 0.5);
+  assert.equal(stats.timing.Gomoku.moves, 5); assert.equal(stats.timing.PentaZen.moves, 5);
+  assert.equal(stats.byColor.white.losses, 1);
+  assert.equal(stats.lossesForReview.length, 1);
+});
 test('external results reject illegal moves, wrong openings and forfeits', () => {
   for (const broken of [game().replace('B[ca]', 'B[aa]'), game().replace('RE[B+1]', 'RE[W+1]'),
     game().replace(';B[ea]C[50ms]', ''), game().replace('C[10ms]', 'C[no timing]'), game().slice(0, -1)]) {
