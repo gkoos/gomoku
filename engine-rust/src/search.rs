@@ -83,6 +83,7 @@ pub struct Search {
     use_pvs: bool,
     protect_forcing: bool,
     candidate_width: Option<usize>,
+    root_width: Option<usize>,
 }
 impl Search {
     pub fn new(
@@ -143,6 +144,7 @@ impl Search {
             use_pvs: true,
             protect_forcing: true,
             candidate_width: None,
+            root_width: None,
         })
     }
     /// Diagnostic reference mode. A running search cannot mix cache semantics.
@@ -166,6 +168,14 @@ impl Search {
             return Err("Candidate width must be 1..225 and selected before search starts");
         }
         self.candidate_width = Some(width);
+        Ok(())
+    }
+    /// Diagnostic root-only width; deeper nodes keep the depth policy.
+    pub fn set_root_width(&mut self, width: usize) -> Result<(), &'static str> {
+        if !(1..=225).contains(&width) || self.nodes != 0 || self.next_depth != 1 {
+            return Err("Root width must be 1..225 and selected before search starts");
+        }
+        self.root_width = Some(width);
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -597,7 +607,11 @@ impl Search {
                 &mut self.buffers[ply],
                 SearchSelection {
                     depth,
-                    width: self.candidate_width,
+                    width: if ply == 0 {
+                        self.root_width.or(self.candidate_width)
+                    } else {
+                        self.candidate_width
+                    },
                     preferred,
                     forcing: if self.protect_forcing {
                         crate::vcf::four_moves(&self.state.lines, to_move)

@@ -365,3 +365,38 @@ The match runner now labels the opponent from `--opponent-name` instead of
 hardcoding Rapfi. `scripts/external-match/core.js`, `lengths.js`, `analyze.js`,
 `check-vcf.js`, and `length-report.js` treat "our engine" as `Gomoku` and derive
 the opponent name from the games, with `Rapfi` retained as the default.
+
+## Root candidate width (search breadth)
+
+The per-node candidate cap is `max(8, 20 - 2 * remainingDepth)`, so at the final
+depth-six iteration the **root keeps only 8 moves** while deeper nodes keep up to
+18. The new `--root-width=N` diagnostic overrides the cap at the root only; it is
+still bounded by the 30/50 generation cap. It was swept against Rapfi depth six
+on two opening seeds (100 games each, 15x15 freestyle, our engine otherwise
+unchanged).
+
+| Root width | Seed 43 | Seed 7 | Our mean move time |
+| ---: | ---: | ---: | ---: |
+| 8 (default) | 12% | 11% | ~54 ms |
+| 16 | 13% | - | ~77 ms |
+| 30 | 14% | 13% | ~119 ms |
+| 50 | 15% | - | 500+ s per run |
+
+The score rose monotonically with root width on both seeds (about +2 at width
+30), so the root was too narrow. The cost is large: each extra root move gets a
+full-depth subtree. Narrowing the deeper nodes to compensate destroyed the gain
+(root 30 with a fixed depth-6 width elsewhere scored **6%**), so breadth matters
+at both levels.
+
+This is a diagnostic, not a proposed default: brute breadth buys ~2 points for
+2-6x the time. The payoff is in **candidate ordering** (put the good quiet moves
+in a narrow root) and the candidate-generation performance work, not in more
+breadth.
+
+Reproduce (the second seed compares both configurations on the same openings):
+
+```powershell
+node scripts/external-match.js --root-width=30 --output=.selfplay/external-rapfi-root30-depth6
+node scripts/external-match.js --seed=7 --output=.selfplay/ext-rapfi-s7-base
+node scripts/external-match.js --seed=7 --root-width=30 --output=.selfplay/ext-rapfi-s7-root30
+```

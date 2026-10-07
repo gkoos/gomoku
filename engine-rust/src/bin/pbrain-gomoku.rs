@@ -14,7 +14,7 @@ fn run() -> Result<(), String> {
     for arg in std::env::args().skip(1) {
         if arg == "--help" {
             eprintln!(
-                "pbrain-gomoku [--depth=6] [--extension=4] [--table-capacity=32768] [--candidate-width=8] [--nnue=model.nnue] [--nnue-scale=1000]\n15x15 freestyle, Gomocup/Piskvork stdin/stdout protocol. Candidate width is an optional diagnostic override. Fixed depth; clock and node limits are not enforced."
+                "pbrain-gomoku [--depth=6] [--extension=4] [--table-capacity=32768] [--candidate-width=8] [--root-width=8] [--nnue=model.nnue] [--nnue-scale=1000]\n15x15 freestyle, Gomocup/Piskvork stdin/stdout protocol. Candidate/root width are optional diagnostic overrides. Fixed depth; clock and node limits are not enforced."
             );
             return Ok(());
         }
@@ -26,6 +26,9 @@ fn run() -> Result<(), String> {
             "--candidate-width" => {
                 options.candidate_width =
                     Some(value.parse().map_err(|_| "Invalid candidate width")?)
+            }
+            "--root-width" => {
+                options.root_width = Some(value.parse().map_err(|_| "Invalid root width")?)
             }
             "--extension" => options.extension = value.parse().map_err(|_| "Invalid extension")?,
             "--table-capacity" => {

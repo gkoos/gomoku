@@ -1,8 +1,8 @@
 {
-  "sourceHash": "a0282421ece4b8fb76446d4fe014069672b3950a96225f82d9213a26e8bccd5b",
+  "sourceHash": "293d2a64b76ad1f3090def25e9ece92b68d04e17ae8852e65e5ea1d1e42995f0",
   "artifacts": {
     "gomoku_engine.js": "af48058516330c0f8421211ce6c9d723ff74e233d646e708939a655c78db7365",
-    "gomoku_engine_bg.wasm": "66e67606ea62fa961e0945075ae7d3ebf5e88bf48e07de700a5409806955f09c",
+    "gomoku_engine_bg.wasm": "85d18bfe8dfe8a87daf1b47943802bb0d0945490ef85e7ca76b153aef1d37632",
     "gomoku_engine.d.ts": "d4f47e09fc5ef6a5119709ea2e858a602c03d3ddbf0c5e4d330753b86ab5d58b"
   }
 }
