@@ -231,9 +231,11 @@ root-width result (15%) at a fraction of the cost. The 200-game interval is stil
 about +/-5 points, so a larger run is needed to tighten it; the two seeds agreeing
 is the encouraging part.
 
-Scope note: M3 wires the native/Rust search only. The browser JavaScript search
-(`src/ai/moves.js`, `src/ai/search.js`) does not yet apply a policy, so the web
-game is unaffected; mirroring it there is a follow-up.
+Scope note: the native engine applies the policy behind `--policy`, and the
+browser game exposes it as an opt-in **"Stronger (learned ordering)"** toggle
+(default off) that loads `public/models/policy-depth6.policy` and passes it to
+the Wasm `MoveEngine`. The pure-JavaScript fallback search (`src/ai/moves.js`,
+`src/ai/search.js`) still does not apply a policy.
 
 Reproduce:
 

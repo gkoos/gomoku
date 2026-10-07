@@ -10,6 +10,10 @@ export class MoveEngine {
     constructor(black: Uint32Array, white: Uint32Array, computer_black: boolean, difficulty: number, extension: number, table_capacity: number);
     next_depth(): Float64Array;
     root_move(): number;
+    /**
+     * Load a candidate-ordering policy before the first iteration.
+     */
+    set_policy(model: Uint8Array, scale: number, plies: number): void;
     static with_nnue(black: Uint32Array, white: Uint32Array, computer_black: boolean, difficulty: number, extension: number, table_capacity: number, model: Uint8Array, scale: number): MoveEngine;
     /**
      * Factory keeps the existing constructor and browser defaults compatible.
@@ -130,6 +134,7 @@ export interface InitOutput {
     readonly moveengine_new: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => [number, number, number];
     readonly moveengine_next_depth: (a: number) => [number, number, number, number];
     readonly moveengine_root_move: (a: number) => number;
+    readonly moveengine_set_policy: (a: number, b: number, c: number, d: number, e: number) => [number, number];
     readonly moveengine_with_nnue: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number) => [number, number, number];
     readonly moveengine_with_weights: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number) => [number, number, number];
     readonly occupied_positions: (a: number, b: number, c: number, d: number) => [number, number, number, number];

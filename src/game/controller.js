@@ -23,6 +23,7 @@ export function createGameController({
   let humanPlayer = 'black'; // Human player color
   let computerPlayer = 'white'; // Computer player color
   let aiDifficulty = 'medium'; // AI difficulty: easy, medium, hard, expert
+  let usePolicy = false; // Optional learned candidate ordering (stronger, opt-in)
 
   let gameGeneration = 0;
   let openingTimer = null;
@@ -273,6 +274,7 @@ export function createGameController({
       {
         position: { blackBitboard, whiteBitboard, toMove: computerPlayer },
         difficulty: aiDifficulty,
+        usePolicy,
       },
       fallback,
     );
@@ -366,6 +368,7 @@ export function createGameController({
       humanPlayer,
       computerPlayer,
       aiDifficulty,
+      usePolicy,
       gameOver: isGameOver(),
       gameInProgress: isGameInProgress(),
       activeAIRequest: aiClient.pendingRequestId,
@@ -385,6 +388,9 @@ export function createGameController({
     )
       aiDifficulty = value;
   }
+  function setUsePolicy(value) {
+    if (!isGameInProgress() && typeof value === 'boolean') usePolicy = value;
+  }
   const view = createView({
     document,
     Setup,
@@ -399,6 +405,7 @@ export function createGameController({
     makeMove,
     setHumanPlayer,
     setDifficulty,
+    setUsePolicy,
     forceComputerMove,
   });
   const {
@@ -421,6 +428,7 @@ export function createGameController({
     makeMove,
     setHumanPlayer,
     setDifficulty,
+    setUsePolicy,
     makeComputerMove,
     forceComputerMove,
     cleanup,

@@ -13,10 +13,11 @@ export function createView({
   makeMove,
   setHumanPlayer,
   setDifficulty,
+  setUsePolicy,
   forceComputerMove,
 }) {
   function createGameUI() {
-    const { board, currentPlayer, humanPlayer, aiDifficulty, gameInProgress } =
+    const { board, currentPlayer, humanPlayer, aiDifficulty, usePolicy, gameInProgress } =
       getState();
     const isSetupMode = Setup.isSetupMode();
     const setupState = Setup.getSetupState();
@@ -40,6 +41,7 @@ export function createView({
             <option value="hard" ${aiDifficulty === 'hard' ? 'selected' : ''}>Hard</option>
             <option value="expert" ${aiDifficulty === 'expert' ? 'selected' : ''}>Expert</option>
           </select>
+          <label title="Learned move ordering trained on depth-6 self-play labels"><input type="checkbox" id="use-policy" ${usePolicy ? 'checked' : ''} ${gameInProgress ? 'disabled' : ''}> Stronger (learned ordering)</label>
           <button id="start-btn" class="start-button" ${gameInProgress ? 'style="visibility: hidden;"' : ''}>Start Game</button>
           <button id="setup-btn" class="start-button" ${gameInProgress ? 'style="visibility: hidden;"' : ''}>Setup Board</button>
         `
@@ -91,6 +93,11 @@ export function createView({
         .getElementById('ai-difficulty')
         .addEventListener('change', (e) => {
           setDifficulty(e.target.value);
+        });
+      document
+        .getElementById('use-policy')
+        .addEventListener('change', (e) => {
+          setUsePolicy(e.target.checked);
         });
     } else {
       document
@@ -239,6 +246,7 @@ export function createView({
   function showPlayingControls() {
     document.getElementById('player-color').disabled = true;
     document.getElementById('ai-difficulty').disabled = true;
+    document.getElementById('use-policy').disabled = true;
     document.getElementById('start-btn').style.visibility = 'hidden';
     document.getElementById('setup-btn').style.visibility = 'hidden';
     document.getElementById('reset-btn').style.visibility = 'visible';

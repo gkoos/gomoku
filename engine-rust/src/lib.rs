@@ -484,6 +484,16 @@ impl MoveEngine {
             None => Ok(Vec::new()),
         }
     }
+    /// Load a candidate-ordering policy before the first iteration.
+    pub fn set_policy(&mut self, model: &[u8], scale: f32, plies: u32) -> Result<(), JsValue> {
+        if let Some(search) = &mut self.search {
+            search.set_policy(model, scale).map_err(JsValue::from_str)?;
+            search
+                .set_policy_plies(plies as usize)
+                .map_err(JsValue::from_str)?;
+        }
+        Ok(())
+    }
 }
 
 /// Diagnostic root-only selection: -2 requires search, -1 is terminal.

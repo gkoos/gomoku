@@ -61,6 +61,20 @@ export class MoveEngine {
         return ret;
     }
     /**
+     * Load a candidate-ordering policy before the first iteration.
+     * @param {Uint8Array} model
+     * @param {number} scale
+     * @param {number} plies
+     */
+    set_policy(model, scale, plies) {
+        const ptr0 = passArray8ToWasm0(model, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.moveengine_set_policy(this.__wbg_ptr, ptr0, len0, scale, plies);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * @param {Uint32Array} black
      * @param {Uint32Array} white
      * @param {boolean} computer_black

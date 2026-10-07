@@ -179,3 +179,29 @@ export function exportPolicy({ features = POLICY_FEATURES, hidden, input, bias, 
   for (let i = 0; i < count; i++) data.setFloat32(HEADER + i * 4, values[i], true);
   return view;
 }
+
+/**
+ * Lazy GOMPOL1 asset loader. The model bytes are fetched once; a load failure
+ * resolves to null so the engine keeps its default ordering.
+ */
+export function createPolicyLoader({
+  url,
+  fetchBytes = (target) => fetch(target),
+  reportError = console.warn,
+}) {
+  let pending;
+  return function loadPolicy() {
+    pending ??= Promise.resolve()
+      .then(() => fetchBytes(url))
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.arrayBuffer();
+      })
+      .then((buffer) => new Uint8Array(buffer))
+      .catch((error) => {
+        reportError('Policy model load failed; using the default ordering:', error);
+        return null;
+      });
+    return pending;
+  };
+}

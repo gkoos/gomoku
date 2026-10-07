@@ -1,6 +1,8 @@
 ﻿import { findBestMove } from './engine.js';
 import { findBestMoveDeepSearch } from './search.js';
 import {
+  POLICY_PLIES,
+  POLICY_SCALE,
   TACTICAL_EXTENSION_PLIES,
   TRANSPOSITION_TABLE_SIZE,
 } from './config.js';
@@ -50,6 +52,7 @@ export function createWasmDeepSearch(SearchEngine) {
 /** Lazy initialization is shared by requests; a load failure retains JS search. */
 export function createWasmChooseMove({
   loadEngine,
+  loadPolicy,
   reportError = console.warn,
 }) {
   let loading;
@@ -109,6 +112,14 @@ export function createWasmChooseMove({
       } finally {
         search.free();
       }
+    }
+    try {
+      if (options.usePolicy && loadPolicy) {
+        const model = await loadPolicy();
+        if (model) search.set_policy(model, POLICY_SCALE, POLICY_PLIES);
+      }
+    } catch (error) {
+      reportError('Policy model rejected; using the default ordering:', error);
     }
     return runIterations(search, onProgress, [0, 6, 8, 10][level], options);
   };
