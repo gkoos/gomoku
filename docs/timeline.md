@@ -132,6 +132,25 @@ Key observations:
 - The **threat tier is neutral alone and worse combined**, because it outranks the
   policy at the root. This was the last untested "generate better moves" lever.
 
+## Phase 7 - Dynamic ordering from the reference survey (2026-10-07)
+
+Read the public classical engines (Rapfi, keonwoo98/Gomoku, SlowRenju, and the
+CodeCup 2020 winner write-up) and implemented the most-cited untried lever:
+dynamic interior move ordering. See the untried-lever survey below.
+
+| Commit | Change | Result | Status |
+| --- | --- | --- | --- |
+| `cac1400` | main history + countermove + killer ordering at interior nodes (root keeps static/policy ordering) | **2%** vs the 12% baseline | diagnostic (worse) |
+| (same build, diagnostics) | main history only, killers and countermoves zeroed | **3%** | diagnostic (worse) |
+
+Both are catastrophic, so it is the history itself rather than the killers.
+History rewards a square that caused a cutoff, then promotes that square at every
+other node where it is a candidate; in a narrow candidate cap that displaces the
+density-ranked quiet moves the search needs, and gomoku's threat structure makes
+the promotion unsafe. Together with the interior-policy result (12-13%), the
+conclusion is that our **static density ordering is already the best retention
+function** available at interior nodes.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
@@ -145,6 +164,8 @@ Key observations:
 | Threat tier alone | 12% |
 | Depth 8 | 10% |
 | LMR (start 4) depth 6 / depth 8 | 9% / 7.4% |
+| Dynamic ordering, history only | 3% |
+| Dynamic ordering, history + countermove + killer | 2% |
 
 Other opponents at our default depth 6: PentaZen 0.4.18 **1%** (1 s/move) and
 **9%** (0.1 s/move); TITO 2014 **4%** (1 s), **25%** (10 ms), **66%** (3 ms).
@@ -163,10 +184,12 @@ uses a traditional board and applies the policy automatically.
 
 **Reverted or not kept:** every evaluation change (weight tuning, outcome NNUE,
 search-target NNUE, pattern value net, Rapfi-eval distillation); interior
-ordering; LMR; the threat tier; depth seven; and the squares board look.
+ordering (policy and dynamic history); LMR; the threat tier; depth seven; and the
+squares board look.
 
 **Diagnostics (merged, off by default):** `--root-width`, `--candidate-width`,
-`--policy`, `--policy-plies`, `--pattern`, `--pattern-scale`, `--lmr`, `--tier`.
+`--policy`, `--policy-plies`, `--pattern`, `--pattern-scale`, `--lmr`, `--tier`,
+`--history`.
 
 ## What the evidence says
 
@@ -184,7 +207,7 @@ ordering; LMR; the threat tier; depth seven; and the squares board look.
   `max(8, 20 - 2 * remainingDepth)`, ordering is static, and no evaluation-driven
   pruning/singular-extension exists.
 
-## Untried levers (external source survey, 2026-10)
+## Remaining untried levers (external source survey, 2026-10)
 
 Sources read: **Rapfi** (`dhbloo/rapfi`) `search/movepick.{h,cpp}`,
 `game/movegen.{h,cpp}`, `search/history.h`, `search/ab/search.cpp`,
@@ -192,9 +215,11 @@ Sources read: **Rapfi** (`dhbloo/rapfi`) `search/movepick.{h,cpp}`,
 **wind23/SlowRenju**; and the CodeCup 2020 winner write-up ("OOOOO", Tomek
 Czajka).
 
+The first candidate - dynamic ordering - was implemented as `--history` and lost
+badly (Phase 7), so it is no longer listed. The rest remain untried.
+
 | Lever | Reference | Why it is different from what we tried |
 | --- | --- | --- |
-| Dynamic ordering: history + countermove (+ killer) | Rapfi `MainHistory`/`CounterMoveHistory`; keonwoo98 | our interior ordering is 100% static; this learns from actual cutoffs |
 | TT-move-first ordering | Rapfi picker | we store the best move but only use it on a cutoff |
 | History-driven depth extension | Rapfi `extensionFromStatScore` | extends lines with high history stat score |
 | Pruning kit: futility / razoring / null-move + log LMR LUT | Rapfi `ab/parameter.h` | we have only aspiration and a simple LMR that hurt |

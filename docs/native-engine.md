@@ -50,6 +50,14 @@ below immediate wins, mandatory blocks and four-creating attacks. It is a
 diagnostic and off by default: over 100 games against Rapfi depth 6 it scored
 12% on its own and 15% alongside the policy ordering, versus 17% for the policy
 alone, so the threat tier does not beat the policy.
+
+`--history=1` enables dynamic interior ordering from main history, countermoves
+and killer moves (the root keeps its static/policy ordering). It is a diagnostic
+and off by default: over 100 games against Rapfi depth 6 it scored 2% with
+killers and countermoves and 3% with main history alone, versus the 12% baseline.
+Search-derived history promotes a square that caused a cutoff in one branch to
+the front of every other branch, displacing the density-ranked quiet moves the
+narrow candidate cap depends on, so it is not used.
 `--root-width` overrides the candidate cap at the root only, leaving deeper nodes
 on the depth policy, and is still bounded by the same 30/50 generation cap.
 
