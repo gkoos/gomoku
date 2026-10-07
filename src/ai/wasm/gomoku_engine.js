@@ -99,6 +99,31 @@ export class MoveEngine {
         return MoveEngine.__wrap(ret[0]);
     }
     /**
+     * Factory with a learned pattern-histogram evaluator (off by default).
+     * @param {Uint32Array} black
+     * @param {Uint32Array} white
+     * @param {boolean} computer_black
+     * @param {number} difficulty
+     * @param {number} extension
+     * @param {number} table_capacity
+     * @param {Uint8Array} model
+     * @param {number} scale
+     * @returns {MoveEngine}
+     */
+    static with_pattern(black, white, computer_black, difficulty, extension, table_capacity, model, scale) {
+        const ptr0 = passArray32ToWasm0(black, wasm.__wbindgen_malloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passArray32ToWasm0(white, wasm.__wbindgen_malloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ptr2 = passArray8ToWasm0(model, wasm.__wbindgen_malloc);
+        const len2 = WASM_VECTOR_LEN;
+        const ret = wasm.moveengine_with_pattern(ptr0, len0, ptr1, len1, computer_black, difficulty, extension, table_capacity, ptr2, len2, scale);
+        if (ret[2]) {
+            throw takeFromExternrefTable0(ret[1]);
+        }
+        return MoveEngine.__wrap(ret[0]);
+    }
+    /**
      * Factory keeps the existing constructor and browser defaults compatible.
      * @param {Uint32Array} black
      * @param {Uint32Array} white

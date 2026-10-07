@@ -27,6 +27,7 @@ pub struct Evaluator {
     next_token: u32,
     weights: [i32; 8],
     nnue: Option<crate::nnue::Network>,
+    pattern: Option<crate::pattern_eval::PatternNet>,
 }
 impl Evaluator {
     pub fn new(black: Bitboard, white: Bitboard, perspective_black: bool) -> Self {
@@ -54,6 +55,7 @@ impl Evaluator {
             next_token: 0,
             weights: crate::pattern_reference::DEFAULT_WEIGHTS,
             nnue: None,
+            pattern: None,
         };
         for position in positions(&black, &white, false) {
             for direction in 0..4 {
@@ -91,7 +93,17 @@ impl Evaluator {
     pub fn nnue_logit(&self, black_to_move: bool) -> Option<f32> {
         self.nnue.as_ref().map(|n| n.logit(black_to_move))
     }
+    pub fn set_pattern(&mut self, bytes: &[u8], scale: f32) -> Result<(), &'static str> {
+        if !self.history.is_empty() {
+            return Err("Pattern net cannot change during a move sequence");
+        }
+        self.pattern = Some(crate::pattern_eval::PatternNet::load(bytes, scale)?);
+        Ok(())
+    }
     pub fn score_for_turn(&self, black_to_move: bool) -> i32 {
+        if let Some(net) = &self.pattern {
+            return net.score(&self.black, &self.white, black_to_move, self.perspective_black);
+        }
         self.nnue.as_ref().map_or_else(
             || self.score(),
             |n| n.score(black_to_move, self.perspective_black),

@@ -7,7 +7,7 @@ import { parseWeights, playGame, replay } from './selfplay/core.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const require = createRequire(import.meta.url);
-const allowed = new Set(['games', 'seed', 'depth', 'a', 'b', 'weights-a', 'weights-b', 'nnue-a', 'nnue-b', 'nnue-scale', 'output']);
+const allowed = new Set(['games', 'seed', 'depth', 'a', 'b', 'weights-a', 'weights-b', 'nnue-a', 'nnue-b', 'nnue-scale', 'pattern-a', 'pattern-b', 'pattern-scale', 'output']);
 const args = {};
 for (const arg of process.argv.slice(2)) {
   if (arg === '--help') {
@@ -45,10 +45,21 @@ for (const player of ['a', 'b']) {
     engines[player].nnueScale = scale;
     config[player].nnue = { digest: createHash('sha256').update(model).digest('hex'), scale };
   }
+  if (args[`pattern-${player}`]) {
+    if (args[`weights-${player}`] || args[`nnue-${player}`]) throw new Error('Pattern net cannot be combined with weights or NNUE');
+    const model = fs.readFileSync(path.resolve(args[`pattern-${player}`]));
+    const scale = Number(args['pattern-scale'] ?? 1000);
+    if (!Number.isFinite(scale) || scale < 1 || scale > 100000) throw new Error('Invalid --pattern-scale');
+    if (typeof engines[player].MoveEngine.with_pattern !== 'function') throw new Error('Engine needs the pattern API; rebuild Wasm');
+    engines[player].patternModel = model;
+    engines[player].patternScale = scale;
+    config[player].pattern = { digest: createHash('sha256').update(model).digest('hex'), scale };
+  }
   if (typeof engines[player].MoveEngine !== 'function') throw new Error(`Engine ${player} does not expose MoveEngine; run npm run wasm:build`);
   if (typeof engines[player].MoveEngine.with_weights !== 'function' && weights.some((w, i) => w !== parseWeights()[i])) throw new Error(`Engine ${player} needs the configurable-weight API for custom weights`);
 }
 if (args['nnue-scale'] && !args['nnue-a'] && !args['nnue-b']) throw new Error('--nnue-scale requires a model');
+if (args['pattern-scale'] && !args['pattern-a'] && !args['pattern-b']) throw new Error('--pattern-scale requires a model');
 const output = path.resolve(args.output ?? path.join(root, '.selfplay/matches.jsonl'));
 const records = [];
 if (fs.existsSync(output)) {

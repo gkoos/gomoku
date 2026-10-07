@@ -12,6 +12,8 @@ pub struct Options {
     pub policy: Option<Vec<u8>>,
     pub policy_scale: f32,
     pub policy_plies: usize,
+    pub pattern: Option<Vec<u8>>,
+    pub pattern_scale: f32,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -26,6 +28,8 @@ impl Default for Options {
             policy: None,
             policy_scale: 1000.0,
             policy_plies: 1,
+            pattern: None,
+            pattern_scale: 1000.0,
         }
     }
 }
@@ -45,6 +49,8 @@ impl Options {
             || !self.policy_scale.is_finite()
             || !(1.0..=100_000.0).contains(&self.policy_scale)
             || self.policy_plies > 225
+            || !self.pattern_scale.is_finite()
+            || !(1.0..=100_000.0).contains(&self.pattern_scale)
         {
             Err(
                 "Invalid configuration: depth 1..10, candidate/root width 1..225 if set, extension 0..225, table capacity 0..1000000, NNUE/policy scale 1..100000",
@@ -150,6 +156,9 @@ impl Protocol {
                 Evaluator::with_lines(black, white, own_black, prepared.lines, prepared.winning);
             if let Some(model) = &self.options.model {
                 state.set_nnue(model, self.options.scale)?;
+            }
+            if let Some(model) = &self.options.pattern {
+                state.set_pattern(model, self.options.pattern_scale)?;
             }
             let mut search = Search::with_state(
                 state,

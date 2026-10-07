@@ -11,6 +11,7 @@ import torch
 from torch.nn import functional as F
 
 from pattern_model import PatternEval, PATTERN_FEATURES
+from pattern_inference import export_pattern_model, PortablePattern
 
 
 def digest(filename):
@@ -99,6 +100,16 @@ def main():
         elif epoch - best_epoch >= args.patience:
             break
     model.load_state_dict(best_state)
+    export_pattern_model(model, args.output / "model.pattern")
+    portable = PortablePattern(args.output / "model.pattern")
+    maximum_error = 0.0
+    model.eval()
+    with torch.no_grad():
+        for index in range(min(2048, len(validation_x))):
+            expected = model(validation_x[index : index + 1]).item()
+            maximum_error = max(maximum_error, abs(expected - portable.logit(validation_x[index].tolist())))
+    if maximum_error > 1e-4:
+        raise RuntimeError("Portable pattern model disagrees with PyTorch")
     report = {
         "version": 1,
         "architecture": f"{PATTERN_FEATURES} -> ReLU({args.hidden}) -> 1 sigmoid",

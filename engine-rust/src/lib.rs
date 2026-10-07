@@ -78,6 +78,7 @@ pub fn boards_full(black: &[u32], white: &[u32]) -> Result<bool, JsValue> {
 pub mod incremental;
 pub mod lines;
 pub mod nnue;
+pub mod pattern_eval;
 pub mod policy;
 
 /// Stateful prototype interface. Array getters return copies, not mutable internal views.
@@ -389,6 +390,35 @@ impl MoveEngine {
             search
                 .state
                 .set_nnue(model, scale)
+                .map_err(JsValue::from_str)?;
+        }
+        Ok(engine)
+    }
+    /// Factory with a learned pattern-histogram evaluator (off by default).
+    #[allow(clippy::too_many_arguments)]
+    pub fn with_pattern(
+        black: &[u32],
+        white: &[u32],
+        computer_black: bool,
+        difficulty: u32,
+        extension: u32,
+        table_capacity: u32,
+        model: &[u8],
+        scale: f32,
+    ) -> Result<Self, JsValue> {
+        crate::pattern_eval::PatternNet::load(model, scale).map_err(JsValue::from_str)?;
+        let mut engine = Self::new(
+            black,
+            white,
+            computer_black,
+            difficulty,
+            extension,
+            table_capacity,
+        )?;
+        if let Some(search) = &mut engine.search {
+            search
+                .state
+                .set_pattern(model, scale)
                 .map_err(JsValue::from_str)?;
         }
         Ok(engine)
