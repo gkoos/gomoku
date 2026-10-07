@@ -155,6 +155,36 @@ M1 is pure offline work with **no engine change**, so it is a clean go/no-go. If
 the policy cannot out-rank the handcrafted priority on validation, stop - the
 architecture is not worth the parity and latency cost.
 
+## M1 result (offline ordering)
+
+Trained the 25-feature re-ranker (`training/nnue/policy_train.py`) on the
+depth-six teacher labels and evaluated on the disjoint validation split
+(`.selfplay/policy-dataset-v1`). Candidates are the generator's own list stored
+in handcrafted order, so the handcrafted baseline is just the stored index and
+`target` is the teacher's `pv[0]`.
+
+| Split | Metric | Handcrafted | Policy |
+| --- | --- | ---: | ---: |
+| All (2,742) | top-1 | 28.6% | **44.8%** |
+| All | top-8 | 78.4% | **91.1%** |
+| All | mean rank | 4.34 | **2.30** |
+| Quiet (2,202) | top-1 | 11.1% | **31.6%** |
+| Quiet | top-8 | 73.2% | **89.0%** |
+| Quiet | mean rank | 5.41 | **2.87** |
+
+The policy clears the gate by a wide margin: it lifts the teacher's own move into
+the top-8 from 78.4% to 91.1% (quiet-only 73.2% to 89.0%) and nearly triples the
+quiet top-1 rate. The handcrafted `priority` really is a weak ranker and a small
+net improves it.
+
+This measures agreement with the depth-six handcrafted teacher, not playing
+strength; the gain only matters if it survives the M3 match. Reproduce:
+
+```powershell
+node scripts/export-policy-dataset.js --input=.selfplay/nnue-teacher-depth6-v1 --output=.selfplay/policy-dataset-v1
+node scripts/run-nnue.js policy_train --dataset=.selfplay/policy-dataset-v1 --output=.training/nnue-policy-v1 --epochs=40 --seed=42 --threads=2
+```
+
 ## Evaluation plan
 
 - **Offline (M1):** top-1 accuracy, top-8 hit rate, and mean reciprocal rank of
