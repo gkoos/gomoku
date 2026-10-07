@@ -20,6 +20,16 @@ impl Pattern {
     pub fn score(self) -> i32 {
         self.score_with(&DEFAULT_WEIGHTS)
     }
+    /// The open-three component only: the potential that converts into a forcing
+    /// win next move. Used by the initiative term; five/four categories are
+    /// excluded because the search already resolves them.
+    pub fn forcing_with(self, weights: &[i32; 8]) -> i32 {
+        if self.stones == 3 && self.open_three {
+            weights[3]
+        } else {
+            0
+        }
+    }
     /// Five, open/closed four, open/closed three, open/closed two, window.
     pub fn score_with(self, weights: &[i32; 8]) -> i32 {
         match self.stones {

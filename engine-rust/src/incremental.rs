@@ -9,6 +9,8 @@ struct Frame {
     black: bool,
     total: i32,
     scores: [i32; 36],
+    forcings: [i32; 36],
+    forcing_color: [i32; 2],
     winning: WinningUndo,
     density_updated: bool,
     nnue_accumulator: Option<Vec<f32>>,
@@ -21,6 +23,12 @@ pub struct Evaluator {
     pub winning: WinningCache,
     pub density: Density,
     scores: [i32; 900],
+    /// Per square and direction, the unsigned open-three potential of the occupant.
+    forcings: [i32; 900],
+    /// Unsigned open-three potential summed per colour (black, white).
+    forcing_color: [i32; 2],
+    /// Weight of the tempo-aware initiative term; zero keeps the linear evaluator.
+    initiative: i32,
     total: i32,
     perspective_black: bool,
     history: Vec<Frame>,
@@ -28,6 +36,19 @@ pub struct Evaluator {
     weights: [i32; 8],
     nnue: Option<crate::nnue::Network>,
     pattern: Option<crate::pattern_eval::PatternNet>,
+}
+/// Signed full contribution and unsigned open-three potential for one square and
+/// direction. Both come from a single pattern analysis.
+fn components(state: &Evaluator, index: usize) -> (i32, i32) {
+    let position = index >> 2;
+    let black = contains(&state.black, position);
+    if !black && !contains(&state.white, position) {
+        return (0, 0);
+    }
+    let pattern = state.lines.analyze(black, position, index & 3);
+    let full = pattern.score_with(&state.weights);
+    let forcing = pattern.forcing_with(&state.weights);
+    (if black { full } else { -full }, forcing)
 }
 impl Evaluator {
     pub fn new(black: Bitboard, white: Bitboard, perspective_black: bool) -> Self {
@@ -49,6 +70,9 @@ impl Evaluator {
             winning,
             density: Density::new(&black, &white),
             scores: [0; 900],
+            forcings: [0; 900],
+            forcing_color: [0; 2],
+            initiative: 0,
             total: 0,
             perspective_black,
             history: Vec::with_capacity(BOARD_CELLS),
@@ -60,23 +84,17 @@ impl Evaluator {
         for position in positions(&black, &white, false) {
             for direction in 0..4 {
                 let index = position * 4 + direction;
-                result.scores[index] = result.contribution(index);
-                result.total += result.scores[index];
+                let (full, forcing) = components(&result, index);
+                result.scores[index] = full;
+                result.forcings[index] = forcing;
+                result.total += full;
+                result.forcing_color[usize::from(contains(&black, position))] += forcing;
             }
         }
         result
     }
     fn contribution(&self, index: usize) -> i32 {
-        let position = index >> 2;
-        let black = contains(&self.black, position);
-        if !black && !contains(&self.white, position) {
-            return 0;
-        }
-        let score = self
-            .lines
-            .analyze(black, position, index & 3)
-            .score_with(&self.weights);
-        if black { score } else { -score }
+        components(self, index).0
     }
     pub fn set_nnue(&mut self, bytes: &[u8], scale: f32) -> Result<(), &'static str> {
         if !self.history.is_empty() {
@@ -100,14 +118,37 @@ impl Evaluator {
         self.pattern = Some(crate::pattern_eval::PatternNet::load(bytes, scale)?);
         Ok(())
     }
+    /// Add a tempo-aware initiative term: the side to move's open-three potential
+    /// counts for an extra `value/16`. Zero keeps the linear evaluator exactly.
+    pub fn set_initiative(&mut self, value: i32) -> Result<(), &'static str> {
+        if !self.history.is_empty() {
+            return Err("Initiative weight cannot change during a move sequence");
+        }
+        if !(-64..=64).contains(&value) {
+            return Err("Initiative weight must be between -64 and 64");
+        }
+        self.initiative = value;
+        Ok(())
+    }
     pub fn score_for_turn(&self, black_to_move: bool) -> i32 {
         if let Some(net) = &self.pattern {
             return net.score(&self.black, &self.white, black_to_move, self.perspective_black);
         }
-        self.nnue.as_ref().map_or_else(
-            || self.score(),
-            |n| n.score(black_to_move, self.perspective_black),
-        )
+        if let Some(net) = &self.nnue {
+            return net.score(black_to_move, self.perspective_black);
+        }
+        let base = self.score();
+        if self.initiative == 0 {
+            return base;
+        }
+        // The side to move converts its open three first, so its potential is live.
+        let own = usize::from(self.perspective_black);
+        let live = if black_to_move == self.perspective_black {
+            self.forcing_color[own]
+        } else {
+            -self.forcing_color[1 - own]
+        };
+        (base + self.initiative * live / 16).clamp(-MAX_STATIC_SCORE, MAX_STATIC_SCORE)
     }
     pub fn score(&self) -> i32 {
         (if self.perspective_black {
@@ -129,9 +170,13 @@ impl Evaluator {
         }
         self.weights = weights;
         self.total = 0;
+        self.forcing_color = [0; 2];
         for index in 0..900 {
-            self.scores[index] = self.contribution(index);
-            self.total += self.scores[index];
+            let (full, forcing) = components(self, index);
+            self.scores[index] = full;
+            self.forcings[index] = forcing;
+            self.total += full;
+            self.forcing_color[usize::from(contains(&self.black, index >> 2))] += forcing;
         }
         Ok(())
     }
@@ -179,6 +224,8 @@ impl Evaluator {
             black,
             total: self.total,
             scores: [0; 36],
+            forcings: [0; 36],
+            forcing_color: self.forcing_color,
             winning,
             density_updated,
             nnue_accumulator: self.nnue.as_ref().map(|n| n.accumulator.clone()),
@@ -193,9 +240,13 @@ impl Evaluator {
                 .enumerate()
             {
                 frame.scores[offset] = self.scores[index];
-                let next = self.contribution(index);
-                self.total += next - self.scores[index];
-                self.scores[index] = next;
+                frame.forcings[offset] = self.forcings[index];
+                let (full, forcing) = components(self, index);
+                self.total += full - self.scores[index];
+                self.scores[index] = full;
+                self.forcing_color[usize::from(contains(&self.black, index >> 2))] +=
+                    forcing - self.forcings[index];
+                self.forcings[index] = forcing;
             }
         }
         self.history.push(frame);
@@ -225,12 +276,14 @@ impl Evaluator {
                 .enumerate()
             {
                 self.scores[index] = frame.scores[offset];
+                self.forcings[index] = frame.forcings[offset];
             }
         }
         if let (Some(n), Some(accumulator)) = (&mut self.nnue, frame.nnue_accumulator) {
             n.accumulator = accumulator;
         }
         self.total = frame.total;
+        self.forcing_color = frame.forcing_color;
         Ok(())
     }
 }
@@ -297,6 +350,54 @@ mod tests {
         assert_ne!(first, third);
         assert!(state.undo_move(first).is_err());
         state.undo_move(third).unwrap();
+    }
+    #[test]
+    fn initiative_term_rewards_the_side_to_move_and_follows_make_undo() {
+        let mut black = [0; 8];
+        for p in [109, 110, 111] {
+            black[p >> 5] |= 1 << (p & 31);
+        }
+        let mut white = [0; 8];
+        for p in [139, 140, 141] {
+            white[p >> 5] |= 1 << (p & 31);
+        }
+        let base = Evaluator::new(black, white, true);
+        assert_eq!(base.score_for_turn(true), base.score());
+        let mut state = Evaluator::new(black, white, true);
+        state.set_initiative(16).unwrap();
+        assert!(state.forcing_color[0] > 0 && state.forcing_color[1] > 0);
+        assert_eq!(
+            state.score_for_turn(true),
+            state.score() + state.forcing_color[1]
+        );
+        assert_eq!(
+            state.score_for_turn(false),
+            state.score() - state.forcing_color[0]
+        );
+        let before = (
+            state.score_for_turn(true),
+            state.total,
+            state.forcing_color,
+        );
+        let token = state.make_move(126, false).unwrap();
+        let mut fresh = Evaluator::new(black, white, true);
+        fresh.make_move(126, false).unwrap();
+        assert_eq!(state.total, fresh.total);
+        assert_eq!(state.forcing_color, fresh.forcing_color);
+        state.undo_move(token).unwrap();
+        assert_eq!(
+            (
+                state.score_for_turn(true),
+                state.total,
+                state.forcing_color
+            ),
+            before
+        );
+        assert!(state.set_initiative(65).is_err());
+        assert!(state.set_initiative(-65).is_err());
+        assert!(state.set_initiative(32).is_ok());
+        assert!(state.make_move(125, true).is_ok());
+        assert!(state.set_initiative(16).is_err());
     }
     #[test]
     fn crossing_threat_survives_removing_one_line() {

@@ -267,6 +267,13 @@ impl Search {
         self.use_tt_move = enabled;
         Ok(())
     }
+    /// Weight of the tempo-aware initiative term (0 keeps the linear evaluator).
+    pub fn set_initiative(&mut self, value: i32) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Initiative weight must be selected before search starts");
+        }
+        self.state.set_initiative(value)
+    }
     /// An ordering hint for the first iteration, replaced by the completed PV.
     pub fn prefer_root(&mut self, position: usize) -> Result<(), &'static str> {
         if self.next_depth != 1

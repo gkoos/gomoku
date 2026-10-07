@@ -7,7 +7,7 @@ import { opening } from './selfplay/core.js';
 import { openingText, parseGames, validatePair, report } from './external-match/core.js';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
-const defaults = { games: 100, seed: 43, depth: 6, 'candidate-width': 0, 'root-width': 0, policy: '', 'policy-plies': 0, pattern: '', lmr: 0, tier: 0, history: 0, 'tt-move': 0, 'rapfi-depth': 6, 'turn-seconds': 3600,
+const defaults = { games: 100, seed: 43, depth: 6, 'candidate-width': 0, 'root-width': 0, policy: '', 'policy-plies': 0, pattern: '', lmr: 0, tier: 0, history: 0, 'tt-move': 0, initiative: 0, 'rapfi-depth': 6, 'turn-seconds': 3600,
   'opponent-name': 'Rapfi',
   output: '.selfplay/external-rapfi-depth6', manager: 'download/c-gomoku-cli.exe',
   engine: 'engine-rust/target/release/pbrain-gomoku.exe', rapfi: 'download/rapfi/pbrain-rapfi-windows-sse.exe' };
@@ -68,7 +68,7 @@ for (let pair = 0; pair < opts.games / 2; pair++) {
     // The manager appends output; truncate only this incomplete pair before retrying.
     for (const name of ['games.sgf', 'messages.txt', 'manager.log']) writeFileSync(path.join(dir, name), '');
     const args = ['-each', `tc=0/${opts['turn-seconds']}`, 'thread=1',
-      '-engine', 'name=Gomoku', `cmd=${slash(engine)}${opts['candidate-width'] ? ` --candidate-width=${opts['candidate-width']}` : ''}${opts['root-width'] ? ` --root-width=${opts['root-width']}` : ''}${opts.policy ? ` --policy=${slash(opts.policy)}` : ''}${opts['policy-plies'] ? ` --policy-plies=${opts['policy-plies']}` : ''}${opts.pattern ? ` --pattern=${slash(opts.pattern)}` : ''}${opts.lmr ? ` --lmr=${opts.lmr}` : ''}${opts.tier ? ' --tier=1' : ''}${opts.history ? ' --history=1' : ''}${opts['tt-move'] ? ' --tt-move=1' : ''}`, `depth=${opts.depth}`,
+      '-engine', 'name=Gomoku', `cmd=${slash(engine)}${opts['candidate-width'] ? ` --candidate-width=${opts['candidate-width']}` : ''}${opts['root-width'] ? ` --root-width=${opts['root-width']}` : ''}${opts.policy ? ` --policy=${slash(opts.policy)}` : ''}${opts['policy-plies'] ? ` --policy-plies=${opts['policy-plies']}` : ''}${opts.pattern ? ` --pattern=${slash(opts.pattern)}` : ''}${opts.lmr ? ` --lmr=${opts.lmr}` : ''}${opts.tier ? ' --tier=1' : ''}${opts.history ? ' --history=1' : ''}${opts['tt-move'] ? ' --tt-move=1' : ''}${opts.initiative ? ` --initiative=${opts.initiative}` : ''}`, `depth=${opts.depth}`,
       '-engine', `name=${opts['opponent-name']}`, `cmd=${slash(rapfi)}`, `depth=${opts['rapfi-depth']}`,
       '-rule', '0', '-boardsize', '15', '-games', '2', '-repeat', '-concurrency', '1',
       '-openings', 'file=opening.txt', 'order=sequential', '-sgf', 'games.sgf', '-msg', 'messages.txt', '-fatalerror'];

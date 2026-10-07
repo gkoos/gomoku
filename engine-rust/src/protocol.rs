@@ -18,6 +18,7 @@ pub struct Options {
     pub tier: bool,
     pub history: bool,
     pub tt_move: bool,
+    pub initiative: i32,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -38,6 +39,7 @@ impl Default for Options {
             tier: false,
             history: false,
             tt_move: false,
+            initiative: 0,
         }
     }
 }
@@ -60,6 +62,7 @@ impl Options {
             || !self.pattern_scale.is_finite()
             || !(1.0..=100_000.0).contains(&self.pattern_scale)
             || self.lmr > 225
+            || !(-64..=64).contains(&self.initiative)
         {
             Err(
                 "Invalid configuration: depth 1..10, candidate/root width 1..225 if set, extension 0..225, table capacity 0..1000000, NNUE/policy scale 1..100000",
@@ -190,6 +193,7 @@ impl Protocol {
             search.set_tier(self.options.tier)?;
             search.set_history(self.options.history)?;
             search.set_tt_move(self.options.tt_move)?;
+            search.set_initiative(self.options.initiative)?;
             if let Some(preferred) = prepared.preferred {
                 search.prefer_root(preferred)?;
             }
