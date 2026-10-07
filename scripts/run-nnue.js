@@ -9,8 +9,8 @@ const python = process.env.NNUE_PYTHON ?? (existsSync(local) ? local : 'python')
 const command = process.argv[2];
 const args = command === 'test'
   ? ['-m', 'unittest', 'discover', '-s', 'training/nnue', '-p', 'test_*.py']
-  : ['train', 'policy_train', 'benchmark', 'check_wasm'].includes(command) ? [`training/nnue/${command}.py`] : null;
-if (!args) throw new Error('Expected train, policy_train, test, benchmark, or check_wasm');
+  : ['train', 'policy_train', 'pattern_train', 'benchmark', 'check_wasm'].includes(command) ? [`training/nnue/${command}.py`] : null;
+if (!args) throw new Error('Expected train, policy_train, pattern_train, test, benchmark, or check_wasm');
 const result = spawnSync(python, [...args, ...process.argv.slice(3)], { cwd: root, stdio: 'inherit' });
 if (result.error) throw result.error;
 process.exit(result.status ?? 1);
