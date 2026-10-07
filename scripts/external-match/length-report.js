@@ -31,6 +31,7 @@ const load = file => {
   return { report, sha256: sha(bytes), file };
 };
 const baseline = load(opts.baseline), current = load(opts.current);
+if ((baseline.report.config['candidate-width'] ?? 0) !== (current.report.config['candidate-width'] ?? 0)) throw new Error('Settings differ: candidate-width');
 for (const key of ['games', 'seed', 'depth', 'rapfi-depth', 'turn-seconds', 'threads', 'rule', 'boardSize']) {
   if (key === 'depth' && opts.allowDepthChange) continue;
   if (baseline.report.config[key] !== current.report.config[key]) throw new Error(`Settings differ: ${key}`);

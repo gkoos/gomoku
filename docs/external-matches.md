@@ -244,3 +244,55 @@ run `node scripts/external-match/length-report.js --allow-depth-change --baselin
 The opt-in only permits our engine's depth to differ. Opponent depth, openings,
 colors and the other checked settings must still match, and the output records
 both engine depths and the explicit permission to compare them.
+
+## Controlled even-depth experiment
+
+To separate additional depth from the remaining-depth candidate cap, the native
+engine accepts the diagnostic `--candidate-width` option. The match runner
+records it and passes it through to our engine; zero (the runner default) keeps
+the production depth-dependent policy. A positive width applies at every
+searched depth, including iterative-deepening iterations. Protected tactical
+moves and PV promotion may exceed that width. The independent generation caps,
+root shortcuts, tactical extensions, evaluation and opponent settings remain
+unchanged.
+
+The depth-six and depth-eight runs use a fixed cap of eight, the existing
+policy's minimum, with the same 50 paired-color openings (seed 43), Rapfi depth
+six, one thread and the same engine executable. This narrower diagnostic policy
+is not a proposed production setting. Both even depths are compared under that
+policy; this comparison alone cannot demonstrate an odd/even effect without a
+matching odd-depth run. Actual terminal positions can also end search early,
+and tactical extensions can move the horizon beyond the requested depth.
+
+```powershell
+node scripts/build-native.js
+node scripts/external-match.js --depth=6 --candidate-width=8 --output=.selfplay/external-rapfi-fixed8-depth6
+node scripts/external-match.js --depth=8 --candidate-width=8 --output=.selfplay/external-rapfi-fixed8-depth8
+node scripts/external-match/length-report.js --allow-depth-change --baseline=.selfplay/external-rapfi-fixed8-depth6/report.json --current=.selfplay/external-rapfi-fixed8-depth8/report.json --output=.selfplay/external-rapfi-fixed8-depth8/length-comparison.json
+```
+
+The length reporter rejects differing candidate-width policies, even with
+`--allow-depth-change`. Full game records and timing reports remain under
+`.selfplay/`; browser difficulty depths and pruning defaults are unchanged.
+
+| Fixed width | Depth | Wins | Draws | Losses | Mean move time | Median | p95 | Maximum |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 8 | 6 | 5 | 0 | 95 | 3.0 ms | 2 ms | 10 ms | 23 ms |
+| 8 | 8 | 4 | 0 | 96 | 12.3 ms | 2 ms | 50 ms | 674 ms |
+
+Both reports record the same executable SHA-256. Depth eight converted two
+losses to wins (zero-based pair/index 12/0 and 38/0), but lost three previous
+wins (13/0, 36/0 and 36/1). Depth six won three Black and two White games;
+depth eight won three Black and one White game. Of the 93 shared losses,
+27 lasted longer, 29 shorter and 37 were unchanged. Mean length change was
+-0.86 plies, median zero; the Black mean was -1.07 and White -0.67.
+
+This sample gives no evidence that two additional plies improve results under
+the fixed-width policy, despite approximately four times the mean move time.
+The one-win difference is too small to establish a general strength ordering.
+The fixed-width depth-six run also performed worse than the earlier production
+policy's 11 wins: narrowing quiet candidates materially changes play, and extra
+depth cannot recover a move discarded at a node. The existing depth-seven
+experiment used a different pruning policy, so these runs cannot isolate
+odd/even effects. A fixed-width odd-depth run or analysis of the changed games
+would be required to investigate that hypothesis further.

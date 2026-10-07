@@ -3,6 +3,7 @@ use std::io::{self, BufRead, Write};
 
 pub struct Options {
     pub depth: usize,
+    pub candidate_width: Option<usize>,
     pub extension: usize,
     pub capacity: usize,
     pub model: Option<Vec<u8>>,
@@ -12,6 +13,7 @@ impl Default for Options {
     fn default() -> Self {
         Self {
             depth: 6,
+            candidate_width: None,
             extension: 4,
             capacity: 32768,
             model: None,
@@ -22,13 +24,16 @@ impl Default for Options {
 impl Options {
     pub fn validate(&self) -> Result<(), &'static str> {
         if !(1..=10).contains(&self.depth)
+            || self
+                .candidate_width
+                .is_some_and(|width| !(1..=225).contains(&width))
             || self.extension > 225
             || self.capacity > 1_000_000
             || !self.scale.is_finite()
             || !(1.0..=100_000.0).contains(&self.scale)
         {
             Err(
-                "Invalid configuration: depth 1..10, extension 0..225, table capacity 0..1000000, NNUE scale 1..100000",
+                "Invalid configuration: depth 1..10, candidate width 1..225 if set, extension 0..225, table capacity 0..1000000, NNUE scale 1..100000",
             )
         } else {
             Ok(())
@@ -139,6 +144,9 @@ impl Protocol {
                 self.options.extension,
                 self.options.capacity,
             )?;
+            if let Some(width) = self.options.candidate_width {
+                search.set_candidate_width(width)?;
+            }
             if let Some(preferred) = prepared.preferred {
                 search.prefer_root(preferred)?;
             }

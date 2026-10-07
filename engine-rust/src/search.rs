@@ -81,6 +81,7 @@ pub struct Search {
     vcf_cache: HashMap<(Bitboard, Bitboard, bool), Option<Vec<u16>>>,
     use_pvs: bool,
     protect_forcing: bool,
+    candidate_width: Option<usize>,
 }
 impl Search {
     pub fn new(
@@ -140,6 +141,7 @@ impl Search {
             vcf_cache: HashMap::new(),
             use_pvs: true,
             protect_forcing: true,
+            candidate_width: None,
         })
     }
     /// Diagnostic reference mode. A running search cannot mix cache semantics.
@@ -155,6 +157,14 @@ impl Search {
             return Err("Forcing-move mode must be selected before search starts");
         }
         self.protect_forcing = enabled;
+        Ok(())
+    }
+    /// Diagnostic fixed width; tactical candidates remain protected.
+    pub fn set_candidate_width(&mut self, width: usize) -> Result<(), &'static str> {
+        if !(1..=225).contains(&width) || self.nodes != 0 || self.next_depth != 1 {
+            return Err("Candidate width must be 1..225 and selected before search starts");
+        }
+        self.candidate_width = Some(width);
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -564,6 +574,7 @@ impl Search {
                 &mut self.buffers[ply],
                 SearchSelection {
                     depth,
+                    width: self.candidate_width,
                     preferred,
                     forcing: if self.protect_forcing {
                         crate::vcf::four_moves(&self.state.lines, to_move)
@@ -760,6 +771,15 @@ mod tests {
         assert!(reference.next_iteration().unwrap().is_none());
     }
     #[test]
+    fn fixed_width_configuration_is_validated_and_locked() {
+        let mut search = Search::new(bits(&[112]), bits(&[113]), true, 2, 4, 32768).unwrap();
+        assert!(search.set_candidate_width(0).is_err());
+        assert!(search.set_candidate_width(226).is_err());
+        search.set_candidate_width(8).unwrap();
+        search.next_iteration().unwrap();
+        assert!(search.set_candidate_width(12).is_err());
+    }
+    #[test]
     fn mandatory_block_shortcut_restores_state_and_never_overrides_a_win() {
         for capacity in [0, 2, 32768] {
             let b = bits(&[107]);
@@ -830,6 +850,7 @@ mod tests {
                             &mut actual,
                             SearchSelection {
                                 depth,
+                                width: None,
                                 preferred,
                                 forcing: [0; 8],
                             },

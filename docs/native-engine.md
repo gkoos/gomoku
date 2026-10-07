@@ -32,6 +32,13 @@ Options use `--name=value`:
 | `--table-capacity` | 32768 | 0–1,000,000 entries; zero disables caching |
 | `--nnue` | None | Path to an experimental portable model |
 | `--nnue-scale` | 1000 | Finite value from 1 to 100,000 |
+| `--candidate-width` | Unset | Diagnostic fixed candidate cap from 1 to 225 |
+
+The diagnostic width replaces the remaining-depth candidate cap at every search
+node. Immediate wins, mandatory blocks, four-creating attacks and retained PV
+moves keep their existing protection, so a node can exceed the requested cap.
+The independent 30/50 generation cap remains in place. Omitting this option
+preserves the production policy; browser difficulty settings are unaffected.
 
 `--help` prints usage to stderr and exits. Handcrafted evaluation is the default.
 Models are loaded and validated before reading protocol input. Use the scale

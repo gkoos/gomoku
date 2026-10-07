@@ -103,6 +103,7 @@ pub fn generate_with_density(
 #[derive(Clone, Copy)]
 pub struct SearchSelection {
     pub depth: usize,
+    pub width: Option<usize>,
     pub preferred: Option<usize>,
     pub forcing: Bitboard,
 }
@@ -326,9 +327,9 @@ fn finish(
         protected_count
     };
     let retained = eligible.min(
-        20usize
-            .saturating_sub(selection.depth * 2)
-            .max(8)
+        selection
+            .width
+            .unwrap_or_else(|| 20usize.saturating_sub(selection.depth * 2).max(8))
             .max(tactics),
     );
     let preferred = selection
@@ -380,6 +381,45 @@ mod tests {
     use super::*;
     use crate::lines::LineBoards;
     #[test]
+    fn fixed_width_is_independent_of_remaining_depth() {
+        let mut black = [0; 8];
+        black[112 >> 5] |= 1 << (112 & 31);
+        black[48 >> 5] |= 1 << (48 & 31);
+        let mut white = [0; 8];
+        white[160 >> 5] |= 1 << (160 & 31);
+        let state = crate::incremental::Evaluator::new(black, white, true);
+        for width in [1, 8, 12, 18] {
+            let mut reference = Candidates::default();
+            generate_for_search(
+                &state,
+                true,
+                &mut reference,
+                SearchSelection {
+                    depth: 1,
+                    width: Some(width),
+                    preferred: None,
+                    forcing: [0; 8],
+                },
+            );
+            assert_eq!(reference.len, width);
+            for depth in 2..=10 {
+                let mut actual = Candidates::default();
+                generate_for_search(
+                    &state,
+                    true,
+                    &mut actual,
+                    SearchSelection {
+                        depth,
+                        width: Some(width),
+                        preferred: None,
+                        forcing: [0; 8],
+                    },
+                );
+                assert_eq!(actual.as_slice(), reference.as_slice());
+            }
+        }
+    }
+    #[test]
     fn generated_four_attacks_survive_both_caps_for_both_colors() {
         let mut own = [0; 8];
         for row in (0..15).step_by(2) {
@@ -401,6 +441,7 @@ mod tests {
                 &mut selected,
                 SearchSelection {
                     depth: 10,
+                    width: Some(1),
                     preferred: None,
                     forcing,
                 },
@@ -433,6 +474,7 @@ mod tests {
                 0,
                 Some(SearchSelection {
                     depth: 10,
+                    width: Some(1),
                     preferred: Some(79),
                     forcing,
                 }),
