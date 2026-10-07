@@ -159,8 +159,8 @@ h1 {
   display: grid;
   grid-template-columns: repeat(15, 1fr);
   grid-template-rows: repeat(15, 1fr);
-  gap: 2px;
-  background: #8B4513;
+  gap: 0;
+  background: #DEB887;
   padding: 8px;
   border-radius: 8px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
@@ -236,12 +236,13 @@ h1 {
 }
 
 .cell {
-  background: #DEB887;
+  background-color: transparent;
+  background-image:
+    linear-gradient(to right, transparent 50%, #6b4423 50%, #6b4423 calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(to bottom, transparent 50%, #6b4423 50%, #6b4423 calc(50% + 1px), transparent calc(50% + 1px));
   border: none;
-  border-radius: 3px;
   cursor: pointer;
   position: relative;
-  transition: background-color 0.2s ease;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -250,8 +251,12 @@ h1 {
 
 
 
-.cell:hover {
-  background: #E6C794;
+.cell:not(.stone):hover::before {
+  content: '';
+  width: 80%;
+  height: 80%;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.12);
 }
 
 .cell.stone {
@@ -259,7 +264,7 @@ h1 {
 }
 
 .cell.stone:hover {
-  background: #DEB887;
+  background-color: transparent;
 }
 
 .cell.stone.black::before {
@@ -597,13 +602,15 @@ h1 {
 }
 
 .board.disabled .cell {
-  background: #C4A484;
-  border-color: #8B7355;
   cursor: not-allowed;
 }
 
 .board.disabled .cell:hover {
-  background: #C4A484;
+  background-color: transparent;
+}
+
+.board.disabled .cell:not(.stone):hover::before {
+  content: none;
 }
 
 .board.disabled::after {
