@@ -1,4 +1,5 @@
 import { BOARD_SIZE, BOARD_CELLS } from '../core/constants.js';
+import { bitboardPositions } from '../core/bitboards.js';
 
 // Every row, column and diagonal fits in a 15-bit word. Geometry is shared;
 // search maintains these masks alongside its occupancy bitboards.
@@ -147,6 +148,111 @@ export function findFourCreationSquares(own, opponent) {
     }
     return result;
   });
+}
+
+function popcount(value) {
+  let count = 0;
+  while (value) {
+    count++;
+    value &= value - 1;
+  }
+  return count;
+}
+
+// Does placing a stone at `bit` create a clean open three through that square?
+// A clean open three is three consecutive friendly stones with both ends empty;
+// broken/jump threes such as `_XX_X_` are excluded.
+function openThreeAt(own, opponent, length, bit) {
+  if (length < 6) return false;
+  for (let start = 0; start <= length - 6; start++) {
+    const interior = 0b1111 << (start + 1);
+    if ((interior & bit) === 0) continue;
+    if (interior & opponent) continue;
+    const ends = (1 << start) | (1 << (start + 5));
+    if ((own | opponent) & ends) continue;
+    const stones = (own | bit) & interior;
+    if (stones === (0b0111 << (start + 1)) || stones === (0b1110 << (start + 1))) return true;
+  }
+  return false;
+}
+
+// Does `position` (already placed for `color`) participate in a clean
+// consecutive open three in `direction`? Broken/jump threes are excluded.
+export function isCleanThree(lines, color, position, direction) {
+  const [line, bit] = MEMBERSHIPS[position][direction];
+  const length = LINES[line].length;
+  if (length < 6) return false;
+  const other = color === 'black' ? 'white' : 'black';
+  const own = lines[color][line];
+  const enemy = lines[other][line];
+  for (let start = 0; start <= length - 6; start++) {
+    const interior = 0b1111 << (start + 1);
+    if ((interior & bit) === 0) continue;
+    if (interior & enemy) continue;
+    const ends = (1 << start) | (1 << (start + 5));
+    if ((own | enemy) & ends) continue;
+    const stones = own & interior;
+    if (stones === (0b0111 << (start + 1)) || stones === (0b1110 << (start + 1))) return true;
+  }
+  return false;
+}
+
+// Every move that creates an open three for the given side.
+export function findThreeCreationSquares(own, opponent) {
+  const result = Array(8).fill(0);
+  for (let line = 0; line < LINES.length; line++) {
+    const cells = LINES[line];
+    const length = cells.length;
+    if (length < 6) continue;
+    let mask = ~(own[line] | opponent[line]) & ((1 << length) - 1);
+    while (mask) {
+      const bit = mask & -mask;
+      if (openThreeAt(own[line], opponent[line], length, bit)) {
+        const position = cells[31 - Math.clz32(bit)];
+        result[position >>> 5] |= 1 << (position & 31);
+      }
+      mask &= mask - 1;
+    }
+  }
+  return result;
+}
+
+// Every move that creates an unanswerable threat for `color`: two or more
+// winning squares, a four plus an open three on another line, or two open
+// threes on distinct lines.
+export function findDoubleThreatSquares(lines, color) {
+  const other = color === 'black' ? 'white' : 'black';
+  const fours = findFourCreationSquares(lines[color], lines[other]);
+  const threes = findThreeCreationSquares(lines[color], lines[other]);
+  const candidates = fours.map((word, i) => word | threes[i]);
+  const result = Array(8).fill(0);
+  const cache = createWinningSquareCache(lines);
+  for (const p of bitboardPositions(candidates, Array(8).fill(0), false)) {
+    let threeDirs = 0;
+    for (const [line, bit] of MEMBERSHIPS[p]) {
+      if (
+        openThreeAt(lines[color][line], lines[other][line], LINES[line].length, bit)
+      )
+        threeDirs++;
+    }
+    updateLineBitboards(lines, p, color, true);
+    const undo = cache.refresh(p);
+    let winCount = 0;
+    for (const word of cache.bitboards[color]) winCount += popcount(word);
+    cache.restore(undo);
+    updateLineBitboards(lines, p, color, false);
+    if (winCount >= 2 || (winCount >= 1 && threeDirs >= 1) || threeDirs >= 2) {
+      result[p >>> 5] |= 1 << (p & 31);
+    }
+  }
+  return result;
+}
+
+// A position can start a continuous-threat sequence when it holds a four-window
+// or any open-three move (mirrors the Rust `vct::can_start`).
+export function canStartVct(own, opponent) {
+  if (canStartFourSequence(own, opponent)) return true;
+  return findThreeCreationSquares(own, opponent).some((word) => word !== 0);
 }
 
 export function canStartFourSequence(own, opponent) {

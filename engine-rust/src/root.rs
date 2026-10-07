@@ -256,12 +256,12 @@ pub fn prepare(black: Bitboard, white: Bitboard, computer: bool, easy: bool) -> 
         return result;
     }
     if !easy {
-        let outcome = crate::vcf::solve(
+        let outcome = crate::vct::solve(
             &mut result.lines,
             &mut result.winning,
             computer,
-            crate::vcf::MAX_PLIES,
-            crate::vcf::NODE_BUDGET,
+            crate::vct::MAX_PLIES,
+            crate::vct::NODE_BUDGET,
         );
         if let Some(line) = outcome.line {
             result.choice = line[0] as i32;

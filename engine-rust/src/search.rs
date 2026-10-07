@@ -78,7 +78,7 @@ pub struct Search {
     cutoffs: u64,
     // Full occupancy and attacker verify identity; proof lengths stay relative
     // to this position, so callers can apply their own root distance.
-    vcf_cache: HashMap<(Bitboard, Bitboard, bool), Option<Vec<u16>>>,
+    vcf_cache: HashMap<(Bitboard, Bitboard, bool), Option<(Vec<u16>, usize)>>,
     use_pvs: bool,
     protect_forcing: bool,
     candidate_width: Option<usize>,
@@ -334,27 +334,28 @@ impl Search {
             return Ok(ResultLine::prepend(block, ResultLine::single(score, win)));
         }
         if threats.count == 0 || remaining == 0 {
-            if threats.count == 0 && remaining > 0 && crate::vcf::can_start(&self.state.lines, own)
+            if threats.count == 0 && remaining > 0 && crate::vct::can_start(&self.state.lines, own)
             {
                 let key = (self.state.black, self.state.white, own);
-                let line = if let Some(cached) = self.vcf_cache.get(&key) {
+                let proof = if let Some(cached) = self.vcf_cache.get(&key) {
                     cached.clone()
                 } else {
-                    let proof = crate::vcf::solve(
+                    let proof = crate::vct::solve(
                         &mut self.state.lines,
                         &mut self.state.winning,
                         own,
-                        crate::vcf::HORIZON_PLIES,
-                        crate::vcf::HORIZON_NODES,
+                        crate::vct::HORIZON_PLIES,
+                        crate::vct::HORIZON_NODES,
                     );
                     if self.vcf_cache.len() >= 2048 {
                         self.vcf_cache.clear();
                     }
-                    self.vcf_cache.insert(key, proof.line.clone());
-                    proof.line
+                    let entry = proof.line.clone().map(|line| (line, proof.plies));
+                    self.vcf_cache.insert(key, entry.clone());
+                    entry
                 };
-                if let Some(line) = line {
-                    let distance = (ply + line.len()) as i32;
+                if let Some((line, plies)) = proof {
+                    let distance = (ply + plies) as i32;
                     let mut result = ResultLine::quiet(if maximizing {
                         WIN_SCORE - distance
                     } else {
@@ -703,7 +704,7 @@ mod tests {
         }
     }
     #[test]
-    fn horizon_vcf_turn_distance_cache_and_restoration() {
+    fn horizon_vct_turn_distance_cache_and_restoration() {
         let b = bits(&[110, 111, 112, 128, 143]);
         let w = bits(&[109, 0, 14, 210, 224]);
         for perspective in [true, false] {

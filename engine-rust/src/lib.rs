@@ -314,6 +314,7 @@ impl SearchEngine {
 }
 pub mod root;
 pub mod vcf;
+pub mod vct;
 
 /// status (1 = proven win, 0 = unknown), nodes, budget exhausted, PV length, PV.
 #[wasm_bindgen]

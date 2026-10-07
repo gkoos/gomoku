@@ -12,7 +12,7 @@ import {
   evaluateStrategicPosition,
 } from './evaluation.js';
 import { findBestMoveDeepSearch } from './search.js';
-import { solveVcf } from './vcf.js';
+import { solveVct } from './vct.js';
 
 export function findBestMoveAdaptive(
   blackBitboard,
@@ -205,7 +205,7 @@ export async function findBestMove(
     }
 
     if (['medium', 'hard', 'expert'].includes(difficulty)) {
-      const proof = solveVcf(blackBitboard, whiteBitboard, computerPlayer);
+      const proof = solveVct(blackBitboard, whiteBitboard, computerPlayer);
       if (proof.proven) {
         const position = proof.line[0];
         progressCallback(100);

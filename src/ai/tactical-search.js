@@ -1,17 +1,17 @@
 import { WIN_SCORE } from './config.js';
 import { checkImmediateThreat } from './threats.js';
-import { solveVcf, VCF_HORIZON_PLIES, VCF_HORIZON_NODES } from './vcf.js';
-import { canStartFourSequence } from './line-bitboards.js';
+import { solveVct, VCT_HORIZON_PLIES, VCT_HORIZON_NODES } from './vct.js';
+import { canStartVct } from './line-bitboards.js';
 
 function quietResult(black, white, maximizing, own, ply, tracker, state, context, remaining) {
   const other = own === 'black' ? 'white' : 'black';
   if (remaining > 0 && (!state.lineBitboards ||
-      canStartFourSequence(state.lineBitboards[own], state.lineBitboards[other]))) {
+      canStartVct(state.lineBitboards[own], state.lineBitboards[other]))) {
     const key = `${own}/${black.map(word => word >>> 0).join(',')}/${white.map(word => word >>> 0).join(',')}`;
     const cache = context?.vcfCache;
     let proof = cache?.get(key);
     if (!proof) {
-      proof = solveVcf(black, white, own, VCF_HORIZON_PLIES, VCF_HORIZON_NODES);
+      proof = solveVct(black, white, own, VCT_HORIZON_PLIES, VCT_HORIZON_NODES);
       if (cache?.size >= 2048) cache.clear();
       cache?.set(key, proof);
     }
@@ -19,7 +19,7 @@ function quietResult(black, white, maximizing, own, ply, tracker, state, context
       const line = proof.line.map(position => ({
         position, row: Math.floor(position / 15), col: position % 15,
       }));
-      const distance = ply + line.length;
+      const distance = ply + proof.plies;
       return {
         score: maximizing ? WIN_SCORE - distance : -WIN_SCORE + distance,
         move: line[0],
