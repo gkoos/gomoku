@@ -137,3 +137,10 @@ The concrete next step is to **order candidates by a shallow evaluation instead 
 by density**, then re-measure - including whether depth starts to help once the
 right moves survive the cap.
 
+**Outcome (Phase 11 of the timeline).** That change is `--order-eval=1` and it
+raises the score against Rapfi depth 6 from **12% to 19%** (19W/81L) - the best
+result in the project, above the root policy's 17%. Combined with the policy it
+falls back to 15%, because the policy imitates our own biased search choices. The
+diagnosis therefore holds: the moves were being discarded before they were
+searched.
+

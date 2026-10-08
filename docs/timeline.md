@@ -194,14 +194,35 @@ The mechanism is real (the loss analysis already recorded a 999991 score becomin
 -708 one ply deeper) but disabling the early stop changed one game, so unsound
 mates are not the dominant effect at depth six. The flag is retained.
 
+## Phase 11 - Fixing the retention filter (2026-10-07)
+
+The diagnostic said the bottleneck was retention, not depth and not the evaluation
+itself. The fix is to order candidates by the shallow evaluation of the resulting
+position instead of by density.
+
+| Commit | Change | Result | Status |
+| --- | --- | --- | --- |
+| `1b43ef7` | `--order-eval=1`: each quiet candidate carries the shallow evaluation of the position after it, inserted into the ordering key between the policy and the density priority | **19%** (19W/81L) on seed 43 and **18%** (18W/82L) on seed 7, against 12% and 11% baselines, at 216 ms per move - the best result in the project | kept (opt-in) |
+| (same change) | `--order-eval=1` combined with the root policy | 15% - the policy drags it back | finding |
+
+After the root policy, this is the first lever to beat the baseline, and it beats
+the policy (17%). The gap holds on both seeds (12% to 19% and 11% to 18%, about
++7 points), so it is not seed noise. It also completes the diagnosis: the accepted
+moves were chosen by a density heuristic that ranks the true move in its top eight
+only 36% of the time, while the evaluation ranks it there 79% of the time. Adding
+the policy instead lowers the score, consistent with the policy imitating our own
+(biased) search choices while the evaluation ranks Rapfi's move better.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
 | --- | ---: |
 | Baseline (handcrafted evaluation, depth 6) | 12% |
-| **Root policy ordering** | **17%** |
+| **Shallow-evaluation candidate ordering (`--order-eval`)** | **19%** / 18% (2 seeds) |
+| Root policy ordering | 17% |
 | Root width 50 (2-6x slower) | 15% |
 | Rapfi-move policy distillation | 15% |
+| Shallow-evaluation ordering + policy | 15% |
 | Threat tier **with** policy | 15% |
 | Pattern value net / Rapfi-eval distillation | 12% |
 | Threat tier alone | 12% |
@@ -225,9 +246,11 @@ NNUE **21%** (depth 4), "stronger twos" weights **51.7-52.4%** (intervals includ
 **Kept:** the Rust/Wasm port and its parity suites; the profiling-driven speed
 work; PVS, aspiration windows, TT, iterative deepening; the tactical stack (VCF,
 VCT, tactical horizon, forcible-move protection, searched defenses); the native
-Gomocup executable and the external-match/loss-analysis harness; and the **root
-policy ordering (12% to 17%)** with the portable `GOMPOL1` format. The browser
-uses a traditional board and applies the policy automatically.
+Gomocup executable and the external-match/loss-analysis harness; the **root policy
+ordering (12% to 17%)** with the portable `GOMPOL1` format; and the
+**shallow-evaluation candidate ordering (`--order-eval`, 12% to 19%/18%)**, the
+best result and the fix for the retention bottleneck. The browser uses a
+traditional board and applies the policy automatically.
 
 **Reverted or not kept:** every evaluation change (weight tuning, outcome NNUE,
 search-target NNUE, pattern value net, Rapfi-eval distillation); interior
@@ -236,7 +259,7 @@ squares board look.
 
 **Diagnostics (merged, off by default):** `--root-width`, `--candidate-width`,
 `--policy`, `--policy-plies`, `--pattern`, `--pattern-scale`, `--lmr`, `--tier`,
-`--history`, `--tt-move`, `--initiative`, `--mate-stop`.
+`--history`, `--tt-move`, `--initiative`, `--mate-stop`, `--order-eval`.
 
 ## What the evidence says
 
