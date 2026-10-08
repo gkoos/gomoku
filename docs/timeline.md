@@ -225,12 +225,29 @@ gain (three games) is inside the noise of a single seed, but the sign has change
 which is what the diagnosis predicted - more depth cannot help while the
 improvements are discarded before the search reaches them.
 
+## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
+
+`--order-eval` takes 0 (off), 1 (every node) or 2 (root only).
+
+| Configuration | Score | Mean move time |
+| --- | ---: | ---: |
+| baseline | 12% | ~20 ms |
+| `--order-eval=2` (root only) | 16% | 61 ms |
+| `--order-eval=1` (every node) | 19% | 216 ms |
+
+The gain splits into roughly four points at the root and three in the interior,
+for about 3x and 10x the baseline cost. The engine is fixed-depth and has no
+clock, so the extra time does not buy strength directly - what it buys is the
+ability to search deeper, which now pays (Phase 12). Replacing the full child
+re-evaluation with an incremental update is the remaining optimisation.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
 | --- | ---: |
 | Baseline (handcrafted evaluation, depth 6) | 12% |
-| **Shallow-evaluation candidate ordering (`--order-eval`)** | **19%** / 18% (2 seeds) |
+| Shallow-evaluation ordering (`--order-eval`), root only | 16% |
+| Shallow-evaluation ordering (`--order-eval`), every node | **19%** / 18% (2 seeds) |
 | Root policy ordering | 17% |
 | Root width 50 (2-6x slower) | 15% |
 | Rapfi-move policy distillation | 15% |

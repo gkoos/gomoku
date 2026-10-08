@@ -20,7 +20,7 @@ pub struct Options {
     pub tt_move: bool,
     pub initiative: i32,
     pub mate_stop: bool,
-    pub eval_order: bool,
+    pub eval_order: u8,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -43,7 +43,7 @@ impl Default for Options {
             tt_move: false,
             initiative: 0,
             mate_stop: true,
-            eval_order: false,
+            eval_order: 0,
         }
     }
 }
@@ -67,6 +67,7 @@ impl Options {
             || !(1.0..=100_000.0).contains(&self.pattern_scale)
             || self.lmr > 225
             || !(-64..=64).contains(&self.initiative)
+            || self.eval_order > 2
         {
             Err(
                 "Invalid configuration: depth 1..10, candidate/root width 1..225 if set, extension 0..225, table capacity 0..1000000, NNUE/policy scale 1..100000",

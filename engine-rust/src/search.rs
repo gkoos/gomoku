@@ -99,6 +99,7 @@ pub struct Search {
     use_tt_move: bool,
     stop_on_mate: bool,
     use_eval_order: bool,
+    eval_order_root_only: bool,
     /// Main-history cutoff statistics, indexed by side to move and square.
     history: [[i32; 225]; 2],
     /// Best reply found to the opponent's previous move, indexed by side and square.
@@ -175,6 +176,7 @@ impl Search {
             use_tt_move: false,
             stop_on_mate: true,
             use_eval_order: false,
+            eval_order_root_only: false,
             history: [[0; 225]; 2],
             counter: [[u16::MAX; 225]; 2],
             killers: [[u16::MAX; 2]; 225],
@@ -289,11 +291,16 @@ impl Search {
         Ok(())
     }
     /// Order quiet candidates by the shallow evaluation of the resulting position.
-    pub fn set_eval_order(&mut self, enabled: bool) -> Result<(), &'static str> {
+    /// 0 disables it, 1 orders at every node, 2 orders at the root only.
+    pub fn set_eval_order(&mut self, level: u8) -> Result<(), &'static str> {
         if self.nodes != 0 || self.next_depth != 1 {
             return Err("Evaluation ordering must be selected before search starts");
         }
-        self.use_eval_order = enabled;
+        if level > 2 {
+            return Err("Evaluation ordering level must be 0, 1 or 2");
+        }
+        self.use_eval_order = level != 0;
+        self.eval_order_root_only = level == 2;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -786,7 +793,7 @@ impl Search {
                     } else {
                         [0; 8]
                     },
-                    eval_order: self.use_eval_order,
+                    eval_order: self.use_eval_order && (!self.eval_order_root_only || ply == 0),
                 },
                 scoring,
                 three,
