@@ -213,6 +213,18 @@ only 36% of the time, while the evaluation ranks it there 79% of the time. Addin
 the policy instead lowers the score, consistent with the policy imitating our own
 (biased) search choices while the evaluation ranks Rapfi's move better.
 
+## Phase 12 - Depth helps again once retention is fixed (2026-10-07)
+
+| Commit | Change | Result | Status |
+| --- | --- | --- | --- |
+| (same build) | `--order-eval=1 --depth=8`, seed 43 | **22%** (22W/78L) versus 19% for the same configuration at depth 6, at 1.04 s per move | diagnostic |
+
+Depth was inert or negative before: 10% at depth 8 against 12% at depth 6, and 4%
+against 5% at a fixed cap of 8. With evaluation ordering it turns positive. The
+gain (three games) is inside the noise of a single seed, but the sign has changed,
+which is what the diagnosis predicted - more depth cannot help while the
+improvements are discarded before the search reaches them.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
@@ -223,6 +235,7 @@ the policy instead lowers the score, consistent with the policy imitating our ow
 | Root width 50 (2-6x slower) | 15% |
 | Rapfi-move policy distillation | 15% |
 | Shallow-evaluation ordering + policy | 15% |
+| Shallow-evaluation ordering + depth 8 | 22% |
 | Threat tier **with** policy | 15% |
 | Pattern value net / Rapfi-eval distillation | 12% |
 | Threat tier alone | 12% |

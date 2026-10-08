@@ -97,7 +97,9 @@ Against Rapfi depth 6 it scores **19%** (19W/81L) on seed 43 and **18%** (18W/82
 on seed 7, against baselines of 12% and 11% and the root policy's 17% and 17% -
 the best result in the project. Combining it with the policy lowers the score to
 15%, because the policy imitates our own (biased) search choices. It is opt-in
-and costs roughly ten times the search time; the default path is unchanged.
+and costs roughly ten times the search time; the default path is unchanged. With
+it, depth finally pays: `--order-eval=1 --depth=8` scores 22% against 19% for the
+same configuration at depth 6.
 `--root-width` overrides the candidate cap at the root only, leaving deeper nodes
 on the depth policy, and is still bounded by the same 30/50 generation cap.
 
