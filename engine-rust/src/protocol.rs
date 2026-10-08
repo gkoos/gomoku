@@ -19,6 +19,7 @@ pub struct Options {
     pub history: bool,
     pub tt_move: bool,
     pub initiative: i32,
+    pub mate_stop: bool,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -40,6 +41,7 @@ impl Default for Options {
             history: false,
             tt_move: false,
             initiative: 0,
+            mate_stop: true,
         }
     }
 }
@@ -194,6 +196,7 @@ impl Protocol {
             search.set_history(self.options.history)?;
             search.set_tt_move(self.options.tt_move)?;
             search.set_initiative(self.options.initiative)?;
+            search.set_mate_stop(self.options.mate_stop)?;
             if let Some(preferred) = prepared.preferred {
                 search.prefer_root(preferred)?;
             }

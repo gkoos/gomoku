@@ -76,6 +76,16 @@ and `64` all score exactly the baseline 12% (12W/88L) while changing every game,
 so the term is inert at the weights tested. See
 [strategic loss diagnostic](strategic-diagnostic.md) for why the evaluation is
 still the leading suspect.
+
+`--mate-stop=0` lets iterative deepening continue past a mate-sized iteration
+score. By default it stops at once (`done = depth >= max_depth || |score| >=
+WIN_SCORE - 225`), and because every non-root node caps candidates at
+`max(8, 20 - 2 * remainingDepth)` while protecting only immediate wins, blocks and
+four-creating moves, a selectively-derived mate is not a certificate - the
+[loss analysis](external-loss-analysis.md) already recorded a 999991 score
+becoming -708 one ply deeper. Against Rapfi depth 6 the flag scores 13% (13W/87L)
+versus the 12% baseline, so the unsound-mate effect is real but not dominant at
+this depth. It is a diagnostic and off by default.
 `--root-width` overrides the candidate cap at the root only, leaving deeper nodes
 on the depth policy, and is still bounded by the same 30/50 generation cap.
 

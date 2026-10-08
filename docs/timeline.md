@@ -177,6 +177,23 @@ The diagnostic is the actionable result: the strategic gap is **led by the
 evaluation** (a plain linear sum with no initiative or tempo term), with candidate
 retention responsible for about a third of the divergences.
 
+## Phase 10 - Tracing the origin: are our mate scores sound? (2026-10-07)
+
+The observation that every Rapfi-style search technique makes us *worse* points
+at a missing substrate rather than a missing feature. The first candidate was
+soundness: iterative deepening ends the instant any iteration returns a
+mate-sized score, while every non-root node caps its candidates at
+`max(8, 20 - 2 * remainingDepth)` and protects only immediate wins, blocks and
+four-creating moves. A selectively-derived mate is therefore not a certificate.
+
+| Commit | Change | Result | Status |
+| --- | --- | --- | --- |
+| `--mate-stop=0` | keep iterating past a mate-sized score so a deeper iteration can refute it | **13%** (13W/87L) versus the 12% baseline | diagnostic (wash) |
+
+The mechanism is real (the loss analysis already recorded a 999991 score becoming
+-708 one ply deeper) but disabling the early stop changed one game, so unsound
+mates are not the dominant effect at depth six. The flag is retained.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
@@ -195,6 +212,7 @@ retention responsible for about a third of the divergences.
 | TT-move-first ordering | 10% |
 | TT-move-first ordering + policy | 16% |
 | Initiative eval term (`--initiative`, ±16 and 64) | 12% |
+| Mate-stop disabled (`--mate-stop=0`) | 13% |
 
 Other opponents at our default depth 6: PentaZen 0.4.18 **1%** (1 s/move) and
 **9%** (0.1 s/move); TITO 2014 **4%** (1 s), **25%** (10 ms), **66%** (3 ms).
@@ -218,7 +236,7 @@ squares board look.
 
 **Diagnostics (merged, off by default):** `--root-width`, `--candidate-width`,
 `--policy`, `--policy-plies`, `--pattern`, `--pattern-scale`, `--lmr`, `--tier`,
-`--history`, `--tt-move`, `--initiative`.
+`--history`, `--tt-move`, `--initiative`, `--mate-stop`.
 
 ## What the evidence says
 

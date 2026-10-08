@@ -97,6 +97,7 @@ pub struct Search {
     use_tier: bool,
     use_history: bool,
     use_tt_move: bool,
+    stop_on_mate: bool,
     /// Main-history cutoff statistics, indexed by side to move and square.
     history: [[i32; 225]; 2],
     /// Best reply found to the opponent's previous move, indexed by side and square.
@@ -171,6 +172,7 @@ impl Search {
             use_tier: false,
             use_history: false,
             use_tt_move: false,
+            stop_on_mate: true,
             history: [[0; 225]; 2],
             counter: [[u16::MAX; 225]; 2],
             killers: [[u16::MAX; 2]; 225],
@@ -274,6 +276,16 @@ impl Search {
         }
         self.state.set_initiative(value)
     }
+    /// Whether a mate-sized iteration score ends iterative deepening immediately.
+    /// Disabling it searches to full depth, so deeper iterations can refute a
+    /// selectively-derived (unsound) mate claim.
+    pub fn set_mate_stop(&mut self, enabled: bool) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Mate handling must be selected before search starts");
+        }
+        self.stop_on_mate = enabled;
+        Ok(())
+    }
     /// An ordering hint for the first iteration, replaced by the completed PV.
     pub fn prefer_root(&mut self, position: usize) -> Result<(), &'static str> {
         if self.next_depth != 1
@@ -324,7 +336,8 @@ impl Search {
         }
         self.previous = result;
         self.next_depth += 1;
-        self.done = depth >= self.max_depth || result.score.abs() >= WIN_SCORE - 225;
+        self.done = depth >= self.max_depth
+            || (self.stop_on_mate && result.score.abs() >= WIN_SCORE - 225);
         Ok(Some(Iteration {
             depth,
             result,
@@ -946,6 +959,24 @@ mod tests {
             assert_eq!(search.hasher, hash);
             assert!(search.next_iteration().unwrap().is_none());
         }
+    }
+    #[test]
+    fn disabling_the_mate_stop_searches_to_full_depth() {
+        let black = bits(&[110, 111, 112, 68, 83, 98]);
+        let white = bits(&[109, 53, 155, 156, 157, 0]);
+        let mut search = Search::new(black, white, true, 4, 4, 32768).unwrap();
+        search.set_mate_stop(false).unwrap();
+        let mut iterations = 0;
+        let mut pv0 = None;
+        let mut mate = false;
+        while let Some(iteration) = search.next_iteration().unwrap() {
+            iterations += 1;
+            pv0 = Some(iteration.result.pv[0]);
+            mate = iteration.result.score >= WIN_SCORE - 225;
+        }
+        assert_eq!(iterations, 4);
+        assert_eq!(pv0, Some(113));
+        assert!(mate);
     }
     #[test]
     fn cached_iterations_match_uncached() {
