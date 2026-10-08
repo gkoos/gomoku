@@ -11,6 +11,7 @@
     "external:compare": "node scripts/external-match/compare.js",
     "external:lengths": "node scripts/external-match/length-report.js",
     "external:strategic": "node scripts/external-match/strategic.js",
+    "external:eval-rank": "node scripts/external-match/eval-rank.js",
     "vcf:check": "node scripts/check-vcf.js",
     "selfplay": "node scripts/selfplay.js",
     "selfplay:batch": "node scripts/selfplay/batch.js",
