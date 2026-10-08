@@ -98,6 +98,7 @@ pub struct Search {
     use_history: bool,
     use_tt_move: bool,
     stop_on_mate: bool,
+    use_eval_order: bool,
     /// Main-history cutoff statistics, indexed by side to move and square.
     history: [[i32; 225]; 2],
     /// Best reply found to the opponent's previous move, indexed by side and square.
@@ -173,6 +174,7 @@ impl Search {
             use_history: false,
             use_tt_move: false,
             stop_on_mate: true,
+            use_eval_order: false,
             history: [[0; 225]; 2],
             counter: [[u16::MAX; 225]; 2],
             killers: [[u16::MAX; 2]; 225],
@@ -284,6 +286,14 @@ impl Search {
             return Err("Mate handling must be selected before search starts");
         }
         self.stop_on_mate = enabled;
+        Ok(())
+    }
+    /// Order quiet candidates by the shallow evaluation of the resulting position.
+    pub fn set_eval_order(&mut self, enabled: bool) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Evaluation ordering must be selected before search starts");
+        }
+        self.use_eval_order = enabled;
         Ok(())
     }
     /// An ordering hint for the first iteration, replaced by the completed PV.
@@ -776,6 +786,7 @@ impl Search {
                     } else {
                         [0; 8]
                     },
+                    eval_order: self.use_eval_order,
                 },
                 scoring,
                 three,
@@ -1154,6 +1165,7 @@ mod tests {
                                 width: None,
                                 preferred,
                                 forcing: [0; 8],
+                eval_order: false,
                             },
                             None,
                             [0; 8],

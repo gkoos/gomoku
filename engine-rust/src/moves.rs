@@ -12,6 +12,8 @@ pub struct Candidate {
     pub tier: u8,
     /// Dynamic ordering score (main history + countermove + killer); zero when off.
     pub order: i32,
+    /// Shallow evaluation of the position after this move, from the mover's view.
+    pub eval_score: i32,
     /// None is reserved for empty-board opening candidates, matching JavaScript.
     pub tactical: Option<u8>,
     rank: u16,
@@ -147,6 +149,8 @@ pub fn generate_with_density(
     }
     generate_ranked(
         occupied,
+        black,
+        white,
         player_black,
         winning,
         density,
@@ -164,6 +168,8 @@ pub struct SearchSelection {
     pub width: Option<usize>,
     pub preferred: Option<usize>,
     pub forcing: Bitboard,
+    /// Order quiet candidates by the shallow evaluation of the resulting position.
+    pub eval_order: bool,
 }
 pub fn generate_for_search(
     state: &crate::incremental::Evaluator,
@@ -176,6 +182,8 @@ pub fn generate_for_search(
 ) {
     generate_ranked(
         state.lines.occupied_rows(),
+        &state.black,
+        &state.white,
         player_black,
         &state.winning,
         &state.density.0,
@@ -193,6 +201,8 @@ pub fn generate_from_state(
 ) {
     generate_ranked(
         state.lines.occupied_rows(),
+        &state.black,
+        &state.white,
         player_black,
         &state.winning,
         &state.density.0,
@@ -205,6 +215,8 @@ pub fn generate_from_state(
 }
 fn generate_ranked(
     occupied: [u16; 15],
+    black: &Bitboard,
+    white: &Bitboard,
     player_black: bool,
     winning: &WinningCache,
     density: &[u8; 225],
@@ -215,6 +227,22 @@ fn generate_ranked(
     ordering: Option<MoveOrdering>,
 ) {
     result.len = 0;
+    let eval_order = selection.is_some_and(|s| s.eval_order);
+    // Shallow evaluation of the position after playing `position`, from the mover's
+    // view. Only computed when the caller asks for evaluation ordering.
+    let eval_score = |position: usize| -> i32 {
+        if !eval_order {
+            return 0;
+        }
+        let mut own = if player_black { *black } else { *white };
+        own[position >> 5] |= 1 << (position & 31);
+        let (next_black, next_white) = if player_black {
+            (own, *white)
+        } else {
+            (*black, own)
+        };
+        crate::evaluation::evaluate(&next_black, &next_white, player_black)
+    };
     let stone_count: usize = occupied.iter().map(|row| row.count_ones() as usize).sum();
     let policy_score = |position: usize, priority: i32, tactical: u8| match scoring {
         Some(scoring) => {
@@ -249,6 +277,7 @@ fn generate_ranked(
                 policy: policy_score(row * 15 + col, priority, 0),
                 tier: 0,
                 order: ordering_score(ordering, row * 15 + col),
+                eval_score: 0,
                 tactical: None,
                 rank: result.len as u16,
             });
@@ -350,6 +379,7 @@ fn generate_ranked(
                 policy: policy_score(p, priority, tactical),
                 tier: u8::from(tactical == 0 && contains(&three, p)),
                 order: ordering_score(ordering, p),
+                eval_score: if tactical == 0 { eval_score(p) } else { 0 },
                 tactical: Some(tactical),
                 rank: first_rank.expect("frontier has a qualifying source"),
             });
@@ -363,6 +393,7 @@ fn compare(a: &Candidate, b: &Candidate) -> std::cmp::Ordering {
         .cmp(&a.tactical)
         .then(b.tier.cmp(&a.tier))
         .then(b.policy.cmp(&a.policy))
+        .then(b.eval_score.cmp(&a.eval_score))
         .then(b.order.cmp(&a.order))
         .then(b.priority.cmp(&a.priority))
         .then(a.rank.cmp(&b.rank))
@@ -493,6 +524,7 @@ mod tests {
                     width: Some(width),
                     preferred: None,
                     forcing: [0; 8],
+                eval_order: false,
                 },
                 None,
                 [0; 8],
@@ -510,6 +542,7 @@ mod tests {
                         width: Some(width),
                         preferred: None,
                         forcing: [0; 8],
+                eval_order: false,
                     },
                     None,
                     [0; 8],
@@ -544,6 +577,7 @@ mod tests {
                     width: Some(1),
                     preferred: None,
                     forcing,
+                    eval_order: false,
                 },
                 None,
                 [0; 8],
@@ -566,6 +600,7 @@ mod tests {
                     policy: 0,
                     tier: 0,
                     order: 0,
+                    eval_score: 0,
                     tactical: Some(0),
                     rank: position as u16,
                 });
@@ -583,6 +618,7 @@ mod tests {
                     width: Some(1),
                     preferred: Some(79),
                     forcing,
+                    eval_order: false,
                 }),
             );
             for p in 0..count {
@@ -648,6 +684,7 @@ mod tests {
             width: Some(20),
             preferred: None,
             forcing: [0; 8],
+                eval_order: false,
         };
         let mut reference = Candidates::default();
         generate_for_search(&state, true, &mut reference, selection, None, [0; 8], None);
@@ -717,6 +754,7 @@ mod tests {
             width: Some(8),
             preferred: None,
             forcing: [0; 8],
+                eval_order: false,
         };
         let mut plain = Candidates::default();
         generate_for_search(&state, true, &mut plain, selection, None, [0; 8], None);
@@ -750,6 +788,7 @@ mod tests {
             width: Some(8),
             preferred: None,
             forcing: [0; 8],
+                eval_order: false,
         };
         let mut plain = Candidates::default();
         generate_for_search(&state, true, &mut plain, selection, None, [0; 8], None);
@@ -767,6 +806,7 @@ mod tests {
                 width: Some(8),
                 preferred: None,
                 forcing: [0; 8],
+                eval_order: false,
             };
             let mut result = Candidates::default();
             generate_for_search(state, true, &mut result, selection, None, [0; 8], Some(ordering));
