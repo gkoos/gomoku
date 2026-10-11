@@ -218,12 +218,14 @@ the policy instead lowers the score, consistent with the policy imitating our ow
 | Commit | Change | Result | Status |
 | --- | --- | --- | --- |
 | (same build) | `--order-eval=1 --depth=8` on seeds 43 and 7 | **22%** (22W/78L) and **23%** (23W/77L), against **19%** and **18%** for the same configuration at depth 6, at ~0.85 s per move | kept (opt-in) |
+| (same build) | `--order-eval=1 --depth=10`, seed 43 | **28%** (28W/72L) at 3.4 s per move | kept (opt-in) |
 
 Depth was inert or negative before: 10% at depth 8 against 12% at depth 6, and 4%
-against 5% at a fixed cap of 8. With evaluation ordering it gains on both seeds
-(+3 and +5 games, about +4 points overall), which is what the diagnosis predicted -
-more depth cannot help while the improvements are discarded before the search
-reaches them. Depth 10 costs about 2.2 s per move (~2.6x depth 8).
+against 5% at a fixed cap of 8. With evaluation ordering the sweep is monotone -
+12% baseline, 19% at depth 6, 22-23% at depth 8, **28% at depth 10** - which is
+what the diagnosis predicted: more depth cannot help while the improvements are
+discarded before the search reaches them. The engine is fixed-depth and has no
+clock, so this depth is affordable only because the time limit is not enforced.
 
 ## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
 
@@ -248,6 +250,8 @@ re-evaluation with an incremental update is the remaining optimisation.
 | Baseline (handcrafted evaluation, depth 6) | 12% |
 | Shallow-evaluation ordering (`--order-eval`), root only | 16% |
 | Shallow-evaluation ordering (`--order-eval`), every node | **19%** / 18% (2 seeds) |
+| Shallow-evaluation ordering + depth 8 | 22% / 23% (2 seeds) |
+| **Shallow-evaluation ordering + depth 10** | **28%** |
 | Root policy ordering | 17% |
 | Root width 50 (2-6x slower) | 15% |
 | Rapfi-move policy distillation | 15% |
