@@ -256,6 +256,25 @@ nothing. Improving the ranking signal itself - rather than swapping the
 evaluation function - is what remains, and it must be validated externally, not
 by self-play.
 
+## Phase 15 - Is the candidate cap still the lever? (2026-10-07)
+
+The cap is `max(8, 20 - 2 * remainingDepth)`: tightest at the root (8), widest just
+above the leaves (18). Reference for this phase is `--order-eval=1` at depth 6,
+which scores 19%.
+
+| Configuration | Score | Mean move time |
+| --- | ---: | ---: |
+| `--order-eval=1` (default cap) | 19% | 216 ms |
+| `--order-eval=1 --candidate-width=10` (flat, narrower interior) | **12%** | 156 ms |
+| `--order-eval=1 --root-width=16` (wider root only) | 20% | 348 ms |
+
+Narrowing the interior costs seven points, so the cap's widening toward the leaves
+is load-bearing: a flat 10 gives a wider root than the default 8 and still loses
+badly. Widening the root gives almost nothing **once the ordering is good**: before
+evaluation ordering a wide root had bought three points (12% to 15% at width 50,
+for 2-6x the time) because breadth was compensating for a bad ordering. With a good
+ordering the root no longer needs it. The cap formula is left unchanged.
+
 ## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
 
 `--order-eval` takes 0 (off), 1 (every node) or 2 (root only).
@@ -283,6 +302,8 @@ re-evaluation with an incremental update is the remaining optimisation.
 | **Shallow-evaluation ordering + depth 10** | **28%** |
 | Shallow-evaluation ordering + pattern net (depth 6) | 20% |
 | Shallow-evaluation ordering + Rapfi-distilled net (depth 6) | 23% / 16% (2 seeds) |
+| Shallow-evaluation ordering + flat cap 10 | 12% |
+| Shallow-evaluation ordering + root width 16 | 20% |
 | Root policy ordering | 17% |
 | Root width 50 (2-6x slower) | 15% |
 | Rapfi-move policy distillation | 15% |
