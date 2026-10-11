@@ -130,6 +130,14 @@ impl Evaluator {
         self.initiative = value;
         Ok(())
     }
+    /// Value of a hypothetical position for the side to move, using the active
+    /// evaluation: the pattern net when loaded, otherwise the configured weights.
+    pub fn ordering_value(&self, black: &Bitboard, white: &Bitboard, mover_black: bool) -> i32 {
+        if let Some(net) = &self.pattern {
+            return net.score(black, white, mover_black, mover_black);
+        }
+        crate::evaluation::evaluate_with(black, white, mover_black, &self.weights)
+    }
     pub fn score_for_turn(&self, black_to_move: bool) -> i32 {
         if let Some(net) = &self.pattern {
             return net.score(&self.black, &self.white, black_to_move, self.perspective_black);

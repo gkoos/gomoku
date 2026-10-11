@@ -159,6 +159,7 @@ pub fn generate_with_density(
         None,
         [0; 8],
         None,
+        None,
     );
 }
 
@@ -192,6 +193,7 @@ pub fn generate_for_search(
         scoring,
         three,
         ordering,
+        Some(state),
     );
 }
 pub fn generate_from_state(
@@ -211,6 +213,7 @@ pub fn generate_from_state(
         None,
         [0; 8],
         None,
+        Some(state),
     );
 }
 fn generate_ranked(
@@ -225,11 +228,12 @@ fn generate_ranked(
     scoring: Option<PolicyScoring>,
     three: Bitboard,
     ordering: Option<MoveOrdering>,
+    eval: Option<&crate::incremental::Evaluator>,
 ) {
     result.len = 0;
     let eval_order = selection.is_some_and(|s| s.eval_order);
-    // Shallow evaluation of the position after playing `position`, from the mover's
-    // view. Only computed when the caller asks for evaluation ordering.
+    // Value of the position after playing `position`, from the mover's view, using
+    // the active evaluation. Only computed when the caller asks for eval ordering.
     let eval_score = |position: usize| -> i32 {
         if !eval_order {
             return 0;
@@ -241,7 +245,10 @@ fn generate_ranked(
         } else {
             (*black, own)
         };
-        crate::evaluation::evaluate(&next_black, &next_white, player_black)
+        match eval {
+            Some(state) => state.ordering_value(&next_black, &next_white, player_black),
+            None => crate::evaluation::evaluate(&next_black, &next_white, player_black),
+        }
     };
     let stone_count: usize = occupied.iter().map(|row| row.count_ones() as usize).sum();
     let policy_score = |position: usize, priority: i32, tactical: u8| match scoring {
