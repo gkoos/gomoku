@@ -227,6 +227,29 @@ what the diagnosis predicted: more depth cannot help while the improvements are
 discarded before the search reaches them. The engine is fixed-depth and has no
 clock, so this depth is affordable only because the time limit is not enforced.
 
+## Phase 14 - Does the learned evaluation transfer now? (2026-10-07)
+
+The ordering key now uses the **active** evaluator (`Evaluator::ordering_value`:
+the loaded pattern net when present, otherwise the configured pattern weights)
+instead of the standalone default-weight evaluator. So `--weights` and `--pattern`
+reach the retention decision rather than being confined to the leaves.
+
+This was the test the project had been missing. The pattern value net had won
+61.3% of self-play games while moving the Rapfi score by nothing, and the
+suspicion was that the evaluation was not being asked to decide anything.
+
+| Commit | Change | Result | Status |
+| --- | --- | --- | --- |
+| `b5c2956` | ordering key wired to the active evaluator | the key now shares `--weights` and `--pattern` | kept |
+| (same build) | `--order-eval=1 --pattern=.training/pattern-eval-v1/model.pattern`, depth 6 | **20%** (20W/80L) versus 19% for the handcrafted evaluation, at 391 ms per move | no gain |
+
+The learned evaluation **still does not transfer**, even now that it decides which
+candidates survive the cap. The most likely reason is that there is little
+headroom left in ranking: the handcrafted evaluation already puts Rapfi's move in
+its top eight 79.4% of the time (`external:eval-rank`), so a net of similar
+ranking quality changes almost nothing. Improving the ranking signal itself, rather
+than swapping the evaluation function, is what remains.
+
 ## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
 
 `--order-eval` takes 0 (off), 1 (every node) or 2 (root only).
@@ -252,6 +275,7 @@ re-evaluation with an incremental update is the remaining optimisation.
 | Shallow-evaluation ordering (`--order-eval`), every node | **19%** / 18% (2 seeds) |
 | Shallow-evaluation ordering + depth 8 | 22% / 23% (2 seeds) |
 | **Shallow-evaluation ordering + depth 10** | **28%** |
+| Shallow-evaluation ordering + pattern net (depth 6) | 20% |
 | Root policy ordering | 17% |
 | Root width 50 (2-6x slower) | 15% |
 | Rapfi-move policy distillation | 15% |
