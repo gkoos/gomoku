@@ -241,14 +241,20 @@ suspicion was that the evaluation was not being asked to decide anything.
 | Commit | Change | Result | Status |
 | --- | --- | --- | --- |
 | `b5c2956` | ordering key wired to the active evaluator | the key now shares `--weights` and `--pattern` | kept |
-| (same build) | `--order-eval=1 --pattern=.training/pattern-eval-v1/model.pattern`, depth 6 | **20%** (20W/80L) versus 19% for the handcrafted evaluation, at 391 ms per move | no gain |
+| (same build) | `--order-eval=1 --pattern=.training/pattern-eval-v1/model.pattern`, depth 6 | **20%** (20W/80L) versus 19% for the handcrafted evaluation | no gain |
+| (same build) | `--order-eval=1 --pattern=.training/rafi-eval-v1/model.pattern` on seeds 43 and 7 | **23%** and **16%**, against **19%** and **18%** for the handcrafted evaluation | no gain |
 
-The learned evaluation **still does not transfer**, even now that it decides which
-candidates survive the cap. The most likely reason is that there is little
-headroom left in ranking: the handcrafted evaluation already puts Rapfi's move in
-its top eight 79.4% of the time (`external:eval-rank`), so a net of similar
-ranking quality changes almost nothing. Improving the ranking signal itself, rather
-than swapping the evaluation function, is what remains.
+Both learned nets fail to beat the handcrafted evaluation on two seeds. The
+Rapfi-distilled net looked like a +4 gain on seed 43 (23% against 19%) but scored
+16% against 18% on seed 7, so the two seeds disagree in sign and the average is a
+wash (19.5% against 18.5%). The learned evaluation **still does not transfer**,
+even now that it decides which candidates survive the cap, and the reason is now
+clear: there is little headroom left in ranking. The handcrafted evaluation
+already puts Rapfi's move in its top eight 79.4% of the time
+(`external:eval-rank`), so nets of similar or worse ranking quality change almost
+nothing. Improving the ranking signal itself - rather than swapping the
+evaluation function - is what remains, and it must be validated externally, not
+by self-play.
 
 ## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
 
@@ -276,6 +282,7 @@ re-evaluation with an incremental update is the remaining optimisation.
 | Shallow-evaluation ordering + depth 8 | 22% / 23% (2 seeds) |
 | **Shallow-evaluation ordering + depth 10** | **28%** |
 | Shallow-evaluation ordering + pattern net (depth 6) | 20% |
+| Shallow-evaluation ordering + Rapfi-distilled net (depth 6) | 23% / 16% (2 seeds) |
 | Root policy ordering | 17% |
 | Root width 50 (2-6x slower) | 15% |
 | Rapfi-move policy distillation | 15% |

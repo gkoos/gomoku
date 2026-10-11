@@ -99,10 +99,12 @@ the time, while the evaluation keeps it there 79% of the time. Against Rapfi dep
 baselines of 12% and 11% and the root policy's 17% - the best result in the
 project - at 216 ms per move; `N=2` scores 16% at 61 ms. Combining `N=1` with the
 policy lowers the score to 15%, because the policy imitates our own (biased)
-search choices. Loading the pattern value net as well (`--pattern=...`) gives 20%,
-no gain. With it, depth pays monotonically: `--order-eval=1` scores 19% at depth 6,
-22% at depth 8 and 28% at depth 10, against 12% for the depth-6 baseline. It is
-opt-in; the default path is unchanged.
+search choices. Loading the pattern value nets as well (`--pattern=...`) gives 20%
+for the self-play-trained net and 23%/16% on two seeds for the Rapfi-distilled one,
+so neither reliably beats the handcrafted evaluation. With it, depth pays
+monotonically: `--order-eval=1` scores 19% at depth 6, 22% at depth 8 and 28% at
+depth 10, against 12% for the depth-6 baseline. It is opt-in; the default path is
+unchanged.
 `--root-width` overrides the candidate cap at the root only, leaving deeper nodes
 on the depth policy, and is still bounded by the same 30/50 generation cap.
 
