@@ -194,11 +194,11 @@ These show roughly 1?2% less elapsed time: a modest Node-hosted improvement, not
 `Search` accepts a whole-move node budget (`SearchEngine.set_node_budget` in Wasm,
 `INFO node_budget N` in the native protocol), and the native executable passes
 `INFO timeout_turn N` as a hard deadline at 85% of the turn. Either limit cuts the
-running iteration and publishes the best root move whose subtree completed,
-provided it already beat the previous line; a cut that improved nothing keeps the
-last completed depth. Depth one is exempt, so a reply always exists. The node
-budget is a count rather than a clock, so an equal-effort comparison repeats
-exactly.
+running iteration and keeps the last completed depth; `--cut-playback=1` publishes
+the best root move whose subtree completed instead, provided it already beat the
+previous line (off by default, see Phase 20 of the timeline). Depth one is exempt,
+so a reply always exists. The node budget is a count rather than a clock, so an
+equal-effort comparison repeats exactly.
 
 `npm run wasm:budget` reproduces the curve below against the JavaScript search and
 checks that a truncated search ends on the exact requested node.

@@ -116,7 +116,9 @@ pub struct Search {
     use_history: bool,
     use_tt_move: bool,
     stop_on_mate: bool,
-    /// Whether an iteration cut by a limit may still supply the move.
+    /// Whether an iteration cut by a limit may still supply the move. Off by
+    /// default: over 300 equal-time games the direction favoured keeping the last
+    /// completed iteration (19 wins against 14), consistently within each seed.
     play_cuts: bool,
     use_eval_order: bool,
     eval_order_root_only: bool,
@@ -202,7 +204,7 @@ impl Search {
             use_history: false,
             use_tt_move: false,
             stop_on_mate: true,
-            play_cuts: true,
+            play_cuts: false,
             use_eval_order: true,
             eval_order_root_only: false,
             history: [[0; 225]; 2],
@@ -259,9 +261,9 @@ impl Search {
         self.deadline = deadline;
         Ok(())
     }
-    /// Whether a cut iteration may still supply the move (default). Disabling it
-    /// keeps the last completed iteration instead, which is the behavior to
-    /// compare against when measuring the cut itself.
+    /// Whether a cut iteration may still supply the move. Off by default; the
+    /// last completed iteration is kept instead, which the equal-time A/B over
+    /// three seeds favored (19 wins to 14 over 300 games).
     pub fn set_cut_playback(&mut self, enabled: bool) -> Result<(), &'static str> {
         if self.nodes != 0 || self.next_depth != 1 {
             return Err("Cut playback must be selected before search starts");
@@ -1410,12 +1412,14 @@ mod tests {
         }
     }
     #[test]
-    fn cut_playback_can_be_disabled_before_the_search_starts() {
+    fn cut_playback_is_off_by_default_and_locks_after_start() {
         let b = bits(&[112, 128, 99]);
         let w = bits(&[113, 97, 127]);
-        let run = |enabled: bool| {
+        let run = |play_cuts: Option<bool>| {
             let mut search = Search::new(b, w, true, 6, 4, 32768).unwrap();
-            search.set_cut_playback(enabled).unwrap();
+            if let Some(enabled) = play_cuts {
+                search.set_cut_playback(enabled).unwrap();
+            }
             search.set_node_budget(4096).unwrap();
             let mut lines = Vec::new();
             while let Some(iteration) = search.next_iteration().unwrap() {
@@ -1424,15 +1428,17 @@ mod tests {
             (lines.len(), search.total_nodes(), search.budget_exhausted())
         };
         // The same work is done either way; only the published move differs.
-        let (with_cut, cut_nodes, exhausted) = run(true);
-        let (without_cut, plain_nodes, plain_exhausted) = run(false);
-        assert!(exhausted && plain_exhausted);
+        let (default_iterations, default_nodes, default_exhausted) = run(None);
+        let (with_cut, cut_nodes, _) = run(Some(true));
+        let (without_cut, plain_nodes, plain_exhausted) = run(Some(false));
+        assert!(default_exhausted && plain_exhausted);
         assert_eq!(cut_nodes, plain_nodes);
-        assert!(with_cut >= 1 && without_cut >= 1);
-        assert!(with_cut <= without_cut + 1);
+        assert_eq!(default_nodes, plain_nodes);
+        assert_eq!(default_iterations, without_cut);
+        assert!(with_cut >= without_cut && with_cut <= without_cut + 1);
         let mut search = Search::new(b, w, true, 4, 4, 0).unwrap();
         search.next_iteration().unwrap();
-        assert!(search.set_cut_playback(false).is_err());
+        assert!(search.set_cut_playback(true).is_err());
     }
     #[test]
     fn deadline_cuts_a_search_and_still_returns_a_line() {

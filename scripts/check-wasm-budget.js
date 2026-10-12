@@ -31,11 +31,16 @@ const reference = (b, w, color, depth) => {
   });
   return iterations;
 };
-const bounded = (b, w, computerBlack, depth, budget) => {
+const bounded = (b, w, computerBlack, depth, budget, playCuts = false) => {
   const search = new wasm.SearchEngine(b, w, computerBlack, depth, 4, 32768);
   const iterations = [];
   try {
-    if (budget !== undefined) search.set_node_budget(budget);
+    if (budget !== undefined) {
+      search.set_node_budget(budget);
+      // Cut publication is off by default; the A/B behind that choice is in
+      // docs/timeline.md (Phase 20).
+      if (playCuts) search.set_cut_playback(true);
+    }
     for (;;) {
       const result = search.next_depth();
       if (!result.length) break;
@@ -77,38 +82,17 @@ for (const fixture of fixtures)
     }
   }
 
-// Budgets that land mid-iteration: the completed prefix is untouched, a cut
-// iteration may be appended, and the total never overshoots the requested nodes.
+// Budgets that land mid-iteration: the completed prefix is untouched, the cut is
+// discarded by default, and the total never overshoots the requested nodes.
 const board = [bits([112, 128, 99]), bits([113, 97, 127])];
 const depth = 6;
 const full = reference(board[0], board[1], 'black', depth);
 assert.equal(full.length, depth);
-const completed = (run) => run.iterations.slice(0, 2);
-const cut = (run) => run.iterations[2];
-let published = 0;
-const checkCut = (run, name) => {
-  assert.deepEqual(completed(run), full.slice(0, 2), name);
-  assert.ok(run.iterations.length <= 3, name);
-  assert.equal(run.exhausted, true, name);
-  if (!cut(run)) return;
-  // A cut iteration is published only when a completed root move improved on the
-  // line before it, which is what makes its move safe to play.
-  assert.equal(cut(run).depth, 3, name);
-  assert.ok(cut(run).nodes > 0, name);
-  assert.ok(cut(run).score > full[1].score, name);
-  published++;
-};
 const budget = full[0].nodes + full[1].nodes + Math.floor(full[2].nodes / 2);
 const run = bounded(board[0], board[1], true, depth, budget);
-checkCut(run, 'half the third iteration');
+assert.deepEqual(run.iterations, full.slice(0, 2));
+assert.equal(run.exhausted, true);
 assert.equal(run.nodes, budget);
-for (const share of [0.25, 0.5, 0.75]) {
-  const target = full[0].nodes + full[1].nodes + Math.floor(full[2].nodes * share);
-  const partial = bounded(board[0], board[1], true, depth, target);
-  checkCut(partial, `share=${share}`);
-  assert.equal(partial.nodes, target, `share=${share}`);
-}
-assert.ok(published > 0, 'a cut iteration must be published at least once');
 assert.deepEqual(bounded(board[0], board[1], true, depth, 1), {
   iterations: full.slice(0, 1),
   nodes: full[0].nodes,
@@ -117,20 +101,28 @@ assert.deepEqual(bounded(board[0], board[1], true, depth, 1), {
 // A repeated budget is reproducible: it is a node count, not a clock.
 assert.deepEqual(bounded(board[0], board[1], true, depth, budget), run);
 
-// How often does a cut iteration actually change the move? If it rarely does, an
-// equal-time match cannot tell the mechanism apart from discarding the cut.
+// The diagnostic publishes a cut iteration when a completed root move improved on
+// the line before it. This also counts how often that changes the move at all.
 let cuts = 0;
 let changed = 0;
 for (let level = 2; level < full.length; level++) {
   const head = full.slice(0, level).reduce((sum, iteration) => sum + iteration.nodes, 0);
-  const run = bounded(board[0], board[1], true, depth, head + Math.floor(full[level].nodes / 2));
-  const cutMove = cut(run);
-  if (!cutMove) continue;
+  const target = head + Math.floor(full[level].nodes / 2);
+  const enabled = bounded(board[0], board[1], true, depth, target, true);
+  assert.deepEqual(enabled.iterations.slice(0, level), full.slice(0, level), `level=${level}`);
+  assert.ok(enabled.iterations.length <= level + 1, `level=${level}`);
+  assert.equal(enabled.nodes, target, `level=${level}`);
+  assert.equal(enabled.exhausted, true, `level=${level}`);
+  const cut = enabled.iterations[level];
+  if (!cut) continue;
   cuts++;
-  if (cutMove.pv[0] !== full[level - 1].pv[0]) changed++;
+  assert.equal(cut.depth, level + 1, `level=${level}`);
+  assert.ok(cut.nodes > 0 && cut.score > full[level - 1].score, `level=${level}`);
+  if (cut.pv[0] !== full[level - 1].pv[0]) changed++;
 }
+assert.ok(cuts > 0, 'enabling cut playback must publish a cut');
 console.log(
-  `Node budget cuts: ${changed}/${cuts} deeper cuts changed the move (the rest published the previous line).`,
+  `Node budget cuts: ${changed}/${cuts} published cuts changed the move; the rest repeated the previous line.`,
 );
 
 // Invalid or late budgets are rejected rather than silently ignored.
@@ -144,5 +136,5 @@ try {
   search.free();
 }
 console.log(
-  `Node budget passed: ${neutral} neutral budgets, ${published} of 4 mid-iteration cuts published a completed root move, and the exempt first iteration; depth/nodes ${full.map((i) => `${i.depth}:${i.nodes}`).join(',')}, cut at ${budget} nodes.`,
+  `Node budget passed: ${neutral} neutral budgets, ${cuts} published cuts at exact totals, a discarded cut by default, and the exempt first iteration; depth/nodes ${full.map((i) => `${i.depth}:${i.nodes}`).join(',')}, cut at ${budget} nodes.`,
 );

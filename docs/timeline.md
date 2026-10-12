@@ -444,16 +444,25 @@ still holds: the engine never plays a move that its own completed search did not
 rank at least as high. Rapfi used a mean 74 ms of the same clock, so we now spend
 it comparably instead of leaving three quarters of it unused.
 
-**The cut publication is not measurably worth anything at this clock.** A
-controlled A/B on a single binary - same 100 ms clock, same deadline, only the
-publication switched off (`--cut-playback=0`) - scored **5% with it on and 7% with
-it off**, and a repeat of the on-configuration scored 7% as well, so the spread
-between identical settings is two games and the effect is inside the noise. The
-mechanism is not inert - a node-budget probe changes the move in 2 of 4 deeper cuts
-- it is simply too small to resolve with one 100-game match. It stays on because it
-is the only thing that turns the clock into a deeper *move* instead of discarding
-the work, and because it never plays a move its completed search did not rank at
-least as high.
+**The cut publication does not pay, so it is off by default.** A controlled A/B on
+a single binary - same clock, same deadline, only the publication switched - ran
+100 games on three seeds:
+
+| Seed | `--cut-playback=1` | off (default) |
+| --- | ---: | ---: |
+| 43 | 5% | 7% |
+| 7 | 7% | 8% |
+| 11 | 2% | 4% |
+| **300 games** | **14 wins (4.7%)** | **19 wins (6.3%)** |
+
+The off arm won more games on every seed, paired on identical openings, but five
+games over 300 is about 0.85 standard errors: the direction is consistent and the
+effect is not established. Following this page's convention - a behavior that does
+not win does not ship as the default - the cut is now discarded unless
+`--cut-playback=1` is passed. It is not inert (a node-budget probe shows the cut
+changes the move in 2 of 4 deeper cuts), which is exactly why it is worth
+re-measuring once the evaluation improves: the cut is a deeper *move*, and a better
+evaluation is what could make it pay.
 
 Equal-time matches are also **not deterministic**, unlike the depth-capped ones on
 this page: the same command twice gave 7% and 5%. Any future clock result needs

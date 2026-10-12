@@ -322,6 +322,16 @@ export class SearchEngine {
         }
     }
     /**
+     * Whether an iteration cut by a limit may supply the move; off by default.
+     * @param {boolean} enabled
+     */
+    set_cut_playback(enabled) {
+        const ret = wasm.searchengine_set_cut_playback(this.__wbg_ptr, enabled);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * @param {boolean} enabled
      */
     set_forcing_moves(enabled) {

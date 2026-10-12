@@ -87,13 +87,14 @@ becoming -708 one ply deeper. Against Rapfi depth 6 the flag scores 13% (13W/87L
 versus the 12% baseline, so the unsound-mate effect is real but not dominant at
 this depth. It is a diagnostic and off by default.
 
-`--cut-playback=0` stops an iteration cut by a limit from supplying the move,
-falling back to the last completed iteration. It is a diagnostic for measuring the
-cut itself: on one binary at a 100 ms clock the 100-game equal-time score was 5%
-with it on and 7% with it off, while a repeat of the on-configuration also scored
-7%, so the effect is inside the run-to-run noise of a clock-limited match. The
-default keeps it on, because it turns the clock into a deeper move instead of
-discarding the work.
+`--cut-playback=1` lets an iteration cut by a limit supply the move: the engine
+plays its best root move whose subtree completed, and only when that move already
+beat the previous completed line. It is a diagnostic and **off by default**. Across
+three seeds and 300 equal-time games at a 100 ms clock the cut arm won 14 games
+against 19 for keeping the last completed iteration, with the direction holding
+within each seed, so the default discards the cut. The effect is small and inside
+sampling noise, so the flag stays to be re-measured: the cut is a deeper *move*, and
+a better evaluation is what could make it pay.
 
 `--order-eval=N` orders quiet candidates by the **shallow evaluation of the
 position after the move** instead of by the density priority, inserting that value
@@ -166,11 +167,11 @@ rather than full Gomocup tournament compliance.
 `INFO node_budget` caps nodes per move; a search stops at whichever limit comes
 first. The clock is a hard deadline **inside** the search, at 85% of the turn and
 read once per 256 nodes; the rest absorbs the check granularity, reply I/O and
-scheduler delays (Rapfi's MaxTime keeps a similar reserve). An iteration that
-cannot finish is cut the way a manager's MaxTime cut works: the engine plays its
-best root move whose subtree completed, and only when that move already beat the
-previous completed line. A cut that improved nothing keeps the last completed
-iteration. The first iteration is never bounded, so a reply is always available.
+scheduler delays (Rapfi's MaxTime keeps a similar reserve). An iteration the
+deadline cuts is discarded and the last completed iteration is played; the first
+iteration is never bounded, so a reply is always available. `--cut-playback=1`
+plays the cut iteration's best completed root move instead ([timeline](timeline.md)
+Phase 20 has the A/B that chose the default).
 `INFO node_budget` is our own extension, counts nodes rather than time, so an
 equal-effort comparison repeats exactly on any machine, and cuts iterations the
 same way.

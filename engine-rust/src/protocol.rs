@@ -54,7 +54,7 @@ impl Default for Options {
             tt_move: false,
             initiative: 0,
             mate_stop: true,
-            cut_playback: true,
+            cut_playback: false,
             eval_order: 1,
             weights: None,
         }

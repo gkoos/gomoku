@@ -52,6 +52,10 @@ export class SearchEngine {
     next_depth(): Float64Array;
     occupancy(black: boolean): Uint32Array;
     prefer_root(position: number): void;
+    /**
+     * Whether an iteration cut by a limit may supply the move; off by default.
+     */
+    set_cut_playback(enabled: boolean): void;
     set_forcing_moves(enabled: boolean): void;
     /**
      * Whole-move node budget; zero leaves the search unbounded.
@@ -171,6 +175,7 @@ export interface InitOutput {
     readonly searchengine_next_depth: (a: number) => [number, number, number, number];
     readonly searchengine_occupancy: (a: number, b: number) => [number, number];
     readonly searchengine_prefer_root: (a: number, b: number) => [number, number];
+    readonly searchengine_set_cut_playback: (a: number, b: number) => [number, number];
     readonly searchengine_set_forcing_moves: (a: number, b: number) => [number, number];
     readonly searchengine_set_node_budget: (a: number, b: number) => [number, number];
     readonly searchengine_set_pvs: (a: number, b: number) => [number, number];

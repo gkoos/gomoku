@@ -298,6 +298,12 @@ impl SearchEngine {
     pub fn total_nodes(&self) -> f64 {
         self.inner.total_nodes() as f64
     }
+    /// Whether an iteration cut by a limit may supply the move; off by default.
+    pub fn set_cut_playback(&mut self, enabled: bool) -> Result<(), JsValue> {
+        self.inner
+            .set_cut_playback(enabled)
+            .map_err(JsValue::from_str)
+    }
     /// True when the budget ended deepening before the allocated depth.
     pub fn budget_exhausted(&self) -> bool {
         self.inner.budget_exhausted()
