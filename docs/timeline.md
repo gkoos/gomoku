@@ -321,6 +321,37 @@ Two recorded expectations changed with the default and were updated deliberately
 
 53 Rust tests, 278 JS tests and all six Wasm/native parity suites pass.
 
+## Phase 18 - Weight tuning against the external objective (2026-10-07)
+
+Now that the evaluation drives retention, the weights finally affect the score, so
+the self-play batch experiment's candidate was re-measured **against Rapfi** with a
+new `--weights` option on the native engine (eight comma-separated integers).
+
+| Weights (five, openFour, closedFour, openThree, closedThree, openTwo, closedTwo, window) | Score |
+| --- | ---: |
+| default `100000,20000,10000,1000,100,100,10,1` | 19% |
+| stronger twos `...,100,200,20,1` - the self-play winner | 20% |
+| weaker threes `...,500,50,100,10,1` | 20% |
+| combined weaker threes + stronger twos | 18% |
+| stronger threes `...,2000,200,100,10,1` | **15%** |
+
+Every variant is within noise of the default except stronger threes, which loses
+four points: the default weights are at a local optimum for this configuration.
+
+The control is the interesting part. Strengthening the three weights costs four
+points now, where before evaluation ordering the evaluation was nearly inert (the
+self-play weight campaign ended with no significant difference at all). That
+confirms the evaluation has finally become live in the search - and that it is no
+longer the bottleneck, because perturbing it in every sane direction fails to
+improve on it.
+
+A learned evaluation is not cheap to re-test either: the ordering key falls back
+to a full net evaluation when `--pattern` is loaded, so a net costs about five
+times the incremental handcrafted path (385 ms against 73 ms per move at depth 6),
+which puts a depth-8 net run out of practical reach. Making the net usable in the
+ordering key is the prerequisite for testing one at the depths where the
+evaluation has the most room.
+
 ## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
 
 `--order-eval` takes 0 (off), 1 (every node) or 2 (root only).
@@ -343,6 +374,8 @@ re-evaluation with an incremental update is the remaining optimisation.
 | --- | ---: |
 | Baseline (handcrafted evaluation, depth 6) | 12% |
 | **Default: evaluation-ordered retention (depth 6)** | **19%** / 18% (2 seeds) |
+| Weight tuning (`--weights`) toward stronger twos / weaker threes | 20% |
+| Weight tuning toward stronger threes | 15% |
 | Shallow-evaluation ordering (`--order-eval`), root only | 16% |
 | Shallow-evaluation ordering (`--order-eval`), every node | **19%** / 18% (2 seeds) |
 | Shallow-evaluation ordering + depth 8 | 22% / 23% (2 seeds) |

@@ -21,6 +21,7 @@ pub struct Options {
     pub initiative: i32,
     pub mate_stop: bool,
     pub eval_order: u8,
+    pub weights: Option<[i32; 8]>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -44,6 +45,7 @@ impl Default for Options {
             initiative: 0,
             mate_stop: true,
             eval_order: 1,
+            weights: None,
         }
     }
 }
@@ -201,6 +203,9 @@ impl Protocol {
             search.set_initiative(self.options.initiative)?;
             search.set_mate_stop(self.options.mate_stop)?;
             search.set_eval_order(self.options.eval_order)?;
+            if let Some(weights) = self.options.weights {
+                search.state.set_weights(weights)?;
+            }
             if let Some(preferred) = prepared.preferred {
                 search.prefer_root(preferred)?;
             }
