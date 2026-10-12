@@ -8,7 +8,9 @@ Unless stated otherwise, strength is a deterministic 100-game match (50 paired
 openings, seed 43, 15x15 freestyle) against **Rapfi depth 6**, run through
 `scripts/external-match.js`. See [External matches](external-matches.md) for the
 harness and [loss analysis](external-loss-analysis.md) for the diagnosis.
-"d4/d6/d8" mean our engine's own search depth.
+"d4/d6/d8" mean our engine's own search depth. Depth-capped runs repeat exactly; a
+clock-limited run does not, so the same command can score two games apart (Phase
+20).
 
 ## Status legend
 
@@ -436,12 +438,27 @@ MaxTime:
 
 All three are equal-time matches against Rapfi at 100 ms (seed 43, `--depth=10`,
 `--rapfi-depth=100`, `--turn-seconds=0.1`); the first row still used the removed
-`--movetime` flag, and the last row is the only one that both matches the score and
-stays under the clock. A cut iteration is published only when a completed root move
+`--movetime` flag. A cut iteration is published only when a completed root move
 already beat the previous line, so the safety property that motivated discarding
 still holds: the engine never plays a move that its own completed search did not
 rank at least as high. Rapfi used a mean 74 ms of the same clock, so we now spend
 it comparably instead of leaving three quarters of it unused.
+
+**The cut publication is not measurably worth anything at this clock.** A
+controlled A/B on a single binary - same 100 ms clock, same deadline, only the
+publication switched off (`--cut-playback=0`) - scored **5% with it on and 7% with
+it off**, and a repeat of the on-configuration scored 7% as well, so the spread
+between identical settings is two games and the effect is inside the noise. The
+mechanism is not inert - a node-budget probe changes the move in 2 of 4 deeper cuts
+- it is simply too small to resolve with one 100-game match. It stays on because it
+is the only thing that turns the clock into a deeper *move* instead of discarding
+the work, and because it never plays a move its completed search did not rank at
+least as high.
+
+Equal-time matches are also **not deterministic**, unlike the depth-capped ones on
+this page: the same command twice gave 7% and 5%. Any future clock result needs
+repeats or several seeds before it is called an improvement; 100 games at a 100 ms
+clock carries at least a two-game band.
 
 A wider clock is spent just as fully - median 256 ms of a 300 ms turn - and the
 score *falls* to **3%** (3W/97L) over the same 100 games and openings, with Rapfi's

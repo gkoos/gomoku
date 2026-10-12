@@ -117,6 +117,22 @@ assert.deepEqual(bounded(board[0], board[1], true, depth, 1), {
 // A repeated budget is reproducible: it is a node count, not a clock.
 assert.deepEqual(bounded(board[0], board[1], true, depth, budget), run);
 
+// How often does a cut iteration actually change the move? If it rarely does, an
+// equal-time match cannot tell the mechanism apart from discarding the cut.
+let cuts = 0;
+let changed = 0;
+for (let level = 2; level < full.length; level++) {
+  const head = full.slice(0, level).reduce((sum, iteration) => sum + iteration.nodes, 0);
+  const run = bounded(board[0], board[1], true, depth, head + Math.floor(full[level].nodes / 2));
+  const cutMove = cut(run);
+  if (!cutMove) continue;
+  cuts++;
+  if (cutMove.pv[0] !== full[level - 1].pv[0]) changed++;
+}
+console.log(
+  `Node budget cuts: ${changed}/${cuts} deeper cuts changed the move (the rest published the previous line).`,
+);
+
 // Invalid or late budgets are rejected rather than silently ignored.
 const search = new wasm.SearchEngine(board[0], board[1], true, depth, 4, 32768);
 try {

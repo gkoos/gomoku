@@ -29,6 +29,7 @@ pub struct Options {
     pub tt_move: bool,
     pub initiative: i32,
     pub mate_stop: bool,
+    pub cut_playback: bool,
     pub eval_order: u8,
     pub weights: Option<[i32; 8]>,
 }
@@ -53,6 +54,7 @@ impl Default for Options {
             tt_move: false,
             initiative: 0,
             mate_stop: true,
+            cut_playback: true,
             eval_order: 1,
             weights: None,
         }
@@ -239,6 +241,7 @@ impl Protocol {
                 search.prefer_root(preferred)?;
             }
             search.set_node_budget(self.node_budget)?;
+            search.set_cut_playback(self.options.cut_playback)?;
             if let Some(clock) = self.turn_millis {
                 // A deadline inside the search, so an iteration that cannot finish
                 // is still cut and its best completed root move is played instead

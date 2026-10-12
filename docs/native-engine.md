@@ -87,6 +87,14 @@ becoming -708 one ply deeper. Against Rapfi depth 6 the flag scores 13% (13W/87L
 versus the 12% baseline, so the unsound-mate effect is real but not dominant at
 this depth. It is a diagnostic and off by default.
 
+`--cut-playback=0` stops an iteration cut by a limit from supplying the move,
+falling back to the last completed iteration. It is a diagnostic for measuring the
+cut itself: on one binary at a 100 ms clock the 100-game equal-time score was 5%
+with it on and 7% with it off, while a repeat of the on-configuration also scored
+7%, so the effect is inside the run-to-run noise of a clock-limited match. The
+default keeps it on, because it turns the clock into a deeper move instead of
+discarding the work.
+
 `--order-eval=N` orders quiet candidates by the **shallow evaluation of the
 position after the move** instead of by the density priority, inserting that value
 into the ordering key between the policy and the priority. The value comes from the
