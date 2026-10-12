@@ -304,6 +304,10 @@ impl SearchEngine {
             .set_cut_playback(enabled)
             .map_err(JsValue::from_str)
     }
+    /// Futility margin per remaining ply; zero disables the pruning.
+    pub fn set_futility(&mut self, margin: i32) -> Result<(), JsValue> {
+        self.inner.set_futility(margin).map_err(JsValue::from_str)
+    }
     /// True when the budget ended deepening before the allocated depth.
     pub fn budget_exhausted(&self) -> bool {
         self.inner.budget_exhausted()

@@ -58,6 +58,10 @@ export class SearchEngine {
     set_cut_playback(enabled: boolean): void;
     set_forcing_moves(enabled: boolean): void;
     /**
+     * Futility margin per remaining ply; zero disables the pruning.
+     */
+    set_futility(margin: number): void;
+    /**
      * Whole-move node budget; zero leaves the search unbounded.
      */
     set_node_budget(budget: number): void;
@@ -177,6 +181,7 @@ export interface InitOutput {
     readonly searchengine_prefer_root: (a: number, b: number) => [number, number];
     readonly searchengine_set_cut_playback: (a: number, b: number) => [number, number];
     readonly searchengine_set_forcing_moves: (a: number, b: number) => [number, number];
+    readonly searchengine_set_futility: (a: number, b: number) => [number, number];
     readonly searchengine_set_node_budget: (a: number, b: number) => [number, number];
     readonly searchengine_set_pvs: (a: number, b: number) => [number, number];
     readonly searchengine_total_nodes: (a: number) => number;

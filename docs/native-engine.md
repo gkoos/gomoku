@@ -96,6 +96,15 @@ within each seed, so the default discards the cut. The effect is small and insid
 sampling noise, so the flag stays to be re-measured: the cut is a deeper *move*, and
 a better evaluation is what could make it pay.
 
+`--futility=M` skips a quiet candidate when the static evaluation plus `M` per
+remaining ply cannot reach alpha (at most three plies deep), in a position where
+neither side has an immediate five; forcing moves, the first candidate and cached
+wins are never touched. It is a diagnostic and off by default: it cut the mean turn
+from 74 ms to 41 ms and the 100-game score from 19% to 7% (M=100) and 10% (M=200),
+so pruning our tree costs more strength than it saves time. The reason is the
+evaluation, not the pruning: a static pattern sum with no defensive urgency cannot
+tell which quiet moves carry the threats.
+
 `--order-eval=N` orders quiet candidates by the **shallow evaluation of the
 position after the move** instead of by the density priority, inserting that value
 into the ordering key between the policy and the priority. The value comes from the

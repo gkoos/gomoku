@@ -341,6 +341,16 @@ export class SearchEngine {
         }
     }
     /**
+     * Futility margin per remaining ply; zero disables the pruning.
+     * @param {number} margin
+     */
+    set_futility(margin) {
+        const ret = wasm.searchengine_set_futility(this.__wbg_ptr, margin);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * Whole-move node budget; zero leaves the search unbounded.
      * @param {number} budget
      */

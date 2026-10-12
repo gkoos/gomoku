@@ -497,6 +497,46 @@ are 0.2-1.0M nodes/s against the 169K nodes/s Rapfi reported in the same turn.
 The engine is not slow and not node-starved; it is **wide**. Selectivity is the
 next lever, not speed.
 
+## Phase 21 - Width, pruning and why the branching factor resists (2026-10-12)
+
+Rapfi reaches nominal depth 13 on 12,000 nodes in a 100 ms turn while our depth-6
+search uses 18,221, an effective branching factor of about 2.05 against 5.1. This
+phase asked whether our tree can be made narrower without losing strength.
+
+| Configuration (100 games, seed 43, Rapfi depth 6) | Score | Our mean turn |
+| --- | ---: | ---: |
+| default (evaluation-ordered retention) | **19%** | 74 ms |
+| root width 16 | 20% | - |
+| interior width 10 | 12% | - |
+| interior width 8 | 5% | - |
+| `--futility=100` | 7% | 41 ms |
+| `--futility=200` | 10% | 42 ms |
+
+The width rows are from earlier phases, re-surveyed here; the futility rows are new.
+Futility skips a quiet candidate when the static evaluation plus a margin per
+remaining ply cannot reach alpha, at most three plies deep, in a position where
+neither side has an immediate five, and never touches forcing moves, the first
+candidate or a cached win.
+
+Two conclusions:
+
+- **Ordering is already at the bound.** With alpha-beta and perfect ordering, a
+  search of width w has an effective branching of about sqrt(w). Our measured
+  4.8-5.2 against a generation width of 30-50 says the remaining nodes are not in
+  the ordering. Rapfi's 2.05 implies an effective width near four, which only
+  pruning produces.
+- **Pruning our tree loses strength faster than it saves nodes.** Futility cut the
+  mean turn from 74 ms to 41 ms - a real reduction in branching - and the score fell
+  from 19% to 7-10%. The evaluation is a static pattern sum with no defensive
+  urgency or tempo term (Phase 9), so "the evaluation says this branch is lost" is
+  not evidence that it is, and the candidates it removes are the ones that hold
+  Rapfi's threats.
+
+The branching factor is therefore downstream of evaluation quality: an engine can
+only afford to prune what it can recognise. `--futility` ships as a diagnostic, off
+by default, and the search-side shortening line (LMR, threat tier, dynamic history,
+futility, fixed interior widths) is exhausted - every entry in it lost strength.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
@@ -555,7 +595,8 @@ squares board look.
 
 **Diagnostics (merged, off by default):** `--root-width`, `--candidate-width`,
 `--policy`, `--policy-plies`, `--pattern`, `--pattern-scale`, `--lmr`, `--tier`,
-`--history`, `--tt-move`, `--initiative`, `--mate-stop`, `--order-eval`.
+`--history`, `--tt-move`, `--initiative`, `--mate-stop`, `--order-eval`,
+`--cut-playback`, `--futility`.
 
 ## What the evidence says
 

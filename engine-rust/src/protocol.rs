@@ -30,6 +30,7 @@ pub struct Options {
     pub initiative: i32,
     pub mate_stop: bool,
     pub cut_playback: bool,
+    pub futility: i32,
     pub eval_order: u8,
     pub weights: Option<[i32; 8]>,
 }
@@ -55,6 +56,7 @@ impl Default for Options {
             initiative: 0,
             mate_stop: true,
             cut_playback: false,
+            futility: 0,
             eval_order: 1,
             weights: None,
         }
@@ -80,10 +82,11 @@ impl Options {
             || !(1.0..=100_000.0).contains(&self.pattern_scale)
             || self.lmr > 225
             || !(-64..=64).contains(&self.initiative)
+            || !(0..=100_000).contains(&self.futility)
             || self.eval_order > 2
         {
             Err(
-                "Invalid configuration: depth 1..10, candidate/root width 1..225 if set, extension 0..225, table capacity 0..1000000, NNUE/policy scale 1..100000",
+                "Invalid configuration: depth 1..10, candidate/root width 1..225 if set, extension 0..225, table capacity 0..1000000, NNUE/policy scale 1..100000, futility 0..100000",
             )
         } else {
             Ok(())
@@ -242,6 +245,7 @@ impl Protocol {
             }
             search.set_node_budget(self.node_budget)?;
             search.set_cut_playback(self.options.cut_playback)?;
+            search.set_futility(self.options.futility)?;
             if let Some(clock) = self.turn_millis {
                 // A deadline inside the search, so an iteration that cannot finish
                 // is still cut and its best completed root move is played instead

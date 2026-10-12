@@ -9,6 +9,8 @@ use std::collections::HashMap;
 pub const WIN_SCORE: i32 = 1_000_000;
 const INFINITY: i32 = 2_000_000;
 const ASPIRATION_DELTA: i32 = 1024;
+/// Deepest ply at which futility pruning may skip a quiet candidate.
+const FUTILITY_MAX_DEPTH: usize = 3;
 /// Clamp for main-history entries and the cap on the per-move depth bonus.
 const HISTORY_CLAMP: i32 = 8192;
 const HISTORY_BONUS_CAP: i32 = 2048;
@@ -120,6 +122,8 @@ pub struct Search {
     /// default: over 300 equal-time games the direction favoured keeping the last
     /// completed iteration (19 wins against 14), consistently within each seed.
     play_cuts: bool,
+    /// Futility margin per remaining ply; zero disables the pruning.
+    futility_margin: i32,
     use_eval_order: bool,
     eval_order_root_only: bool,
     /// Main-history cutoff statistics, indexed by side to move and square.
@@ -205,6 +209,7 @@ impl Search {
             use_tt_move: false,
             stop_on_mate: true,
             play_cuts: false,
+            futility_margin: 0,
             use_eval_order: true,
             eval_order_root_only: false,
             history: [[0; 225]; 2],
@@ -269,6 +274,20 @@ impl Search {
             return Err("Cut playback must be selected before search starts");
         }
         self.play_cuts = enabled;
+        Ok(())
+    }
+    /// Futility margin per remaining ply (0 disables it). A quiet candidate is
+    /// skipped when the static evaluation plus this margin cannot reach alpha, in
+    /// a position where neither side has an immediate five. Off by default; see
+    /// the width and pruning survey in docs/timeline.md.
+    pub fn set_futility(&mut self, margin: i32) -> Result<(), &'static str> {
+        if !(0..=100_000).contains(&margin) {
+            return Err("Futility margin must be 0..100000");
+        }
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Futility must be selected before search starts");
+        }
+        self.futility_margin = margin;
         Ok(())
     }
     /// Diagnostic fixed width; tactical candidates remain protected.
@@ -944,6 +963,28 @@ impl Search {
                 ordering,
             );
         }
+        // Futility: a quiet branch that cannot reach alpha even with a margin per
+        // remaining ply cannot change the decision. Forcing moves, the first
+        // candidate and any position with an immediate five are never pruned.
+        let futility = if self.futility_margin > 0
+            && depth <= FUTILITY_MAX_DEPTH
+            && wins.count == 0
+            && threats.count == 0
+        {
+            let evaluation = self.state.score_for_turn(if maximizing {
+                self.perspective
+            } else {
+                !self.perspective
+            });
+            Some(evaluation + self.futility_margin * depth as i32)
+        } else {
+            None
+        };
+        let futility_forcing = if futility.is_some() && self.protect_forcing {
+            crate::vcf::four_moves(&self.state.lines, to_move)
+        } else {
+            [0; 8]
+        };
         if self.buffers[ply].len == 0 {
             return Ok(self.remember(
                 key,
@@ -975,6 +1016,14 @@ impl Search {
         let mut complete: Option<ResultLine> = None;
         for i in 0..self.buffers[ply].len {
             let candidate = self.buffers[ply].moves[i];
+            if i > 0
+                && let Some(bound) = futility
+                && candidate.tactical == Some(0)
+                && !contains(&futility_forcing, candidate.position)
+                && bound <= alpha
+            {
+                continue;
+            }
             let token = if depth == 1 {
                 self.state.make_leaf_move(candidate.position, to_move)?
             } else {
@@ -1439,6 +1488,42 @@ mod tests {
         let mut search = Search::new(b, w, true, 4, 4, 0).unwrap();
         search.next_iteration().unwrap();
         assert!(search.set_cut_playback(true).is_err());
+    }
+    #[test]
+    fn futility_prunes_quiet_branches_and_never_skips_a_forced_win() {
+        let b = bits(&[112, 128, 99]);
+        let w = bits(&[113, 97, 127]);
+        let run = |margin: i32| {
+            let mut search = Search::new(b, w, true, 6, 4, 32768).unwrap();
+            search.set_futility(margin).unwrap();
+            let mut lines = Vec::new();
+            while let Some(iteration) = search.next_iteration().unwrap() {
+                lines.push(iteration);
+            }
+            (search.total_nodes(), lines)
+        };
+        // The margin is a real reduction in visited nodes, and the shallow
+        // iterations are unaffected.
+        let (plain_nodes, plain) = run(0);
+        let (pruned_nodes, pruned) = run(200);
+        assert!(pruned_nodes < plain_nodes);
+        assert_eq!(pruned[0].result.score, plain[0].result.score);
+        // A position with an immediate five is never pruned, whatever the margin.
+        let win = bits(&[108, 109, 110, 111]);
+        let mut search = Search::new(win, bits(&[0]), true, 6, 4, 32768).unwrap();
+        search.set_futility(100_000).unwrap();
+        let mut last = None;
+        while let Some(iteration) = search.next_iteration().unwrap() {
+            last = Some(iteration);
+        }
+        assert!(last.unwrap().result.score >= WIN_SCORE - 225);
+        // Validation and locking match the other diagnostics.
+        let mut search = Search::new(b, w, true, 4, 4, 0).unwrap();
+        assert!(search.set_futility(-1).is_err());
+        assert!(search.set_futility(100_001).is_err());
+        search.set_futility(150).unwrap();
+        search.next_iteration().unwrap();
+        assert!(search.set_futility(0).is_err());
     }
     #[test]
     fn deadline_cuts_a_search_and_still_returns_a_line() {
