@@ -2,23 +2,13 @@ use gomoku_engine::{bitboards::Bitboard, incremental::Evaluator, root, rules, se
 use std::io::{self, BufRead, Write};
 use std::time::{Duration, Instant};
 
-/// Projected growth between successive iterations. The last completed iteration
-/// is multiplied by this factor to decide whether another one can still fit.
-const TURN_TIME_GROWTH: u32 = 4;
-
-/// Share of the turn clock the projection may plan against. The reserve absorbs
-/// growth beyond the projection: overrunning the manager's clock loses the game,
-/// and Rapfi's own OptiTime/MaxTime pair uses the same 63-70% split.
-const TURN_TIME_PLAN_PERCENT: u32 = 70;
+/// Share of the turn clock the engine may use. The rest absorbs the deadline
+/// check granularity, reply I/O and scheduler delays: overrunning the manager's
+/// clock loses the game, and Rapfi's own MaxTime keeps a similar reserve.
+const TURN_TIME_DEADLINE_PERCENT: u64 = 85;
 
 /// Largest accepted whole-move node budget.
 const MAX_NODE_BUDGET: u64 = 1_000_000_000;
-
-/// Start another iteration only while it is projected to fit in the planning
-/// share of the clock. Any unused remainder is cheaper than a lost game.
-fn fits_turn(elapsed: Duration, last: Duration, clock: Duration) -> bool {
-    elapsed + last * TURN_TIME_GROWTH <= clock * TURN_TIME_PLAN_PERCENT / 100
-}
 
 pub struct Options {
     pub depth: usize,
@@ -249,23 +239,17 @@ impl Protocol {
                 search.prefer_root(preferred)?;
             }
             search.set_node_budget(self.node_budget)?;
-            let budget = self.turn_millis.map(Duration::from_millis);
-            let start = Instant::now();
-            let mut last_iteration = Duration::ZERO;
+            if let Some(clock) = self.turn_millis {
+                // A deadline inside the search, so an iteration that cannot finish
+                // is still cut and its best completed root move is played instead
+                // of the clock being abandoned between iterations.
+                search.set_deadline(Some(
+                    Instant::now()
+                        + Duration::from_millis(clock * TURN_TIME_DEADLINE_PERCENT / 100),
+                ))?;
+            }
             let mut position = None;
-            loop {
-                // The completed line is kept, so stopping early only leaves time
-                // unused; starting a longer iteration could overrun the clock.
-                if let Some(budget) = budget
-                    && !fits_turn(start.elapsed(), last_iteration, budget)
-                {
-                    break;
-                }
-                let before = Instant::now();
-                let Some(iteration) = search.next_iteration()? else {
-                    break;
-                };
-                last_iteration = before.elapsed();
+            while let Some(iteration) = search.next_iteration()? {
                 if iteration.result.length > 0 {
                     position = Some(iteration.result.pv[0] as usize);
                 }
@@ -538,29 +522,21 @@ mod tests {
         assert!(!p.fast);
     }
     #[test]
-    fn turn_time_projection_reserves_part_of_the_clock() {
-        let clock = Duration::from_millis(100);
-        // The first iteration is always attempted, with no time measured yet.
-        assert!(fits_turn(Duration::ZERO, Duration::ZERO, clock));
-        // 20 ms spent with a 10 ms last iteration fits the 70 ms planning share.
-        assert!(fits_turn(
-            Duration::from_millis(20),
-            Duration::from_millis(10),
-            clock
-        ));
-        // The same state against the full 100 ms would start an iteration that
-        // can still grow past the remaining 30 ms, so the reserve stops it.
-        assert!(!fits_turn(
-            Duration::from_millis(20),
-            Duration::from_millis(20),
-            clock
-        ));
-        // A 70 ms iteration after 85 ms spent would overrun 100 ms anyway.
-        assert!(!fits_turn(
-            Duration::from_millis(85),
-            Duration::from_millis(70),
-            clock
-        ));
+    fn a_tiny_turn_clock_still_returns_a_legal_move() {
+        let mut p = protocol();
+        assert_eq!(p.command("INFO max_depth 10"), (None, false));
+        assert_eq!(p.command("INFO timeout_turn 1"), (None, false));
+        assert_eq!(p.turn_millis, Some(1));
+        assert_eq!(reply(&mut p, "START 15"), "OK");
+        // The exempt first iteration answers the empty board without searching.
+        assert_eq!(reply(&mut p, "BEGIN"), "7,7");
+        // One millisecond cannot complete ten plies, but a cut search still has to
+        // produce a legal move rather than an error or a timeout.
+        let move_reply = reply(&mut p, "TURN 8,7");
+        assert!(!move_reply.starts_with("ERROR"), "{move_reply}");
+        let (x, y) = move_reply.split_once(',').expect("coordinate reply");
+        assert!(x.parse::<usize>().unwrap() < 15);
+        assert!(y.parse::<usize>().unwrap() < 15);
     }
     #[test]
     fn info_clock_and_node_budget_are_parsed_and_ignore_unusable_values() {

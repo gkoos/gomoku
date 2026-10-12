@@ -402,31 +402,46 @@ clock where the protocol is (`pbrain-gomoku`).
 
 | Change | Result | Status |
 | --- | --- | --- |
-| whole-move node budget in `Search` (checked per node, aborts the current iteration, keeps the last completed depth) | ends on the exact requested node; depth one is exempt, so a reply always exists | kept |
+| whole-move node budget in `Search` (checked per node, cuts the current iteration and plays its best completed root move) | ends on the exact requested node; depth one is exempt, so a reply always exists | kept |
 | `INFO node_budget N` extension and `SearchEngine.set_node_budget` in Wasm | a machine-independent equal-effort limit that repeats exactly | kept |
-| `INFO timeout_turn N` honoured (stop before an iteration whose projected cost no longer fits) | 100 ms clock used 68 ms, 1 s clock 433 ms, against 7.3 s unbounded | kept |
+| `INFO timeout_turn N` honoured as a hard deadline inside the search | 100 ms clock used 94 ms, 1 s clock 860 ms, against 7.6 s unbounded | kept |
 
 One move on an empty board with one opponent stone, minimum of three runs:
 
 | Configuration | Move time |
 | --- | ---: |
-| `--depth=10`, unbounded | 7,290 ms |
-| `--depth=10`, `INFO timeout_turn 1000` | 433 ms |
-| `--depth=10`, `INFO timeout_turn 100` | 68 ms |
-| `--depth=10`, `INFO node_budget 12000` | 120 ms |
-| `--depth=6`, unbounded (reference) | 140 ms |
+| `--depth=10`, unbounded | 7,636 ms |
+| `--depth=10`, `INFO timeout_turn 1000` | 860 ms |
+| `--depth=10`, `INFO timeout_turn 300` | 264 ms |
+| `--depth=10`, `INFO timeout_turn 100` | 94 ms |
+| `--depth=10`, `INFO timeout_turn 50` | 50 ms |
+| `--depth=10`, `INFO node_budget 12000` | 125 ms |
 
-The first clock rule projected against the whole clock. Timing every iteration on
-the harness's own 24 openings showed why that is unsafe: growth between iterations
-has a median of 2.6x but a maximum of 9.6x, and the worst run started an iteration
-that pushed the turn to **94%** of a 100 ms clock - a forfeit waiting to happen.
-Planning against **70%** of the clock lowers that worst case to 47% (63% at 1 s)
-and costs no median depth at any clock tested, so the reserve is what ships. The
-same measurement shows the other half of the problem: at a 100 ms clock the median
-completed depth is only **4**, because the next iteration (about 62 ms) cannot be
-projected to fit. Using the aborted iteration's best root move - what Rapfi does
-when its own MaxTime cuts an iteration - is the follow-up that would spend that
-time, and the node instrument is what will make it measurable.
+The first clock rule only checked the clock between completed iterations and
+projected the last one forward. Timing every iteration on the harness's own 24
+openings showed both halves of the problem: growth is a median 2.6x but up to
+9.6x, so the worst run pushed a turn to **94%** of a 100 ms clock, while at the
+same time the projection refused to start an iteration that could have been cut -
+a 100 ms turn used only **26 ms** on average. A 70% reserve removed the overrun but
+kept the waste. The shipped rule puts a **hard deadline inside the search** (85% of
+the turn, one clock read per 256 nodes) and cuts an unfinished iteration, playing
+its best root move whose subtree completed - the trade Rapfi makes with its own
+MaxTime:
+
+| Clock rule (100-game equal-time match at 100 ms) | Score | Our mean / median / p95 / max turn |
+| --- | ---: | --- |
+| discard the cut iteration, project against the whole clock (`--movetime`) | 7% | 50 / 57 / 107 / **215** ms |
+| discard it, project against 70% of the clock | 5% | 26 / 26 / 63 / 158 ms |
+| **cut it and play the best completed root move (85% deadline)** | **7%** | 57 / **86** / **90** / 139 ms |
+
+All three are equal-time matches against Rapfi at 100 ms (seed 43, `--depth=10`,
+`--rapfi-depth=100`, `--turn-seconds=0.1`); the first row still used the removed
+`--movetime` flag, and the last row is the only one that both matches the score and
+stays under the clock. A cut iteration is published only when a completed root move
+already beat the previous line, so the safety property that motivated discarding
+still holds: the engine never plays a move that its own completed search did not
+rank at least as high. Rapfi used a mean 74 ms of the same clock, so we now spend
+it comparably instead of leaving three quarters of it unused.
 
 This is an instrument, not a strength feature. Every speed-side lever we tried
 (LMR, history, TT-move, tier) buys *time*, and time was worthless because the

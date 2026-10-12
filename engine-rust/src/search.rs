@@ -67,9 +67,9 @@ impl Iteration {
         result
     }
 }
-/// Synchronous iterations with an optional whole-move node budget. The budget is
-/// checked per node, so a bounded search keeps the last completed line instead of
-/// returning a partially searched depth.
+/// Synchronous iterations with optional limits. An iteration that a limit cuts
+/// publishes the best root move whose subtree completed and already beat the
+/// previous line, so a cut iteration is only abandoned when nothing improved.
 pub struct Search {
     pub state: Evaluator,
     pub hasher: Hasher,
@@ -89,6 +89,16 @@ pub struct Search {
     node_budget: u64,
     /// Set when the budget stopped the search before its allocated depth.
     exhausted: bool,
+    /// Times a visit was refused, so a root move can tell whether the subtree it
+    /// started was searched to the end.
+    aborted: u64,
+    /// Best root move among the children that completed before a cut.
+    partial: Option<ResultLine>,
+    /// Hard wall-clock deadline for this move. Native builds only: `Instant::now`
+    /// is unavailable on `wasm32-unknown-unknown`, where Wasm callers use the
+    /// node budget instead.
+    #[cfg(not(target_arch = "wasm32"))]
+    deadline: Option<std::time::Instant>,
     hits: u64,
     cutoffs: u64,
     // Full occupancy and attacker verify identity; proof lengths stay relative
@@ -171,6 +181,10 @@ impl Search {
             spent: 0,
             node_budget: 0,
             exhausted: false,
+            aborted: 0,
+            partial: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            deadline: None,
             hits: 0,
             cutoffs: 0,
             vcf_cache: HashMap::new(),
@@ -227,6 +241,20 @@ impl Search {
     /// True when the node budget ended deepening before the allocated depth.
     pub fn budget_exhausted(&self) -> bool {
         self.exhausted
+    }
+    /// Hard wall-clock deadline for the whole move. Native builds only: the clock
+    /// is read here rather than in the shared search algebra, because
+    /// `Instant::now` is unavailable on `wasm32-unknown-unknown`.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn set_deadline(
+        &mut self,
+        deadline: Option<std::time::Instant>,
+    ) -> Result<(), &'static str> {
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Deadline must be selected before search starts");
+        }
+        self.deadline = deadline;
+        Ok(())
     }
     /// Diagnostic fixed width; tactical candidates remain protected.
     pub fn set_candidate_width(&mut self, width: usize) -> Result<(), &'static str> {
@@ -387,10 +415,26 @@ impl Search {
         let hits = self.hits;
         let cutoffs = self.cutoffs;
         self.nodes = 0;
+        self.aborted = 0;
+        self.partial = None;
         let result = self.aspiration(depth)?;
         self.spent += self.nodes;
         if self.exhausted {
             self.done = true;
+            // A cut iteration keeps the best root move whose subtree completed, so
+            // the work done before the cut is not thrown away.
+            if let Some(line) = self.partial.take() {
+                self.previous = line;
+                self.next_depth += 1;
+                return Ok(Some(Iteration {
+                    depth,
+                    result: line,
+                    nodes: self.nodes,
+                    hits: self.hits - hits,
+                    cutoffs: self.cutoffs - cutoffs,
+                    table_size: self.table.as_ref().map_or(0, Table::len),
+                }));
+            }
             return Ok(None);
         }
         if result.length == 0 {
@@ -449,12 +493,25 @@ impl Search {
     fn follows_pv(&self, ply: usize) -> bool {
         ply <= self.previous.length && self.path[..ply] == self.previous.pv[..ply]
     }
-    /// True when visiting another node would exceed the whole-move budget.
-    /// Depth one is exempt, so a limited search always returns a line.
+    /// True when visiting another node would exceed a limit. Depth one is exempt,
+    /// so a limited search always completes an iteration and returns a line.
+    fn limit_reached(&self) -> bool {
+        self.next_depth > 1 && (self.budget_exceeded() || self.deadline_due())
+    }
+    /// True when the visit would exceed the whole-move node budget.
     fn budget_exceeded(&self) -> bool {
-        self.node_budget != 0
-            && self.next_depth > 1
-            && self.spent + self.nodes >= self.node_budget
+        self.node_budget != 0 && self.spent + self.nodes >= self.node_budget
+    }
+    /// Reads the clock once per 256 nodes: exact enough for a deadline, and the
+    /// node budget already covers exactness.
+    fn deadline_due(&self) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(deadline) = self.deadline {
+                return self.nodes & 0xFF == 0 && std::time::Instant::now() >= deadline;
+            }
+        }
+        false
     }
     fn key(&self, depth: usize, ply: usize) -> CacheKey {
         let suffix = if self.follows_pv(ply) && ply < self.previous.length {
@@ -592,8 +649,9 @@ impl Search {
         let p = positions(&threats.board, &[0; 8], false)
             .next()
             .expect("cached threat count");
-        if self.budget_exceeded() {
+        if self.limit_reached() {
             self.exhausted = true;
+            self.aborted += 1;
             return Ok(ResultLine::quiet(0));
         }
         let token = self.state.make_leaf_move(p, own)?;
@@ -693,8 +751,9 @@ impl Search {
         maximizing: bool,
         ply: usize,
     ) -> Result<ResultLine, &'static str> {
-        if self.budget_exceeded() {
+        if self.limit_reached() {
             self.exhausted = true;
+            self.aborted += 1;
             return Ok(ResultLine::quiet(0));
         }
         self.nodes += 1;
@@ -892,6 +951,8 @@ impl Search {
             ));
         }
         let mut best = ResultLine::quiet(if maximizing { -INFINITY } else { INFINITY });
+        // Best root move whose subtree finished. A cut iteration publishes this.
+        let mut complete: Option<ResultLine> = None;
         for i in 0..self.buffers[ply].len {
             let candidate = self.buffers[ply].moves[i];
             let token = if depth == 1 {
@@ -901,6 +962,7 @@ impl Search {
             };
             self.hasher.toggle(candidate.position, to_move);
             self.path[ply] = candidate.position as u16;
+            let aborts = self.aborted;
             // The first move establishes the bound. Scout later alternatives;
             // only an improvement inside the original window needs re-search.
             // At depth one the horizon result is window-independent.
@@ -930,6 +992,18 @@ impl Search {
             self.hasher.toggle(candidate.position, to_move);
             self.state.undo_move(token)?;
             let child = child?;
+            // A root move is a candidate result only when its whole subtree was
+            // searched and it already beats the previous completed line.
+            if ply == 0 && self.aborted == aborts {
+                let improved = if maximizing {
+                    child.score > self.previous.score
+                } else {
+                    child.score < self.previous.score
+                };
+                if improved {
+                    complete = Some(ResultLine::prepend(candidate.position, child));
+                }
+            }
             if (maximizing && child.score > best.score) || (!maximizing && child.score < best.score)
             {
                 best = ResultLine::prepend(candidate.position, child);
@@ -946,6 +1020,11 @@ impl Search {
             if cutoff {
                 break;
             }
+        }
+        if ply == 0 && self.exhausted {
+            // A cut iteration publishes its best completed root move; every other
+            // branch was left partial, so it cannot be trusted with the move.
+            self.partial = complete;
         }
         Ok(self.remember(
             key,
@@ -1270,7 +1349,7 @@ mod tests {
         assert!(Search::new([0; 8], [0; 8], true, 8, 226, 0).is_err());
     }
     #[test]
-    fn node_budget_stops_mid_iteration_and_keeps_the_last_completed_line() {
+    fn node_budget_publishes_the_best_completed_root_move_of_a_cut_iteration() {
         let b = bits(&[112, 128, 99]);
         let w = bits(&[113, 97, 127]);
         let mut reference = Search::new(b, w, true, 6, 4, 32768).unwrap();
@@ -1279,7 +1358,7 @@ mod tests {
             depths.push(iteration);
         }
         assert!(depths.len() >= 4);
-        // A budget inside the third iteration aborts it instead of overshooting:
+        // A budget inside the third iteration cuts it instead of overshooting:
         // the first iteration is exempt and the second one completes.
         let budget = depths[0].nodes + depths[1].nodes + depths[2].nodes / 2;
         let mut bounded = Search::new(b, w, true, 6, 4, 32768).unwrap();
@@ -1288,8 +1367,12 @@ mod tests {
         while let Some(iteration) = bounded.next_iteration().unwrap() {
             completed.push(iteration);
         }
-        assert_eq!(completed.len(), 2);
-        for (bounded, reference) in completed.iter().zip(&depths) {
+        // The aborted iteration is discarded, and never overshoots the budget.
+        assert!(bounded.budget_exhausted());
+        assert_eq!(bounded.total_nodes(), budget);
+        assert!(completed.len() >= 2);
+        // Two iterations complete, and at most one cut iteration is appended.
+        for (bounded, reference) in completed[..2].iter().zip(&depths) {
             assert_eq!(bounded.depth, reference.depth);
             assert_eq!(bounded.result.score, reference.result.score);
             assert_eq!(bounded.nodes, reference.nodes);
@@ -1298,9 +1381,38 @@ mod tests {
                 &reference.result.pv[..reference.result.length]
             );
         }
-        // The aborted iteration is discarded, and never overshoots the budget.
-        assert!(bounded.budget_exhausted());
-        assert_eq!(bounded.total_nodes(), budget);
+        assert!(completed.len() <= 3);
+        // A cut iteration is published only when a completed root move already
+        // beat the previous line, which is what makes its move safe to play.
+        if let Some(cut) = completed.get(2) {
+            assert_eq!(cut.depth, 3);
+            assert!(cut.result.length > 0);
+            assert!(cut.result.score > completed[1].result.score);
+            assert!(cut.nodes > 0);
+        }
+    }
+    #[test]
+    fn deadline_cuts_a_search_and_still_returns_a_line() {
+        let b = bits(&[112, 128, 99]);
+        let w = bits(&[113, 97, 127]);
+        let mut search = Search::new(b, w, true, 8, 4, 32768).unwrap();
+        search.set_node_budget(0).unwrap();
+        search
+            .set_deadline(Some(
+                std::time::Instant::now() + std::time::Duration::from_millis(2),
+            ))
+            .unwrap();
+        let mut lines = Vec::new();
+        while let Some(iteration) = search.next_iteration().unwrap() {
+            lines.push(iteration);
+        }
+        // The exempt first iteration always completes, and the deadline ends the
+        // search long before eight plies.
+        assert!(!lines.is_empty());
+        assert!(lines.last().unwrap().depth < 8);
+        assert!(search.budget_exhausted());
+        assert!(search.total_nodes() > 0);
+        assert!(search.set_deadline(None).is_err());
     }
     #[test]
     fn node_budget_never_bounds_the_first_iteration() {

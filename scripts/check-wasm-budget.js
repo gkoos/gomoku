@@ -77,31 +77,43 @@ for (const fixture of fixtures)
     }
   }
 
-// Budgets that land mid-iteration: the aborted depth is discarded, the completed
-// prefix is untouched, and the total never overshoots the requested nodes.
+// Budgets that land mid-iteration: the completed prefix is untouched, a cut
+// iteration may be appended, and the total never overshoots the requested nodes.
 const board = [bits([112, 128, 99]), bits([113, 97, 127])];
 const depth = 6;
 const full = reference(board[0], board[1], 'black', depth);
 assert.equal(full.length, depth);
+const completed = (run) => run.iterations.slice(0, 2);
+const cut = (run) => run.iterations[2];
+let published = 0;
+const checkCut = (run, name) => {
+  assert.deepEqual(completed(run), full.slice(0, 2), name);
+  assert.ok(run.iterations.length <= 3, name);
+  assert.equal(run.exhausted, true, name);
+  if (!cut(run)) return;
+  // A cut iteration is published only when a completed root move improved on the
+  // line before it, which is what makes its move safe to play.
+  assert.equal(cut(run).depth, 3, name);
+  assert.ok(cut(run).nodes > 0, name);
+  assert.ok(cut(run).score > full[1].score, name);
+  published++;
+};
 const budget = full[0].nodes + full[1].nodes + Math.floor(full[2].nodes / 2);
 const run = bounded(board[0], board[1], true, depth, budget);
-assert.deepEqual(run.iterations, full.slice(0, 2));
-assert.equal(run.exhausted, true);
+checkCut(run, 'half the third iteration');
 assert.equal(run.nodes, budget);
+for (const share of [0.25, 0.5, 0.75]) {
+  const target = full[0].nodes + full[1].nodes + Math.floor(full[2].nodes * share);
+  const partial = bounded(board[0], board[1], true, depth, target);
+  checkCut(partial, `share=${share}`);
+  assert.equal(partial.nodes, target, `share=${share}`);
+}
+assert.ok(published > 0, 'a cut iteration must be published at least once');
 assert.deepEqual(bounded(board[0], board[1], true, depth, 1), {
   iterations: full.slice(0, 1),
   nodes: full[0].nodes,
   exhausted: true,
 });
-let truncated = 0;
-for (const share of [0.25, 0.5, 0.75]) {
-  const target = full[0].nodes + full[1].nodes + Math.floor(full[2].nodes * share);
-  const partial = bounded(board[0], board[1], true, depth, target);
-  assert.deepEqual(partial.iterations, full.slice(0, 2), `share=${share}`);
-  assert.equal(partial.nodes, target, `share=${share}`);
-  assert.equal(partial.exhausted, true, `share=${share}`);
-  truncated++;
-}
 // A repeated budget is reproducible: it is a node count, not a clock.
 assert.deepEqual(bounded(board[0], board[1], true, depth, budget), run);
 
@@ -116,5 +128,5 @@ try {
   search.free();
 }
 console.log(
-  `Node budget passed: ${neutral} neutral budgets, ${truncated} mid-iteration truncations and the exempt first iteration; depth/nodes ${full.map((i) => `${i.depth}:${i.nodes}`).join(',')}, aborted at ${budget} nodes.`,
+  `Node budget passed: ${neutral} neutral budgets, ${published} of 4 mid-iteration cuts published a completed root move, and the exempt first iteration; depth/nodes ${full.map((i) => `${i.depth}:${i.nodes}`).join(',')}, cut at ${budget} nodes.`,
 );
