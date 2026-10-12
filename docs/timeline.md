@@ -352,6 +352,30 @@ which puts a depth-8 net run out of practical reach. Making the net usable in th
 ordering key is the prerequisite for testing one at the depths where the
 evaluation has the most room.
 
+## Phase 19 - The remaining weakness, measured again (2026-10-07)
+
+Re-running the oracle diagnostic on the new default's losses (81 games) shows the
+fix worked mechanically, not only in the win count:
+
+| Measure | old default | new default |
+| --- | ---: | ---: |
+| we play Rapfi's own move | 39.4% | **45.5%** |
+| 90th-percentile drop | 564 | **274** |
+| losses whose first bad decision misses a forced win | 16 of 95 | 9 of 81 |
+
+The remaining profile is positional (47 of 81 first bad decisions) with a
+persistent defensive-tactical minority: 16 of 81 losses (20%) walk into a forced
+loss that Rapfi's move avoids.
+
+Cheap levers for each were tried and are neutral:
+
+- a deeper tactical horizon, `--extension=8`, scores 19% - unchanged (the harness
+  now exposes `--extension` for this);
+- weight tuning is flat, with only over-weighting threes losing points (Phase 18).
+
+What remains is the evaluation's ranking quality, already 79% top-8, and raw
+depth, which still pays: 28% at depth 10.
+
 ## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
 
 `--order-eval` takes 0 (off), 1 (every node) or 2 (root only).
