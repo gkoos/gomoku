@@ -342,6 +342,7 @@ re-evaluation with an incremental update is the remaining optimisation.
 | Configuration | Score |
 | --- | ---: |
 | Baseline (handcrafted evaluation, depth 6) | 12% |
+| **Default: evaluation-ordered retention (depth 6)** | **19%** / 18% (2 seeds) |
 | Shallow-evaluation ordering (`--order-eval`), root only | 16% |
 | Shallow-evaluation ordering (`--order-eval`), every node | **19%** / 18% (2 seeds) |
 | Shallow-evaluation ordering + depth 8 | 22% / 23% (2 seeds) |
