@@ -27,6 +27,7 @@ Options use `--name=value`:
 
 | Option | Default | Allowed values |
 | --- | ---: | --- |
+| `--movetime` | Unset | Per-move time budget in milliseconds, up to one day |
 | `--depth` | 6 | 1–10 iterative plies; searched mates can end earlier |
 | `--extension` | 4 | 0–225 tactical horizon plies |
 | `--table-capacity` | 32768 | 0–1,000,000 entries; zero disables caching |

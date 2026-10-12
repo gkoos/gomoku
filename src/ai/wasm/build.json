@@ -1,5 +1,5 @@
 {
-  "sourceHash": "2bc36ecd8e121b33916a025acf86b52538513274b8f34fe4f074c6f0c26bec0d",
+  "sourceHash": "e4d31b52320e2ad3592ed9f2edfddd9fa6d26a6e431f1d7c62c330e7241e59d2",
   "artifacts": {
     "gomoku_engine.js": "e4f54a1317313e7d08b7d33c9092b66563ce7b6254f9088ff047e1e755d923e6",
     "gomoku_engine_bg.wasm": "1710d09c41dbc1a08dda0ea9ebb105c395437254d8e73e4ae42767552064f71d",
