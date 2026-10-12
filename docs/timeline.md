@@ -275,6 +275,24 @@ evaluation ordering a wide root had bought three points (12% to 15% at width 50,
 for 2-6x the time) because breadth was compensating for a bad ordering. With a good
 ordering the root no longer needs it. The cap formula is left unchanged.
 
+## Phase 16 - Incremental evaluation for the ordering key (2026-10-07)
+
+The ordering key re-analysed each candidate's child position from scratch. The
+evaluator already maintains one contribution per square and direction, and placing
+a stone only changes the squares in that position's `affected` list, so
+`Evaluator::ordering_value_after` now adds just those deltas and skips empty
+squares. A loaded pattern net still falls back to a full evaluation, because a
+net's value is not a linear sum of pattern contributions.
+
+| Commit | Change | Result | Status |
+| --- | --- | --- | --- |
+| `e3ae14b` | incremental ordering value | 216 ms to **73 ms** per move (total 432 s to 146 s) with **byte-identical play**: `--order-eval=1` at depth 6 still scores 19% with the same 19W/81L | kept |
+
+A Rust test asserts the incremental value equals the full evaluation for all 225
+candidate squares and both movers, which is why the match reproduces the same
+games. The overhead over the 12% baseline is now about 3.6x rather than 10x, which
+is what makes it plausible as a default.
+
 ## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
 
 `--order-eval` takes 0 (off), 1 (every node) or 2 (root only).
