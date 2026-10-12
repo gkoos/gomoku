@@ -443,6 +443,16 @@ still holds: the engine never plays a move that its own completed search did not
 rank at least as high. Rapfi used a mean 74 ms of the same clock, so we now spend
 it comparably instead of leaving three quarters of it unused.
 
+A wider clock is spent just as fully - median 256 ms of a 300 ms turn - and the
+score *falls* to **3%** (3W/97L) over the same 100 games and openings, with Rapfi's
+median at 273 ms. That is the expected shape of an equal-time comparison rather
+than a defect of the mechanism: with an effective branching factor of about 2.05,
+Rapfi gains about 2.3x more plies than we do for every doubling of the clock (0.97
+plies against 0.42), so extra time widens the gap even while both engines spend all
+of it. Time is not the lever; the branching factor is. Whether the cut publication
+itself helps or hurts needs a controlled A/B (same clock, publication disabled),
+because the 5%-to-7% step above also changed how much of the clock was spent.
+
 This is an instrument, not a strength feature. Every speed-side lever we tried
 (LMR, history, TT-move, tier) buys *time*, and time was worthless because the
 engine never spent it; a clock is also what turns "fewer nodes" into "more depth"
