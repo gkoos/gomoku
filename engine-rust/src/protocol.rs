@@ -22,7 +22,6 @@ pub struct Options {
     pub mate_stop: bool,
     pub eval_order: u8,
     pub weights: Option<[i32; 8]>,
-    pub movetime: Option<u64>,
 }
 impl Default for Options {
     fn default() -> Self {
@@ -47,7 +46,6 @@ impl Default for Options {
             mate_stop: true,
             eval_order: 1,
             weights: None,
-            movetime: None,
         }
     }
 }
@@ -212,27 +210,9 @@ impl Protocol {
                 search.prefer_root(preferred)?;
             }
             let mut position = None;
-            // Per-move time budget, managed here so the engine itself stays
-            // clock-free. Iterative deepening stops between iterations once the
-            // elapsed time plus a likely next iteration would exceed the budget;
-            // at least one iteration always completes, so a move is always chosen.
-            let budget = self
-                .options
-                .movetime
-                .map(std::time::Duration::from_millis);
-            let started = budget.map(|_| std::time::Instant::now());
-            let mut previous = std::time::Duration::ZERO;
             while let Some(iteration) = search.next_iteration()? {
                 if iteration.result.length > 0 {
                     position = Some(iteration.result.pv[0] as usize);
-                }
-                if let (Some(budget), Some(started)) = (budget, started) {
-                    let elapsed = started.elapsed();
-                    let iteration_time = elapsed - previous;
-                    previous = elapsed;
-                    if elapsed >= budget || elapsed + iteration_time * 2 > budget {
-                        break;
-                    }
                 }
             }
             position.ok_or("Search did not return a move")?

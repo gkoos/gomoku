@@ -321,39 +321,6 @@ Two recorded expectations changed with the default and were updated deliberately
 
 53 Rust tests, 278 JS tests and all six Wasm/native parity suites pass.
 
-## Phase 20 - Time management, and the calibrated comparison (2026-10-07)
-
-The engine was fixed-depth with no clock. That made the Rapfi comparison
-apples-to-oranges and made every speed-oriented technique structurally useless -
-reductions and pruning can only buy *time*, and we had no clock to spend it on.
-
-`--movetime=MS` now time-boxes iterative deepening. It lives in the **native
-protocol layer**, so the engine itself stays clock-free, which matters because
-`Instant::now()` is not implemented on `wasm32-unknown-unknown`: calling it from
-the library aborted every Wasm search (found by bisecting the Wasm parity suite).
-Iterative deepening stops between iterations when the elapsed time plus twice the
-last iteration would exceed the budget, and always completes at least one, so a
-move is always produced. The budget is therefore spent on hard moves (up to about
-1.8x it) and skipped on easy ones.
-
-The calibration changes the picture substantially:
-
-| Comparison | Our score |
-| --- | ---: |
-| equal depth 6, both engines capped at depth 6 | **19%** |
-| equal time, 100 ms per move | 7-8% |
-| equal time, 1 s per move | **5%** |
-
-The depth-capped number flatters us. At depth 6 Rapfi finishes in **1-4 ms and
-78-933 nodes** (from the match `messages.txt`) while we use about 70 ms and
-~20,000 nodes, so at equal time it searches much deeper - and giving *more* time
-widens the gap rather than closing it (7-8% at 100 ms, 5% at 1 s). That is the
-paradigm gap stated quantitatively: our tree is 8-18 moves wide per node where
-Rapfi's threat-conditional generation is about 2.
-
-Equal-time matches need `--rapfi-depth=100` to lift Rapfi's depth cap, since
-otherwise it is held at depth 6 and finishes in milliseconds.
-
 ## Phase 18 - Weight tuning against the external objective (2026-10-07)
 
 Now that the evaluation drives retention, the weights finally affect the score, so
@@ -431,8 +398,6 @@ re-evaluation with an incremental update is the remaining optimisation.
 | --- | ---: |
 | Baseline (handcrafted evaluation, depth 6) | 12% |
 | **Default: evaluation-ordered retention (depth 6)** | **19%** / 18% (2 seeds) |
-| Equal time, 100 ms per move | 7-8% |
-| Equal time, 1 s per move | 5% |
 | Weight tuning (`--weights`) toward stronger twos / weaker threes | 20% |
 | Weight tuning toward stronger threes | 15% |
 | Shallow-evaluation ordering (`--order-eval`), root only | 16% |
