@@ -14,10 +14,13 @@ four tactical extension plies, and 32768 table entries. Rapfi loads the
 configuration and evaluator beside its executable.
 
 This compares strength at specified settings, **not equal thinking time**.
-Depth has different meanings across engines. Our engine does not enforce clocks;
-the manager's one-hour limit per move is a failure guard. Time forfeits, illegal
-moves, crashes, and adjudicated draws are rejected rather than counted as board
-results. Only independently replayed wins or full-board draws enter the report.
+Depth has different meanings across engines. The manager sends `INFO timeout_turn`
+to both engines and our engine honours it (Phase 20 of the [timeline](timeline.md)),
+so a row is a depth comparison only while the clock is generous. The documented
+runs use `tc=0/3600`, an hour per move, which our depth cap never reaches, so those
+recorded scores are depth-capped. Time forfeits, illegal moves, crashes, and
+adjudicated draws are rejected rather than counted as board results. Only
+independently replayed wins or full-board draws enter the report.
 
 ## Prerequisites and options
 
@@ -55,7 +58,9 @@ repository root.
 `Rapfi`), and our engine is always named `Gomoku`. Non-integer `--turn-seconds`
 values are allowed so an opponent's clock can be tuned below one second.
 `--rapfi-depth` only reaches engines that implement the manager's `max_depth`
-extension; engines that honor only the clock play to `--turn-seconds`.
+extension; engines that honor only the clock play to `--turn-seconds`. That clock
+is now sent to and honoured by our engine as well, so a clock-limited row limits
+both sides instead of only the opponent.
 
 ## Resume and artifacts
 

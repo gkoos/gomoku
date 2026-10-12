@@ -283,6 +283,25 @@ impl SearchEngine {
             .set_forcing_moves(enabled)
             .map_err(JsValue::from_str)
     }
+    /// Whole-move node budget; zero leaves the search unbounded.
+    pub fn set_node_budget(&mut self, budget: f64) -> Result<(), JsValue> {
+        if !budget.is_finite() || !(0.0..=1_000_000_000.0).contains(&budget) {
+            return Err(JsValue::from_str(
+                "Node budget must be a finite value from 0 to 1000000000",
+            ));
+        }
+        self.inner
+            .set_node_budget(budget as u64)
+            .map_err(JsValue::from_str)
+    }
+    /// Nodes visited for this move, completed and aborted iterations alike.
+    pub fn total_nodes(&self) -> f64 {
+        self.inner.total_nodes() as f64
+    }
+    /// True when the budget ended deepening before the allocated depth.
+    pub fn budget_exhausted(&self) -> bool {
+        self.inner.budget_exhausted()
+    }
     pub fn fixed_depth(
         &mut self,
         depth: u32,

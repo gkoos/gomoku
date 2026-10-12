@@ -392,6 +392,48 @@ clock, so the extra time does not buy strength directly - what it buys is the
 ability to search deeper, which now pays (Phase 12). Replacing the full child
 re-evaluation with an incremental update is the remaining optimisation.
 
+## Phase 20 - Per-turn clock and node budgets (2026-10-12)
+
+The engine was fixed-depth: `INFO timeout_turn` was parsed only to select the Easy
+root selector, and the earlier `--movetime` attempt (`b8898a5`) was reverted in
+`f155e71` because a match manager drives the clock through the protocol, not
+through argv. This phase puts the limit where the search is (`Search`) and the
+clock where the protocol is (`pbrain-gomoku`).
+
+| Change | Result | Status |
+| --- | --- | --- |
+| whole-move node budget in `Search` (checked per node, aborts the current iteration, keeps the last completed depth) | ends on the exact requested node; depth one is exempt, so a reply always exists | kept |
+| `INFO node_budget N` extension and `SearchEngine.set_node_budget` in Wasm | a machine-independent equal-effort limit that repeats exactly | kept |
+| `INFO timeout_turn N` honoured (stop before an iteration whose projected cost no longer fits) | 100 ms clock used 88 ms, 1 s clock 639 ms, against 9.4 s unbounded | kept |
+
+One move on an empty board with one opponent stone, minimum of three runs:
+
+| Configuration | Move time |
+| --- | ---: |
+| `--depth=10`, unbounded | 9,400 ms |
+| `--depth=10`, `INFO timeout_turn 1000` | 639 ms |
+| `--depth=10`, `INFO timeout_turn 100` | 88 ms |
+| `--depth=10`, `INFO node_budget 12000` | 172 ms |
+| `--depth=6`, unbounded (reference) | 245 ms |
+
+This is an instrument, not a strength feature. Every speed-side lever we tried
+(LMR, history, TT-move, tier) buys *time*, and time was worthless because the
+engine never spent it; a clock is also what turns "fewer nodes" into "more depth"
+and makes those experiments measurable at all. At equal time the engine is
+expected to score **below** the depth-capped 19% (7-8% at a 100 ms clock and 5% at
+1 s were measured earlier), because Rapfi converts the same clock into more depth.
+Any later match result has to state which limit was in force.
+
+The node budget is the honest comparison the protocol never allowed: our depth-6
+search visits 18,221 nodes (d1..d6 = 19/110/423/1056/4572/12041) while Rapfi's own
+log reaches nominal depth 13 on 12,000 nodes in its 100 ms turn. Treated as an
+order-of-magnitude comparison rather than a matched one, that is an effective
+branching factor of about 5.1 (`18,221^(1/6)`) against about 2.05
+(`12,000^(1/13)`), and the profiled node rates in [performance](performance.md)
+are 0.2-1.0M nodes/s against the 169K nodes/s Rapfi reported in the same turn.
+The engine is not slow and not node-starved; it is **wide**. Selectivity is the
+next lever, not speed.
+
 ## Results summary (vs Rapfi depth 6, 100 games, seed 43)
 
 | Configuration | Score |
@@ -436,8 +478,9 @@ NNUE **21%** (depth 4), "stronger twos" weights **51.7-52.4%** (intervals includ
 **Kept:** the Rust/Wasm port and its parity suites; the profiling-driven speed
 work; PVS, aspiration windows, TT, iterative deepening; the tactical stack (VCF,
 VCT, tactical horizon, forcible-move protection, searched defenses); the native
-Gomocup executable and the external-match/loss-analysis harness; the **root policy
-ordering (12% to 17%)** with the portable `GOMPOL1` format; and the
+Gomocup executable and the external-match/loss-analysis harness; the per-turn
+clock and the node budget (`INFO timeout_turn`, `INFO node_budget`, Phase 20); the
+**root policy ordering (12% to 17%)** with the portable `GOMPOL1` format; and the
 **shallow-evaluation candidate ordering (`--order-eval`, 12% to 19%/18%)**, the
 best result and the fix for the retention bottleneck. The browser uses a
 traditional board and applies the policy automatically.

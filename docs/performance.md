@@ -188,3 +188,35 @@ Against the prior search-width build, three warmups and eleven alternating runs 
 | Forcing chain | 6 | 0.0511 | 0.0499 |
 
 These show roughly 1?2% less elapsed time: a modest Node-hosted improvement, not a large speedup claim. Scores, PVs, nodes and cache statistics remain identical on every completed iteration. Native geometry tests verify row-mask mapping and make/undo for all 225 squares and both colors; candidate/state/search parity checks also pass. Reproduce using `npm run wasm:compare -- --baseline=.profiles/row-occupancy-before/gomoku_engine.js` with the saved previous build.
+
+## Node budget and turn clock
+
+`Search` accepts a whole-move node budget (`SearchEngine.set_node_budget` in Wasm,
+`INFO node_budget N` in the native protocol) and the native executable honours
+`INFO timeout_turn N`. Both stop between completed iterations and keep the last
+completed depth, so a limited move is never a partially searched one, and depth
+one is exempt so a reply always exists. The node budget is a count rather than a
+clock, so an equal-effort comparison repeats exactly.
+
+`npm run wasm:budget` reproduces the curve below against the JavaScript search and
+checks that a truncated search ends on the exact requested node.
+
+| Completed depth | Iteration nodes | Cumulative nodes |
+| ---: | ---: | ---: |
+| 1 | 19 | 19 |
+| 2 | 110 | 129 |
+| 3 | 423 | 552 |
+| 4 | 1,056 | 1,608 |
+| 5 | 4,572 | 6,180 |
+| 6 | 12,041 | 18,221 |
+
+Position: our stones 112/128/99 against 113/97/127, depth cap 6, table 32768.
+Successive iterations grow by 2.5-5.8x, which is the factor the clock projection
+uses. The same completed depths are bit-identical with and without a budget, so
+the limit only removes iterations rather than changing them.
+
+For comparison, Rapfi's match log reaches nominal depth 13 on 12,000 nodes in a
+100 ms turn. The node rates recorded above (roughly 0.2-1.0M nodes/s) are well
+above the 169K nodes/s Rapfi reported in the same turn, so the distance between
+the engines is effective search width rather than raw speed.
+

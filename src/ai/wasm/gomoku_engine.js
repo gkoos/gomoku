@@ -230,6 +230,14 @@ export class SearchEngine {
         return ret !== 0;
     }
     /**
+     * True when the budget ended deepening before the allocated depth.
+     * @returns {boolean}
+     */
+    budget_exhausted() {
+        const ret = wasm.searchengine_budget_exhausted(this.__wbg_ptr);
+        return ret !== 0;
+    }
+    /**
      * @param {number} depth
      * @param {boolean} maximizing
      * @param {number} alpha
@@ -323,6 +331,16 @@ export class SearchEngine {
         }
     }
     /**
+     * Whole-move node budget; zero leaves the search unbounded.
+     * @param {number} budget
+     */
+    set_node_budget(budget) {
+        const ret = wasm.searchengine_set_node_budget(this.__wbg_ptr, budget);
+        if (ret[1]) {
+            throw takeFromExternrefTable0(ret[0]);
+        }
+    }
+    /**
      * @param {boolean} enabled
      */
     set_pvs(enabled) {
@@ -330,6 +348,14 @@ export class SearchEngine {
         if (ret[1]) {
             throw takeFromExternrefTable0(ret[0]);
         }
+    }
+    /**
+     * Nodes visited for this move, completed and aborted iterations alike.
+     * @returns {number}
+     */
+    total_nodes() {
+        const ret = wasm.searchengine_total_nodes(this.__wbg_ptr);
+        return ret;
     }
 }
 if (Symbol.dispose) SearchEngine.prototype[Symbol.dispose] = SearchEngine.prototype.free;

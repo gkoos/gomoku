@@ -67,7 +67,9 @@ impl Iteration {
         result
     }
 }
-/// Synchronous iterations. This is not yet a resumable node-budget search.
+/// Synchronous iterations with an optional whole-move node budget. The budget is
+/// checked per node, so a bounded search keeps the last completed line instead of
+/// returning a partially searched depth.
 pub struct Search {
     pub state: Evaluator,
     pub hasher: Hasher,
@@ -81,6 +83,12 @@ pub struct Search {
     path: [u16; 225],
     buffers: Vec<Candidates>,
     nodes: u64,
+    /// Nodes already spent on this move, aborted iterations included.
+    spent: u64,
+    /// Whole-move node budget; zero leaves deepening unbounded.
+    node_budget: u64,
+    /// Set when the budget stopped the search before its allocated depth.
+    exhausted: bool,
     hits: u64,
     cutoffs: u64,
     // Full occupancy and attacker verify identity; proof lengths stay relative
@@ -160,6 +168,9 @@ impl Search {
             path: [0; 225],
             buffers: (0..=max_depth).map(|_| Candidates::default()).collect(),
             nodes: 0,
+            spent: 0,
+            node_budget: 0,
+            exhausted: false,
             hits: 0,
             cutoffs: 0,
             vcf_cache: HashMap::new(),
@@ -196,6 +207,26 @@ impl Search {
         }
         self.protect_forcing = enabled;
         Ok(())
+    }
+    /// Whole-move node budget (0 disables it). Depth one is never bounded, so a
+    /// limited search still completes an iteration and returns a line.
+    pub fn set_node_budget(&mut self, budget: u64) -> Result<(), &'static str> {
+        if budget > 1_000_000_000 {
+            return Err("Node budget must not exceed 1000000000");
+        }
+        if self.nodes != 0 || self.next_depth != 1 {
+            return Err("Node budget must be selected before search starts");
+        }
+        self.node_budget = budget;
+        Ok(())
+    }
+    /// Nodes visited for this move, completed and aborted iterations alike.
+    pub fn total_nodes(&self) -> u64 {
+        self.spent
+    }
+    /// True when the node budget ended deepening before the allocated depth.
+    pub fn budget_exhausted(&self) -> bool {
+        self.exhausted
     }
     /// Diagnostic fixed width; tactical candidates remain protected.
     pub fn set_candidate_width(&mut self, width: usize) -> Result<(), &'static str> {
@@ -326,6 +357,10 @@ impl Search {
         let mut beta = self.previous.score + ASPIRATION_DELTA;
         loop {
             let result = self.minimax(depth, alpha, beta, true, 0)?;
+            // An aborted iteration is discarded, so repeating a window is waste.
+            if self.exhausted {
+                return Ok(result);
+            }
             if result.score <= alpha {
                 alpha = -INFINITY;
             } else if result.score >= beta {
@@ -340,6 +375,12 @@ impl Search {
         if self.done {
             return Ok(None);
         }
+        // A spent budget stops deepening without discarding the completed line.
+        if self.next_depth > 1 && self.node_budget != 0 && self.spent >= self.node_budget {
+            self.exhausted = true;
+            self.done = true;
+            return Ok(None);
+        }
         // Diagnostic fixed searches may use the opposite side at the root.
         self.hasher = Hasher::new(&self.state.black, &self.state.white, self.perspective);
         let depth = self.next_depth;
@@ -347,6 +388,11 @@ impl Search {
         let cutoffs = self.cutoffs;
         self.nodes = 0;
         let result = self.aspiration(depth)?;
+        self.spent += self.nodes;
+        if self.exhausted {
+            self.done = true;
+            return Ok(None);
+        }
         if result.length == 0 {
             self.done = true;
             return Ok(None);
@@ -403,6 +449,13 @@ impl Search {
     fn follows_pv(&self, ply: usize) -> bool {
         ply <= self.previous.length && self.path[..ply] == self.previous.pv[..ply]
     }
+    /// True when visiting another node would exceed the whole-move budget.
+    /// Depth one is exempt, so a limited search always returns a line.
+    fn budget_exceeded(&self) -> bool {
+        self.node_budget != 0
+            && self.next_depth > 1
+            && self.spent + self.nodes >= self.node_budget
+    }
     fn key(&self, depth: usize, ply: usize) -> CacheKey {
         let suffix = if self.follows_pv(ply) && ply < self.previous.length {
             self.previous.pv[ply..self.previous.length].to_vec()
@@ -426,6 +479,10 @@ impl Search {
         exact: bool,
         to_move: bool,
     ) -> ResultLine {
+        // An aborted iteration is discarded, so it must not seed the table.
+        if self.exhausted {
+            return result;
+        }
         if let (Some(table), Some(key)) = (&mut self.table, key) {
             let bound = if exact {
                 Bound::Exact
@@ -535,6 +592,10 @@ impl Search {
         let p = positions(&threats.board, &[0; 8], false)
             .next()
             .expect("cached threat count");
+        if self.budget_exceeded() {
+            self.exhausted = true;
+            return Ok(ResultLine::quiet(0));
+        }
         let token = self.state.make_leaf_move(p, own)?;
         self.hasher.toggle(p, own);
         self.nodes += 1;
@@ -632,6 +693,10 @@ impl Search {
         maximizing: bool,
         ply: usize,
     ) -> Result<ResultLine, &'static str> {
+        if self.budget_exceeded() {
+            self.exhausted = true;
+            return Ok(ResultLine::quiet(0));
+        }
         self.nodes += 1;
         if ply == 0 {
             if let Some(result) = rules::result(&self.state.black, &self.state.white) {
@@ -875,7 +940,7 @@ impl Search {
                 beta = beta.min(child.score);
             }
             let cutoff = beta <= alpha;
-            if self.use_history && ply >= 1 && candidate.tactical == Some(0) {
+            if self.use_history && ply >= 1 && candidate.tactical == Some(0) && !self.exhausted {
                 self.record_move(to_move, candidate.position, ply, depth, cutoff);
             }
             if cutoff {
@@ -1203,5 +1268,114 @@ mod tests {
         );
         assert!(Search::new([0; 8], [0; 8], true, 226, 4, 0).is_err());
         assert!(Search::new([0; 8], [0; 8], true, 8, 226, 0).is_err());
+    }
+    #[test]
+    fn node_budget_stops_mid_iteration_and_keeps_the_last_completed_line() {
+        let b = bits(&[112, 128, 99]);
+        let w = bits(&[113, 97, 127]);
+        let mut reference = Search::new(b, w, true, 6, 4, 32768).unwrap();
+        let mut depths = Vec::new();
+        while let Some(iteration) = reference.next_iteration().unwrap() {
+            depths.push(iteration);
+        }
+        assert!(depths.len() >= 4);
+        // A budget inside the third iteration aborts it instead of overshooting:
+        // the first iteration is exempt and the second one completes.
+        let budget = depths[0].nodes + depths[1].nodes + depths[2].nodes / 2;
+        let mut bounded = Search::new(b, w, true, 6, 4, 32768).unwrap();
+        bounded.set_node_budget(budget).unwrap();
+        let mut completed = Vec::new();
+        while let Some(iteration) = bounded.next_iteration().unwrap() {
+            completed.push(iteration);
+        }
+        assert_eq!(completed.len(), 2);
+        for (bounded, reference) in completed.iter().zip(&depths) {
+            assert_eq!(bounded.depth, reference.depth);
+            assert_eq!(bounded.result.score, reference.result.score);
+            assert_eq!(bounded.nodes, reference.nodes);
+            assert_eq!(
+                &bounded.result.pv[..bounded.result.length],
+                &reference.result.pv[..reference.result.length]
+            );
+        }
+        // The aborted iteration is discarded, and never overshoots the budget.
+        assert!(bounded.budget_exhausted());
+        assert_eq!(bounded.total_nodes(), budget);
+    }
+    #[test]
+    fn node_budget_never_bounds_the_first_iteration() {
+        let b = bits(&[112, 128, 99]);
+        let w = bits(&[113, 97, 127]);
+        let first = Search::new(b, w, true, 6, 4, 32768)
+            .unwrap()
+            .next_iteration()
+            .unwrap()
+            .unwrap();
+        let mut bounded = Search::new(b, w, true, 6, 4, 32768).unwrap();
+        bounded.set_node_budget(1).unwrap();
+        let iteration = bounded.next_iteration().unwrap().unwrap();
+        assert_eq!(iteration.depth, 1);
+        assert_eq!(iteration.nodes, first.nodes);
+        assert_eq!(iteration.result.score, first.result.score);
+        assert_eq!(
+            &iteration.result.pv[..iteration.result.length],
+            &first.result.pv[..first.result.length]
+        );
+        assert_eq!(bounded.total_nodes(), first.nodes);
+        assert!(bounded.next_iteration().unwrap().is_none());
+        assert!(bounded.budget_exhausted());
+    }
+    #[test]
+    fn node_budget_is_validated_locked_and_deterministic() {
+        let b = bits(&[112, 128, 99]);
+        let w = bits(&[113, 97, 127]);
+        let unbounded = || {
+            let mut search = Search::new(b, w, true, 6, 4, 32768).unwrap();
+            let mut lines = Vec::new();
+            while let Some(iteration) = search.next_iteration().unwrap() {
+                lines.push(iteration.result);
+            }
+            lines
+        };
+        let mut search = Search::new(b, w, true, 6, 4, 32768).unwrap();
+        assert!(search.set_node_budget(1_000_000_001).is_err());
+        search.set_node_budget(0).unwrap();
+        assert!(!search.budget_exhausted());
+        search.next_iteration().unwrap();
+        assert!(search.set_node_budget(4096).is_err());
+        // A deterministic budget repeats exactly, and a generous budget is neutral.
+        let run = |budget: u64| {
+            let mut search = Search::new(b, w, true, 6, 4, 32768).unwrap();
+            search.set_node_budget(budget).unwrap();
+            let mut lines = Vec::new();
+            while let Some(iteration) = search.next_iteration().unwrap() {
+                lines.push(iteration.result);
+            }
+            (lines, search.total_nodes(), search.budget_exhausted())
+        };
+        let (first, nodes, exhausted) = run(4096);
+        let (second, repeat_nodes, repeat_exhausted) = run(4096);
+        assert_eq!(first.len(), second.len());
+        assert_eq!(nodes, repeat_nodes);
+        assert_eq!(exhausted, repeat_exhausted);
+        for (first, second) in first.iter().zip(&second) {
+            assert_eq!(first.score, second.score);
+            assert_eq!(
+                &first.pv[..first.length],
+                &second.pv[..second.length]
+            );
+        }
+        let (neutral, neutral_nodes, neutral_exhausted) = run(1_000_000);
+        let reference = unbounded();
+        assert_eq!(neutral.len(), reference.len());
+        assert!(!neutral_exhausted);
+        assert!(neutral_nodes > nodes);
+        for (neutral, reference) in neutral.iter().zip(&reference) {
+            assert_eq!(neutral.score, reference.score);
+            assert_eq!(
+                &neutral.pv[..neutral.length],
+                &reference.pv[..reference.length]
+            );
+        }
     }
 }

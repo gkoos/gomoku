@@ -70,4 +70,38 @@ assert.equal(result.status, 0, result.stderr || String(result.error));
 assert.deepEqual(result.stdout.trimEnd().split(/\r?\n/), expected);
 const invalid = spawnSync(executable, ['--depth=0'], { encoding: 'utf8' });
 assert.equal(invalid.status, 1); assert.equal(invalid.stdout, '');
-console.log(`Native protocol passed: live flushed handshake and ${boards.length} native/Wasm move comparisons, both colors, reversed BOARD order, resets, INFO depth, and invalid CLI configuration.`);
+// INFO node_budget must reach the search: one node keeps the exempt first
+// iteration, a large budget is neutral, and the outcome cannot depend on timing.
+const budgetBoard = boards[13];
+const budgetBlack = budgetBoard.reduce((sum, c) => sum + (c !== 0), 0) % 2 === 0;
+const budgetBlocks = [
+  'INFO max_depth 1\nINFO node_budget 0\n',
+  'INFO max_depth 6\nINFO node_budget 1\n',
+  'INFO max_depth 6\nINFO node_budget 0\n',
+  'INFO max_depth 6\nINFO node_budget 1000000000\n',
+  'INFO max_depth 6\nINFO node_budget 1\n',
+];
+let budgetInput = 'START 15\n';
+for (const info of budgetBlocks) {
+  budgetInput += info + 'RESTART\nBOARD\n';
+  for (let p = 224; p >= 0; p--) if (budgetBoard[p]) budgetInput += `${p % 15},${Math.floor(p / 15)},${(budgetBoard[p] === 1) === budgetBlack ? 1 : 2}\n`;
+  budgetInput += 'DONE\n';
+}
+budgetInput += 'END\n';
+const budgetResult = spawnSync(executable, ['--depth=6'], { input: budgetInput, encoding: 'utf8', timeout: 30000 });
+assert.equal(budgetResult.status, 0, budgetResult.stderr || String(budgetResult.error));
+const budgetReplies = budgetResult.stdout.trimEnd().split(/\r?\n/);
+// Each RESTART replies OK, so only every second line carries a move.
+assert.equal(budgetReplies.length, 1 + 2 * budgetBlocks.length, budgetResult.stdout);
+assert.equal(budgetReplies[0], 'OK');
+assert.equal(budgetReplies[1], 'OK');
+const [depthOne, oneNode, unbounded, generous, repeat] = budgetReplies
+  .slice(2)
+  .filter((_, index) => index % 2 === 0);
+assert.equal(oneNode, depthOne, 'INFO node_budget 1 must equal the depth-one reply');
+assert.equal(generous, unbounded, 'a generous INFO node_budget must be neutral');
+assert.equal(repeat, depthOne, 'a node budget must be a node count, not a clock');
+// Without a difference the equalities above would hold even if the budget were
+// ignored, so this board has to be depth-sensitive.
+assert.notEqual(depthOne, unbounded, 'the deeper reply must differ on this board');
+console.log(`Native protocol passed: live flushed handshake and ${boards.length} native/Wasm move comparisons, both colors, reversed BOARD order, resets, INFO depth and node budgets, and invalid CLI configuration.`);

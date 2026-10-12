@@ -41,6 +41,10 @@ export class SearchEngine {
     free(): void;
     [Symbol.dispose](): void;
     black_to_move(): boolean;
+    /**
+     * True when the budget ended deepening before the allocated depth.
+     */
+    budget_exhausted(): boolean;
     fixed_depth(depth: number, maximizing: boolean, alpha: number, beta: number): Float64Array;
     hash_words(): Uint32Array;
     history_length(): number;
@@ -49,7 +53,15 @@ export class SearchEngine {
     occupancy(black: boolean): Uint32Array;
     prefer_root(position: number): void;
     set_forcing_moves(enabled: boolean): void;
+    /**
+     * Whole-move node budget; zero leaves the search unbounded.
+     */
+    set_node_budget(budget: number): void;
     set_pvs(enabled: boolean): void;
+    /**
+     * Nodes visited for this move, completed and aborted iterations alike.
+     */
+    total_nodes(): number;
 }
 
 /**
@@ -151,6 +163,7 @@ export interface InitOutput {
     readonly positionhasher_words: (a: number) => [number, number];
     readonly score_root_move: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => [number, number, number];
     readonly searchengine_black_to_move: (a: number) => number;
+    readonly searchengine_budget_exhausted: (a: number) => number;
     readonly searchengine_fixed_depth: (a: number, b: number, c: number, d: number, e: number) => [number, number, number, number];
     readonly searchengine_hash_words: (a: number) => [number, number];
     readonly searchengine_history_length: (a: number) => number;
@@ -159,7 +172,9 @@ export interface InitOutput {
     readonly searchengine_occupancy: (a: number, b: number) => [number, number];
     readonly searchengine_prefer_root: (a: number, b: number) => [number, number];
     readonly searchengine_set_forcing_moves: (a: number, b: number) => [number, number];
+    readonly searchengine_set_node_budget: (a: number, b: number) => [number, number];
     readonly searchengine_set_pvs: (a: number, b: number) => [number, number];
+    readonly searchengine_total_nodes: (a: number) => number;
     readonly searchstate_analyze_pattern: (a: number, b: number, c: number, d: number) => [number, number, number];
     readonly searchstate_candidates: (a: number, b: number) => [number, number];
     readonly searchstate_has_immediate_threat: (a: number, b: number) => number;

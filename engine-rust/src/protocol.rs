@@ -1,5 +1,19 @@
 use gomoku_engine::{bitboards::Bitboard, incremental::Evaluator, root, rules, search::Search};
 use std::io::{self, BufRead, Write};
+use std::time::{Duration, Instant};
+
+/// Projected growth between successive iterations. The last completed iteration
+/// is multiplied by this factor to decide whether another one can still fit.
+const TURN_TIME_GROWTH: u32 = 4;
+
+/// Largest accepted whole-move node budget.
+const MAX_NODE_BUDGET: u64 = 1_000_000_000;
+
+/// Stop before starting an iteration whose projected cost no longer fits. Any
+/// unused remainder of the turn clock is cheaper than overrunning it.
+fn fits_turn(elapsed: Duration, last: Duration, budget: Duration) -> bool {
+    elapsed + last * TURN_TIME_GROWTH <= budget
+}
 
 pub struct Options {
     pub depth: usize,
@@ -93,6 +107,10 @@ pub struct Protocol {
     rule_error: bool,
     depth_error: bool,
     fast: bool,
+    /// The manager's per-move clock; none means the turn is unbounded.
+    turn_millis: Option<u64>,
+    /// Deterministic whole-move node budget; zero means unbounded.
+    node_budget: u64,
 }
 impl Protocol {
     pub fn new(options: Options) -> Self {
@@ -105,6 +123,8 @@ impl Protocol {
             rule_error: false,
             depth_error: false,
             fast: false,
+            turn_millis: None,
+            node_budget: 0,
         }
     }
     fn clear(&mut self) {
@@ -125,7 +145,21 @@ impl Protocol {
                 }
                 _ => self.depth_error = true,
             },
-            "timeout_turn" => self.fast = value == "0",
+            "timeout_turn" => {
+                // A positive value is the per-move clock; zero means no limit.
+                self.turn_millis = value.parse::<u64>().ok().filter(|ms| *ms > 0);
+                self.fast = value == "0";
+            }
+            // Extension: a whole-move node budget for equal-effort comparisons
+            // that do not depend on machine speed. Managers that do not send it
+            // are unaffected.
+            "node_budget" => {
+                self.node_budget = value
+                    .parse::<u64>()
+                    .ok()
+                    .filter(|nodes| *nodes <= MAX_NODE_BUDGET)
+                    .unwrap_or(0);
+            }
             _ => {} // Metadata/hints: no reply is permitted for INFO.
         }
     }
@@ -209,8 +243,24 @@ impl Protocol {
             if let Some(preferred) = prepared.preferred {
                 search.prefer_root(preferred)?;
             }
+            search.set_node_budget(self.node_budget)?;
+            let budget = self.turn_millis.map(Duration::from_millis);
+            let start = Instant::now();
+            let mut last_iteration = Duration::ZERO;
             let mut position = None;
-            while let Some(iteration) = search.next_iteration()? {
+            loop {
+                // The completed line is kept, so stopping early only leaves time
+                // unused; starting a longer iteration could overrun the clock.
+                if let Some(budget) = budget
+                    && !fits_turn(start.elapsed(), last_iteration, budget)
+                {
+                    break;
+                }
+                let before = Instant::now();
+                let Some(iteration) = search.next_iteration()? else {
+                    break;
+                };
+                last_iteration = before.elapsed();
                 if iteration.result.length > 0 {
                     position = Some(iteration.result.pv[0] as usize);
                 }
@@ -481,6 +531,66 @@ mod tests {
         assert!(p.fast);
         p.command("INFO timeout_turn 1000");
         assert!(!p.fast);
+    }
+    #[test]
+    fn turn_time_projection_stops_before_an_iteration_that_cannot_fit() {
+        let budget = Duration::from_millis(100);
+        // The first iteration is always attempted, with no time measured yet.
+        assert!(fits_turn(Duration::ZERO, Duration::ZERO, budget));
+        assert!(fits_turn(
+            Duration::from_millis(15),
+            Duration::from_millis(15),
+            budget
+        ));
+        // A 70 ms iteration after 85 ms spent would overrun 100 ms.
+        assert!(!fits_turn(
+            Duration::from_millis(85),
+            Duration::from_millis(70),
+            budget
+        ));
+        // Successive iterations grow, so the last one is projected forward.
+        assert!(!fits_turn(
+            Duration::from_millis(60),
+            Duration::from_millis(20),
+            budget
+        ));
+    }
+    #[test]
+    fn info_clock_and_node_budget_are_parsed_and_ignore_unusable_values() {
+        let mut p = protocol();
+        assert_eq!(p.command("INFO timeout_turn 100"), (None, false));
+        assert_eq!(p.turn_millis, Some(100));
+        assert!(!p.fast);
+        assert_eq!(p.command("INFO node_budget 12000"), (None, false));
+        assert_eq!(p.node_budget, 12000);
+        // Zero and unusable values leave the turn unbounded.
+        p.command("INFO timeout_turn 0");
+        assert_eq!(p.turn_millis, None);
+        assert!(p.fast);
+        p.command("INFO timeout_turn soon");
+        assert_eq!(p.turn_millis, None);
+        p.command("INFO node_budget 2000000000");
+        assert_eq!(p.node_budget, 0);
+        p.command("INFO node_budget soon");
+        assert_eq!(p.node_budget, 0);
+    }
+    #[test]
+    fn node_budget_ends_a_protocol_turn_after_the_exempt_first_iteration() {
+        let played = |info: &[&str]| {
+            let mut p = protocol();
+            for line in info {
+                assert_eq!(p.command(line), (None, false));
+            }
+            assert_eq!(reply(&mut p, "START 15"), "OK");
+            assert_eq!(reply(&mut p, "BEGIN"), "7,7");
+            reply(&mut p, "TURN 8,7")
+        };
+        // One node still completes the exempt first iteration, so the reply has
+        // to match the depth-one reference exactly.
+        assert_eq!(
+            played(&["INFO max_depth 1"]),
+            played(&["INFO max_depth 6", "INFO node_budget 1"])
+        );
     }
     #[test]
     fn protocol_stream_has_only_required_replies_and_stops_at_end() {
