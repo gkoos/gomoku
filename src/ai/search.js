@@ -214,6 +214,9 @@ export function minimaxAlphaBeta(
     lines,
     evaluationState?.winningSquareBitboards,
     forcingSquares,
+    // Mirror the engine's default: order quiet candidates by the shallow
+    // evaluation of the resulting position.
+    true,
   );
   if (candidates.length === 0) {
     return remember({ score: 0, move: null }, EXACT);

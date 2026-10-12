@@ -91,20 +91,19 @@ this depth. It is a diagnostic and off by default.
 position after the move** instead of by the density priority, inserting that value
 into the ordering key between the policy and the priority. The value comes from the
 **active** evaluator, so `--weights` and `--pattern` reach the retention decision.
-`N` is 0 (off), 1 (every node) or 2 (root only). It is the fix for the bottleneck
+`N` is 1 (default, every node), 0 (off) or 2 (root only). It fixes the bottleneck
 the [strategic diagnostic](strategic-diagnostic.md) identified: retention was
 decided by a density heuristic that kept Rapfi's move in its top eight only 36% of
 the time, while the evaluation keeps it there 79% of the time. Against Rapfi depth
-6 `N=1` scores **19%** (19W/81L) on seed 43 and **18%** (18W/82L) on seed 7, against
-baselines of 12% and 11% and the root policy's 17% - the best result in the
-project - at 216 ms per move; `N=2` scores 16% at 61 ms. Combining `N=1` with the
-policy lowers the score to 15%, because the policy imitates our own (biased)
-search choices. Loading the pattern value nets as well (`--pattern=...`) gives 20%
-for the self-play-trained net and 23%/16% on two seeds for the Rapfi-distilled one,
-so neither reliably beats the handcrafted evaluation. With it, depth pays
-monotonically: `--order-eval=1` scores 19% at depth 6, 22% at depth 8 and 28% at
-depth 10, against 12% for the depth-6 baseline. It is opt-in; the default path is
-unchanged.
+6 the default scores **19%** (19W/81L) on seed 43 and **18%** (18W/82L) on seed 7,
+against baselines of 12% and 11% - the best result in the project for a config
+whose cost, after the incremental child evaluation, is about 73 ms per move. The
+root-only mode scores 16% at 61 ms. Combining it with the policy lowers the score
+to 15%, because the policy imitates our own (biased) search choices; loading the
+pattern value nets gives 20% for the self-play-trained net and 23%/16% on two seeds
+for the Rapfi-distilled one, so neither reliably beats the handcrafted evaluation.
+With it, depth pays monotonically: 19% at depth 6, 22% at depth 8 and 28% at depth
+10.
 `--root-width` overrides the candidate cap at the root only, leaving deeper nodes
 on the depth policy, and is still bounded by the same 30/50 generation cap.
 

@@ -404,7 +404,9 @@ test('real transpositions reduce visited nodes while preserving the completed an
       'black',
       'white',
       null,
-      4,
+      // Depth five: with evaluation ordering on, depth four on this fixture
+      // completes without a transposition, so it no longer exercises the table.
+      5,
       {
         useTranspositionTable: enabled,
         onIteration: (r) => iterations.push(r),

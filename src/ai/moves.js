@@ -1,6 +1,7 @@
 import { BOARD_SIZE, BOARD_CELLS } from '../core/constants.js';
 
 import { createLineBitboards, findWinningSquares } from './line-bitboards.js';
+import { evaluatePosition } from './evaluation.js';
 
 const ROW_MASK = (1 << BOARD_SIZE) - 1;
 const SOURCE_COLUMNS = Array.from({ length: BOARD_SIZE }, (_, col) => {
@@ -30,6 +31,7 @@ export function generateCandidateMoves(
   lineBitboards = null,
   winningSquareBitboards = null,
   forcingSquares = null,
+  evalOrder = false,
 ) {
   const candidates = [];
   const occupiedRows = new Uint16Array(BOARD_SIZE);
@@ -198,15 +200,33 @@ export function generateCandidateMoves(
     const opponentWin = (opponentWins[slot] & bit) !== 0;
     candidate.tactical = ownWin ? 2 : opponentWin ? 1 : 0;
     if (candidate.tactical || (forcingSquares?.[slot] & bit)) tacticalCount++;
+    // Shallow evaluation of the resulting position, from the mover's view. Only
+    // attached when evaluation ordering is requested, mirroring the Rust key.
+    if (evalOrder) {
+      if (candidate.tactical !== 0) {
+        candidate.evalScore = 0;
+      } else {
+        const ownBoard = playerColor === 'black' ? blackBitboard : whiteBitboard;
+        const opponentBoard = playerColor === 'black' ? whiteBitboard : blackBitboard;
+        const nextOwn = Uint32Array.from(ownBoard);
+        nextOwn[slot] |= bit;
+        candidate.evalScore =
+          playerColor === 'black'
+            ? evaluatePosition(nextOwn, opponentBoard, 'black')
+            : evaluatePosition(opponentBoard, nextOwn, 'white');
+      }
+    }
   }
 
-  // Wins precede blocks, which precede positional moves. Keep all tactics even
-  // when they exceed the usual branching limit.
+  // Wins precede blocks, which precede forcing attacks, then the shallow
+  // evaluation, then positional moves. Keep all tactics even when they exceed the
+  // usual branching limit.
   candidates.sort(
     (a, b) =>
       b.tactical - a.tactical ||
       Number(b.tactical === 0 && !!(forcingSquares?.[b.position >>> 5] & (1 << (b.position & 31)))) -
         Number(a.tactical === 0 && !!(forcingSquares?.[a.position >>> 5] & (1 << (a.position & 31)))) ||
+      ((b.evalScore ?? 0) - (a.evalScore ?? 0)) ||
       b.priority - a.priority ||
       ranks[a.position] - ranks[b.position],
   );

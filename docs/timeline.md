@@ -293,6 +293,34 @@ candidate squares and both movers, which is why the match reproduces the same
 games. The overhead over the 12% baseline is now about 3.6x rather than 10x, which
 is what makes it plausible as a default.
 
+## Phase 17 - Evaluation ordering becomes the default (2026-10-07)
+
+The ordering is now **on by default** in the Rust search core, the Wasm
+`SearchEngine` and `MoveEngine`, the native CLI (`--order-eval` now defaults to 1)
+and the JS fallback search. The JS fallback mirrors it in `src/ai/moves.js` behind
+an `evalOrder` argument that defaults to off, so the plain candidate generation the
+moves-parity suite checks is unchanged, while the JS search passes it on.
+
+| Configuration (seed 43, depth 6) | Score |
+| --- | ---: |
+| previous default | 12% |
+| **new default** | **19%** |
+
+A plain `node scripts/external-match.js` with no flags now scores 19%, and the
+browser uses the same engine.
+
+Two recorded expectations changed with the default and were updated deliberately:
+
+- the JS engine baselines (`test/fixtures/engine-baseline.json`) were regenerated
+  through a new documented path, `UPDATE_BASELINES=1 node --test
+  test/engine-baseline.test.js`;
+- the transposition test moved from depth 4 to depth 5 on its fixture, because with
+  the improved ordering depth 4 completes without a transposition. The table still
+  pays at depth 5 (4751 to 3363 nodes, 43 cutoffs) and depth 6 (10440 to 6747, 136
+  cutoffs), which the probe in this phase confirmed.
+
+53 Rust tests, 278 JS tests and all six Wasm/native parity suites pass.
+
 ## Phase 13 - Where the ordering gain comes from, and what it costs (2026-10-07)
 
 `--order-eval` takes 0 (off), 1 (every node) or 2 (root only).

@@ -43,7 +43,7 @@ impl Default for Options {
             tt_move: false,
             initiative: 0,
             mate_stop: true,
-            eval_order: 0,
+            eval_order: 1,
         }
     }
 }

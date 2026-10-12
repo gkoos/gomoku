@@ -175,7 +175,7 @@ impl Search {
             use_history: false,
             use_tt_move: false,
             stop_on_mate: true,
-            use_eval_order: false,
+            use_eval_order: true,
             eval_order_root_only: false,
             history: [[0; 225]; 2],
             counter: [[u16::MAX; 225]; 2],
