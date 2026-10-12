@@ -157,11 +157,14 @@ rather than full Gomocup tournament compliance.
 `INFO max_depth` caps the depth, `INFO timeout_turn` caps the per-move clock and
 `INFO node_budget` caps nodes per move; a search stops at whichever limit comes
 first. Iterative deepening is synchronous, so the clock is only checked between
-completed iterations: the cost of a depth grows by roughly 3-6x, so the last
-completed iteration is projected forward by 4x and a turn stops early instead of
-overrunning the manager's limit. The first iteration is never bounded, so a reply
-is always available. `INFO node_budget` is our own extension and counts nodes
-rather than time, so an equal-effort comparison repeats exactly on any machine.
+completed iterations: the cost of a depth grows by a median of 2.6x and up to
+9.6x, so the last completed iteration is projected forward by 4x **against 70% of
+the clock**. The remaining 30% is the reserve for growth beyond the projection,
+because overrunning the manager's clock loses the game; Rapfi's own
+OptiTime/MaxTime pair keeps a similar reserve. The first iteration is never
+bounded, so a reply is always available. `INFO node_budget` is our own extension
+and counts nodes rather than time, so an equal-effort comparison repeats exactly
+on any machine.
 The nodes of the main search are counted; the tactical VCF/VCT horizon keeps its
 own internal budget. Memory hints, asynchronous stop/ponder commands and
 `INFO timeout_match` (whole-game time, which is not allocated across moves) are
@@ -169,13 +172,15 @@ still not enforced. An `END` received during a search is processed after that
 search finishes. Browser behavior is unaffected.
 
 Measured on an empty board with one opponent stone, `--depth=10` without a limit
-took 9.4 s for one move, while `INFO timeout_turn 1000` took 0.64 s and
-`INFO timeout_turn 100` took 0.088 s in the same position, and
-`INFO node_budget 12000` took 0.18 s. The per-turn clock is therefore the usable
-default in a timed match, and the depth cap stays a safety bound. An equal-effort
-comparison is easier to reproduce by nodes where the opponent reports them: Rapfi
-prints its per-move node count in its `-msg` log, and our engine accepts the same
-budget through `INFO node_budget N`.
+took 7.3 s for one move, while `INFO timeout_turn 1000` took 0.43 s and
+`INFO timeout_turn 100` took 0.068 s in the same position, and
+`INFO node_budget 12000` took 0.12 s. Across the harness's 24 openings the reserve
+keeps the worst turn under half of a 100 ms clock (47%) instead of the 94% a
+whole-clock projection reached, at the same median depth. The per-turn clock is
+therefore the usable default in a timed match, and the depth cap stays a safety
+bound. An equal-effort comparison is easier to reproduce by nodes where the
+opponent reports them: Rapfi prints its per-move node count in its `-msg` log, and
+our engine accepts the same budget through `INFO node_budget N`.
 
 [c-gomoku-cli](https://github.com/dhbloo/c-gomoku-cli) supports board size, rules,
 paired openings, executable arguments, and the `INFO max_depth` extension.

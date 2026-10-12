@@ -6,13 +6,18 @@ use std::time::{Duration, Instant};
 /// is multiplied by this factor to decide whether another one can still fit.
 const TURN_TIME_GROWTH: u32 = 4;
 
+/// Share of the turn clock the projection may plan against. The reserve absorbs
+/// growth beyond the projection: overrunning the manager's clock loses the game,
+/// and Rapfi's own OptiTime/MaxTime pair uses the same 63-70% split.
+const TURN_TIME_PLAN_PERCENT: u32 = 70;
+
 /// Largest accepted whole-move node budget.
 const MAX_NODE_BUDGET: u64 = 1_000_000_000;
 
-/// Stop before starting an iteration whose projected cost no longer fits. Any
-/// unused remainder of the turn clock is cheaper than overrunning it.
-fn fits_turn(elapsed: Duration, last: Duration, budget: Duration) -> bool {
-    elapsed + last * TURN_TIME_GROWTH <= budget
+/// Start another iteration only while it is projected to fit in the planning
+/// share of the clock. Any unused remainder is cheaper than a lost game.
+fn fits_turn(elapsed: Duration, last: Duration, clock: Duration) -> bool {
+    elapsed + last * TURN_TIME_GROWTH <= clock * TURN_TIME_PLAN_PERCENT / 100
 }
 
 pub struct Options {
@@ -533,26 +538,28 @@ mod tests {
         assert!(!p.fast);
     }
     #[test]
-    fn turn_time_projection_stops_before_an_iteration_that_cannot_fit() {
-        let budget = Duration::from_millis(100);
+    fn turn_time_projection_reserves_part_of_the_clock() {
+        let clock = Duration::from_millis(100);
         // The first iteration is always attempted, with no time measured yet.
-        assert!(fits_turn(Duration::ZERO, Duration::ZERO, budget));
+        assert!(fits_turn(Duration::ZERO, Duration::ZERO, clock));
+        // 20 ms spent with a 10 ms last iteration fits the 70 ms planning share.
         assert!(fits_turn(
-            Duration::from_millis(15),
-            Duration::from_millis(15),
-            budget
+            Duration::from_millis(20),
+            Duration::from_millis(10),
+            clock
         ));
-        // A 70 ms iteration after 85 ms spent would overrun 100 ms.
+        // The same state against the full 100 ms would start an iteration that
+        // can still grow past the remaining 30 ms, so the reserve stops it.
+        assert!(!fits_turn(
+            Duration::from_millis(20),
+            Duration::from_millis(20),
+            clock
+        ));
+        // A 70 ms iteration after 85 ms spent would overrun 100 ms anyway.
         assert!(!fits_turn(
             Duration::from_millis(85),
             Duration::from_millis(70),
-            budget
-        ));
-        // Successive iterations grow, so the last one is projected forward.
-        assert!(!fits_turn(
-            Duration::from_millis(60),
-            Duration::from_millis(20),
-            budget
+            clock
         ));
     }
     #[test]

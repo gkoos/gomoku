@@ -404,17 +404,29 @@ clock where the protocol is (`pbrain-gomoku`).
 | --- | --- | --- |
 | whole-move node budget in `Search` (checked per node, aborts the current iteration, keeps the last completed depth) | ends on the exact requested node; depth one is exempt, so a reply always exists | kept |
 | `INFO node_budget N` extension and `SearchEngine.set_node_budget` in Wasm | a machine-independent equal-effort limit that repeats exactly | kept |
-| `INFO timeout_turn N` honoured (stop before an iteration whose projected cost no longer fits) | 100 ms clock used 88 ms, 1 s clock 639 ms, against 9.4 s unbounded | kept |
+| `INFO timeout_turn N` honoured (stop before an iteration whose projected cost no longer fits) | 100 ms clock used 68 ms, 1 s clock 433 ms, against 7.3 s unbounded | kept |
 
 One move on an empty board with one opponent stone, minimum of three runs:
 
 | Configuration | Move time |
 | --- | ---: |
-| `--depth=10`, unbounded | 9,400 ms |
-| `--depth=10`, `INFO timeout_turn 1000` | 639 ms |
-| `--depth=10`, `INFO timeout_turn 100` | 88 ms |
-| `--depth=10`, `INFO node_budget 12000` | 172 ms |
-| `--depth=6`, unbounded (reference) | 245 ms |
+| `--depth=10`, unbounded | 7,290 ms |
+| `--depth=10`, `INFO timeout_turn 1000` | 433 ms |
+| `--depth=10`, `INFO timeout_turn 100` | 68 ms |
+| `--depth=10`, `INFO node_budget 12000` | 120 ms |
+| `--depth=6`, unbounded (reference) | 140 ms |
+
+The first clock rule projected against the whole clock. Timing every iteration on
+the harness's own 24 openings showed why that is unsafe: growth between iterations
+has a median of 2.6x but a maximum of 9.6x, and the worst run started an iteration
+that pushed the turn to **94%** of a 100 ms clock - a forfeit waiting to happen.
+Planning against **70%** of the clock lowers that worst case to 47% (63% at 1 s)
+and costs no median depth at any clock tested, so the reserve is what ships. The
+same measurement shows the other half of the problem: at a 100 ms clock the median
+completed depth is only **4**, because the next iteration (about 62 ms) cannot be
+projected to fit. Using the aborted iteration's best root move - what Rapfi does
+when its own MaxTime cuts an iteration - is the follow-up that would spend that
+time, and the node instrument is what will make it measurable.
 
 This is an instrument, not a strength feature. Every speed-side lever we tried
 (LMR, history, TT-move, tier) buys *time*, and time was worthless because the

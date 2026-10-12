@@ -195,8 +195,10 @@ These show roughly 1?2% less elapsed time: a modest Node-hosted improvement, not
 `INFO node_budget N` in the native protocol) and the native executable honours
 `INFO timeout_turn N`. Both stop between completed iterations and keep the last
 completed depth, so a limited move is never a partially searched one, and depth
-one is exempt so a reply always exists. The node budget is a count rather than a
-clock, so an equal-effort comparison repeats exactly.
+one is exempt so a reply always exists. The clock projection plans against 70% of
+the clock and reserves the rest, because iteration cost grows by a median of 2.6x
+and up to 9.6x. The node budget is a count rather than a clock, so an equal-effort
+comparison repeats exactly.
 
 `npm run wasm:budget` reproduces the curve below against the JavaScript search and
 checks that a truncated search ends on the exact requested node.
