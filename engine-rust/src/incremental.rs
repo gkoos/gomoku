@@ -138,6 +138,57 @@ impl Evaluator {
         }
         crate::evaluation::evaluate_with(black, white, mover_black, &self.weights)
     }
+    /// Incremental ordering value for playing `position`, from the mover's view.
+    /// Reuses the maintained per-square contributions, so only the squares whose
+    /// pattern changes are re-analysed. Falls back to a full evaluation when a
+    /// pattern net is loaded, because a net's value is not a linear sum of
+    /// pattern contributions.
+    pub fn ordering_value_after(&self, position: usize, mover_black: bool) -> i32 {
+        if self.pattern.is_some() {
+            let mut own = if mover_black { self.black } else { self.white };
+            own[position >> 5] |= 1 << (position & 31);
+            let (black, white) = if mover_black {
+                (own, self.white)
+            } else {
+                (self.black, own)
+            };
+            return self.ordering_value(&black, &white, mover_black);
+        }
+        let mut black = self.black;
+        let mut white = self.white;
+        if mover_black {
+            black[position >> 5] |= 1 << (position & 31);
+        } else {
+            white[position >> 5] |= 1 << (position & 31);
+        }
+        let g = geometry();
+        let mut total = self.total;
+        for &index in &g.affected[position][..g.affected_lengths[position]] {
+            let square = index >> 2;
+            let is_black = if square == position {
+                mover_black
+            } else if contains(&self.black, square) {
+                true
+            } else if contains(&self.white, square) {
+                false
+            } else {
+                continue;
+            };
+            let pattern = if is_black {
+                crate::patterns::analyze(&black, &white, square, index & 3)
+            } else {
+                crate::patterns::analyze(&white, &black, square, index & 3)
+            };
+            let signed = if is_black {
+                pattern.score_with(&self.weights)
+            } else {
+                -pattern.score_with(&self.weights)
+            };
+            total += signed - self.scores[index];
+        }
+        let value = if mover_black { total } else { -total };
+        value.clamp(-MAX_STATIC_SCORE, MAX_STATIC_SCORE)
+    }
     pub fn score_for_turn(&self, black_to_move: bool) -> i32 {
         if let Some(net) = &self.pattern {
             return net.score(&self.black, &self.white, black_to_move, self.perspective_black);
@@ -358,6 +409,42 @@ mod tests {
         assert_ne!(first, third);
         assert!(state.undo_move(first).is_err());
         state.undo_move(third).unwrap();
+    }
+    #[test]
+    fn incremental_ordering_value_matches_a_full_evaluation() {
+        let mut black = [0; 8];
+        for p in [97, 98, 99, 112, 113] {
+            black[p >> 5] |= 1 << (p & 31);
+        }
+        let mut white = [0; 8];
+        for p in [111, 126, 127, 128, 143] {
+            white[p >> 5] |= 1 << (p & 31);
+        }
+        let state = Evaluator::new(black, white, true);
+        for candidate in 0..225 {
+            if contains(&black, candidate) || contains(&white, candidate) {
+                continue;
+            }
+            for mover_black in [true, false] {
+                let mut next_black = black;
+                let mut next_white = white;
+                if mover_black {
+                    next_black[candidate >> 5] |= 1 << (candidate & 31);
+                } else {
+                    next_white[candidate >> 5] |= 1 << (candidate & 31);
+                }
+                assert_eq!(
+                    state.ordering_value_after(candidate, mover_black),
+                    crate::evaluation::evaluate_with(
+                        &next_black,
+                        &next_white,
+                        mover_black,
+                        &state.weights
+                    ),
+                    "candidate {candidate} mover_black {mover_black}"
+                );
+            }
+        }
     }
     #[test]
     fn initiative_term_rewards_the_side_to_move_and_follows_make_undo() {

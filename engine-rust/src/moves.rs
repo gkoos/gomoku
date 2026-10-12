@@ -246,7 +246,7 @@ fn generate_ranked(
             (*black, own)
         };
         match eval {
-            Some(state) => state.ordering_value(&next_black, &next_white, player_black),
+            Some(state) => state.ordering_value_after(position, player_black),
             None => crate::evaluation::evaluate(&next_black, &next_white, player_black),
         }
     };
